@@ -27,11 +27,14 @@ Constraints:
 
 - Pro: Easier to implement
 - Con: Less user-friendly
+- Con: More tedious to check and restart various functions.
 
 ### Option C: Physical indicator on robot
 
 - Pro: Physical status indicator without needing to connect to an external app
 - Con: Requires hardware to be built
+- Con: Easy for scope-creep to build up
+- Con: Difficult to translate other states besides healthy and failed
 
 ## Decision
 
