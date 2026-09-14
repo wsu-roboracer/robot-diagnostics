@@ -3,7 +3,6 @@
 ## Week 2
 # Engineering Log - Dashboard Mockup
 
-**Date:** September 14, 2026
 
 ## Work Completed
 
