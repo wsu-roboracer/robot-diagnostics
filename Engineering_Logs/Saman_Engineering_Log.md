@@ -4,7 +4,6 @@
 # Engineering Log - Dashboard Mockup
 
 
-
 ## Work Completed
 
 - Created a mockup for the RoboRacer diagnostic dashboard using **Adobe Express**.
@@ -37,6 +36,3 @@
 ![UI MOCKUP](../Images/image.png)
 
 ## Week 3
-``` 
-
-```
