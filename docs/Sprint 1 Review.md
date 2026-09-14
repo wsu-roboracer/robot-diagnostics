@@ -11,15 +11,17 @@ Items that meet every line of the Definition of Done.
 |---|---|---|---|
 | #4 | Status Interface Mockup | 3 | #14 |
 | #3 | ADR Report | 2 | #22 |
+| #9 | Physical Indicator Feasability | 3 | #17 |
 
-**Velocity this sprint:** <total points completed>
+**Velocity this sprint:** 5
 
 ### Not completed
 
 | Issue | Points | Why not | What we're doing with it |
 |---|---|---|---|
-| #15 | 5 | Underestimated — turned out to be three separate jobs | Splitting into 3 issues for Sprint 2 |
-| #16 | 2 | Blocked on lab access to robot 2 | Blocked, carrying to Sprint 2 |
+| #5 | 3 | Not enough time because we were working on other issues. Carrying to Sprint 2
+| #6 | 3 | Not enough time because we were working on other issues. Carrying to Sprint 2
+| #7 | 3 | Not enough time because we were working on other issues. Carrying to Sprint 2
 
 One honest sentence per row. "We ran out of time" is acceptable if it's the truth, but
 "why did we run out of time" is usually the more useful answer.
@@ -46,6 +48,7 @@ the report — a dead end you documented is a dead end nobody else has to walk d
 |  |  |
 | Alex | 15 |
 | Saman | 12 |
+| Luke | 24 |
 
 Honest numbers. A low number with a reason is fine; a made-up number is not.
 
