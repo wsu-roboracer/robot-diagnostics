@@ -36,6 +36,3 @@
 ![UI MOCKUP](../Images/image.png)
 
 ## Week 3
-``` 
-
-```
