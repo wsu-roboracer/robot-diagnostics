@@ -57,10 +57,12 @@ In summary, a Web App Interface would the be the best option compared to others 
 ## Consequences
 
 **Easier now:**
-- 
+- Anyone with a browser can check system health without ROS or command-line knowledge.
+- No new hardware required
 
 **Harder now:**
-- ...
+- Requires ROS2 and rosbridge to be on the viewing computer
+- Dependent on a good network connection to run
 
 **We are committed to:**
 - Building the Web App interface and ensuring that all features, nodes and statuses are displayed.
