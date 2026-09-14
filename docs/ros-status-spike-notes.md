@@ -1,0 +1,856 @@
+# Spike notes: reading live status from ROS (full session record)
+
+The summary is in [ros-status-spike-summary.md](ros-status-spike-summary.md). This file keeps every measurement, command and correction from the three robot sessions. It was brought up to date on 2026-09-14: the prototype is in `prototype/` and runs on robot #2 from `~/diag/`, and the check scripts are in `prototype/tools/`.
+
+Track 2 - robot-diagnostics. Closes the work described in issue #2. Reads from **#1 (subsystem inventory)**. Feeds **#3 (ADR: form factor)**, **#8 (health schema)** and **#4 (interface mockup)**.
+
+> **Status.** Conclusive on the question it was asked. Every measurement below was taken on **robot #2 (`f1-wsu-2`)** running `bringup_launch.py` - not inferred from documentation. Anything still unsettled is in [Section 5](#5-closing-the-rest-the-on-robot-session-plan) with the procedure to close it.
+>
+> **Timebox:** three working sessions (2026-08-31, 2026-09-02, 2026-09-09). One was cut short by WiFi packet loss at roughly 90%. The third ran the session plan in Section 5; its results are folded in throughout and summarised in [Section 5](#block-a---safe-reads-complete-2026-09-09).
+>
+> **Written for someone who has never used ROS.** Section 0 is the background; skip it if you already know what a topic is.
+
+---
+
+## What we are building
+
+A **single HTML file**. The robot serves it, a student opens it on their own laptop at the robot's address, and sees that robot's health. Nothing to install - no ROS, no Python, no npm, no browser extension. The same file works for every car; the address selects which one.
+
+Three things on that page:
+
+1. **ROS diagnostics, made digestible.** The robot's own nodes already report structured health. Today the only way to read it is a desktop GUI on a full ROS install. We render it as plain green and red rows.
+2. **System state.** CPU temperature, disk, memory, Bluetooth, USB link speed, network. None of this is in ROS and none of it is visible anywhere today.
+3. **A button that runs a check on the robot** and puts the output back on the student's page.
+
+**This spike does not change that plan. It changes what we have to build to get there.**
+
+The finding that matters: ROS already solved *collection*. Two nodes we run publish structured health right now, and the standard message format, the aggregator, and the transport to a browser all exist and work. What does not exist is **reach** (the only viewer needs a full ROS desktop install), **coverage** (most nodes report nothing), and **the entire system half** (nothing publishes CPU temperature or disk space).
+
+So we are still building the diagnostics system. We are building it as **a readable layer over data that mostly already exists, plus a collector for the half that does not** - rather than re-implementing collection from scratch, which is what a team would do by default and which would take the whole semester.
+
+**Is the page design feasible as described?** Yes for the ROS half, verified end to end on hardware. The system half is built too, as `system_diagnostics.py`. The button is not built yet. [Section 6](#6-does-the-page-design-actually-work) is the full answer.
+
+---
+
+## 0. Background: how the robot's software is put together
+
+Skip if you know ROS. Everything after this assumes it.
+
+**Nodes.** The robot's software is not one program. It is about a dozen small programs called *nodes*, each doing one job: one talks to the lidar, one talks to the motor controller, one reads the gamepad, one converts steering commands into motor commands. `bringup_launch.py` is the script that starts them all at once.
+
+**Topics.** Nodes do not call each other. They post messages onto named channels called *topics*, and any node that cares subscribes to that name. `urg_node` publishes laser scans to `/scan`; anything wanting laser data subscribes to `/scan`. The publisher and the subscriber never know about each other - only about the name. That is why a diagnostics tool can read everything without any existing node being modified to cooperate with it.
+
+**DDS.** Underneath the topics is **DDS - Data Distribution Service**, an industrial publish/subscribe standard that ROS 2 is built on. Think of it as the postal service. It does two jobs:
+
+- **Discovery.** When a node starts, it announces itself over the local network and finds everyone else. There is no central server and nothing to configure. This is why `ros2 node list` can tell you what is currently running, and why our tool can join the network and immediately see the whole robot.
+- **Delivery.** It carries each message from publisher to subscriber directly, across machines if needed, without passing through a broker.
+
+Two consequences matter for us. First, **anything on a topic is readable by anyone on the network**, which is what makes this project possible at all. Second, **discovery happens inside a numbered "domain"** set by the `ROS_DOMAIN_ID` environment variable - two machines with the same number on the same network automatically see each other's nodes. That is a feature right up until several robots share a number, which is an open question for S-19 (Section 5, block E).
+
+### Where the data actually lives
+
+Two places, and the dashboard reads **both**:
+
+| Source | What lives there | How you read it |
+|---|---|---|
+| **ROS topics** | anything a node measures: laser scans, wheel odometry, battery voltage, gamepad buttons, and the health those nodes report about themselves | subscribe to the topic |
+| **The Jetson's operating system** | CPU temperature, load, disk, memory, whether the Bluetooth controller is connected, what speed the camera enumerated at, whether a network cable has a link | read a file under `/proc` or `/sys`, or run a command like `bluetoothctl`, `ping`, `df` and read its output |
+
+**No ROS node publishes the second column.** Running a command and reading its output is the correct and only way to get those, and it is roughly half of #1's subsystem list. That work is fully in scope.
+
+### The one thing that is not a source
+
+**The log text scrolling in the bringup terminal.** That is only what nodes chose to `print` for a human. Battery voltage, laser ranges and steering commands never appear there - they travel over DDS directly between nodes. So for *robot state*, scraping that scroll gets you almost nothing.
+
+The distinction is between **scraping a log that happens to be on screen** (wrong) and **deliberately running a program that reports a fact** (right, and half the dashboard).
+
+The one specific command to avoid as a data source is `ros2 topic echo`. It is a debugging tool: each call starts a process, waits a second or two for DDS discovery, then hands back YAML text to parse. Perfect by hand, wrong as the spine of a live page. Subscribe instead. Commands like `iw`, `bluetoothctl`, `systemctl` and `df` have no such alternative and are exactly right.
+
+### Worked example: the lidar splits across both
+
+This is typical, and it is why the two-channel split matters.
+
+- **Is it scanning, how fast, is the sensor reporting internal errors?** ROS. `urg_node` already publishes its measured rate, device status, error counts and lockout state to `/diagnostics` (Section 3). That is S-12, and it is mostly already done for us.
+- **Is the Ethernet cable plugged in, and does the sensor answer at 192.168.0.10?** Not in ROS at all. `cat /sys/class/net/enP8p1s0/carrier` and `ping`. That is S-17.
+
+Neither alone can tell a student "the cable fell out" versus "the driver crashed". Together they can, which is exactly the kind of thing this project exists to do.
+
+---
+
+## 1. What #1 established, and what it left open
+
+#1 is confirmed on hardware and open on software configuration. Restated only as far as this spike touches it.
+
+**Settled by #1:** the subsystem IDs S-01 to S-23; the states Healthy / Degraded / Failed with `unknown` as a required fourth; the two check patterns (liveness/rate, value-in-range); the tier 1 / tier 2 split; and the finding that the e-stop is a software deadman over a wireless link that **fails open**.
+
+**Left open by #1, and therefore this spike's actual job:**
+
+| #1 left open | Where it lands now |
+|---|---|
+| 6 explicit open questions (watchdog timeout, VESC command timeout, `/sensors/core` rate, lidar IP, DS4 charge, L1/R1 indices) | 4 answered, 1 answered negative, 1 still open - Section 5 |
+| Every `[MEASURE]` threshold | idle baseline captured; under-load baseline still missing - Section 5, block F |
+| Four `[CONFIRM]` tags | 3 confirmed, 1 refuted - Section 3 |
+| **The unstated assumption that each check is readable at all** | four checks are not buildable as written - Section 3 |
+
+That last row is the one to flag. #1's own rule is that a definition is not finished until the check can be written. Four of them cannot be, and one of those is tier 1.
+
+---
+
+## 2. What ROS gives us
+
+Four mechanisms. All four were exercised on the robot.
+
+**1. The graph API answers "what is running".** `node.get_node_names_and_namespaces()` in `rclpy`, `ros2 node list` from a shell, or `/rosapi/nodes` over a websocket. All three ask DDS who is announcing themselves, so it reflects the live network rather than a config file. Measured roll call on a healthy robot, **11 nodes**: the 8 from `bringup_launch.py` plus `rosbridge_websocket`, `rosapi`, `rosapi_params`.
+
+**2. Freshness only exists relative to a subscriber.** There is no "when did this topic last publish" query in ROS. The tool keeps its own `last_seen` clock per topic and derives age and rate from it. Types do not have to be known in advance:
+
+```python
+for topic, types in self.get_topic_names_and_types():
+    msg_cls = get_message(types[0])          # rosidl_runtime_py.utilities
+    self.create_subscription(msg_cls, topic, cb, qos, raw=True)   # raw skips deserialization
+```
+
+**3. `diagnostic_msgs` is a standard for exactly this, and we already run two publishers of it.** The most consequential finding in the spike.
+
+| Component | What it does | Verdict |
+|---|---|---|
+| `diagnostic_msgs` | Standard wire format: `DiagnosticArray` of `DiagnosticStatus` (level OK/WARN/ERROR/STALE, name, message, key/value pairs) on `/diagnostics`. | **Adopt as #8's schema** |
+| `diagnostic_updater` | Library a node uses to publish its own health. Ships ready-made frequency and timestamp checks. | **Adopt** |
+| `diagnostic_aggregator` | Groups `/diagnostics` into a labelled tree, republishes rolled up on `/diagnostics_agg`. Anything listed as `expected` that never reports is marked **Missing**. | **Adopt - this is the dead-node detector** |
+| `rqt_robot_monitor` | Desktop GUI for the tree. | **The gap** - needs a full ROS desktop install, which is the barrier we exist to remove |
+
+The level enum maps straight onto #1's states: OK/WARN/ERROR/STALE against Healthy/Degraded/Failed/unknown. **#8 should adopt it rather than invent a parallel format.**
+
+Integration cost is small. A watchdog using only stock `diagnostic_updater` went from `OK / "Desired frequency met" / 39.999 Hz` to `ERROR / "No events recorded"` when the lidar was killed. The whole body of the node:
+
+```python
+self.freq = du.HeaderlessTopicDiagnostic(
+    'scan', self.updater, du.FrequencyStatusParam({'min': 40.0, 'max': 40.0}, 0.1, 5))
+
+def on_scan(self, _msg):
+    self.freq.tick()
+```
+
+**4. rosbridge carries all of it to a browser with no ROS install.** `rosbridge_server` is already declared in `f1tenth_stack/package.xml`, is installed on the robot, and starts cleanly. It exposes ROS over a WebSocket on port 9090 and translates to plain JSON in both directions. Because translation happens **on the robot**, the client needs no ROS and no message packages.
+
+Verified from a client with no ROS installed and no `vesc_msgs` anywhere:
+
+```
+websocket handshake OK
+nodes: /ackermann_mux /joy /rosapi /rosbridge_websocket /urg_node /vesc_driver_node ...
+  /scan 16 · /odom 17 · /sensors/core 16 · /diagnostics 15   receiving data
+/sensors/core decoded as plain JSON:  battery 12.3 V   fault_code 0
+```
+
+It is **not REST - there are no routes.** One socket, JSON messages with an `op` field:
+
+```json
+{"op":"subscribe",    "topic":"/scan", "throttle_rate":250}
+{"op":"call_service", "service":"/rosapi/nodes", "id":"1"}
+{"op":"publish",      "topic":"/drive", "msg":{...}}
+```
+
+**Publishing and service calls ride the same socket.** That is the detail that makes the "run a check" button cheap - see Section 6.
+
+### What crosses the network, and what does not
+
+| Check | On robot | Student laptop, same network | Note |
+|---|---|---|---|
+| Node list, topic list, types, publisher counts | yes | yes | pure graph metadata |
+| Rate / freshness of stock message types | yes | **unreliable** | see below |
+| Contents of `/sensors/core` | yes | **only via rosbridge** | native ROS needs `vesc_msgs` built locally |
+| CPU, temperature, disk, USB, Bluetooth | yes | **no** | nothing publishes these |
+| Anything at all, from a browser | yes | yes | **via rosbridge** |
+
+**Custom message types do not travel natively.** A native ROS monitor on a laptop decoded `/sensors/core` fully with `vesc_msgs` present, and reported `cannot subscribe: vesc_msgs/msg/VescStateStamped not installed` without it. You still learn a publisher *exists* - you lose values, not liveness. **rosbridge removes this problem entirely**, because it deserializes on the robot where every message package already exists. This is a large part of why the browser design wins.
+
+**Rate cannot be measured reliably from off-robot.** Subscribed over the network, `/scan` read 30.5 Hz and `/odom` read 30.3 Hz. On the robot the same topics are **40.0** and **50.1 Hz**. The numbers were network-limited, not real. **Rate must be computed on the robot and sent as a number**, never derived in the browser - exactly what `urg_node` already does. This is a requirement on the design, not a nicety.
+
+---
+
+## 3. Subsystem coverage: applying this to #1
+
+For every subsystem in #1, where the signal comes from and how far it got. Status vocabulary:
+
+- **Published** - a node we already run reports it; read it, do not rebuild it
+- **Ready** - source verified on hardware, nothing blocking, write the check
+- **Needs motion** - only meaningful while driving; must report `unknown` at rest
+- **Blocked** - the hardware or firmware does not expose it as #1 specifies
+- **Unstarted** - the node is not in bringup, or was never exercised
+
+The last column points at the block in Section 5 that still has work to do.
+
+| ID | Subsystem | Channel | Source, as verified on robot #2 | Status | Close |
+|---|---|---|---|---|---|
+| S-01 | Drive battery | ROS | `/sensors/core` → `state.voltage_input`. **50.020 Hz** measured. Read 12.7 V, then 12.3 V after running | **Ready** | - |
+| S-02 | Compute power rail | system | **`tegrastats` runs with no sudo** and reports `VDD_IN` / `VDD_CPU_GPU_CV` / `VDD_SOC` in mW (4.94-5.18 W idle), plus `/proc/uptime` reset detection | **Ready** | done |
+| S-03 | Deadman | both | `/joy` → `buttons[4]` L1, `buttons[5]` R1, confirmed from `joy_teleop.yaml`. **Must gate on Bluetooth connection state** (S-18) | **Ready** | D |
+| S-04 | CPU / GPU load | system | `/proc/loadavg`. **6 cores**, 1.95 / 1.37 / 1.10 idle | **Ready** | - |
+| S-05 | Thermals | system | **`tj-thermal` is the junction temperature #1 asks for.** 47-51 °C idle across all zones over three sessions. **Read it from `tegrastats`**, not sysfs - see the EAGAIN correction below | **Ready**, threshold unbaselined | F |
+| S-06 | Storage | system | **915 GB NVMe at 4% used**, 837 GB free. Not the cramped eMMC #1 assumes | **Ready**, low risk | - |
+| S-07 | Memory | system | `/proc/meminfo`. 7.88 GB, ~63% available, swap unused | **Ready** | - |
+| S-08 | Clock sync | system | `timedatectl` → `NTPSynchronized=yes`, TZ America/Denver | **Ready**, healthy | - |
+| S-09 | VESC link | both | `/sensors/core` rate **50.020 Hz** (answers #1's `[CONFIRM]`) + `/dev/sensors/vesc -> ttyACM0` present | **Ready** | - |
+| S-10 | Brushless motor | ROS | `fault_code`, `speed`, `current_motor`, `current_input`, `duty_cycle` all **confirmed live under load**. `temp_fet` is **live after a two-line driver fix** (31.4 C idle, climbing under load). `temp_motor` has **no thermistor fitted** - it reads -73.6 C and must be rendered as "absent", never as a temperature | **Buildable.** Thresholds need one long loaded run | F |
+| S-11 | Steering servo | ROS | `/commands/servo/position` exists; needs yaw rate from S-13 or S-15 while moving | **Confirmed** under motion (block B); still no position feedback | - |
+| S-12 | LiDAR | ROS | **`urg_node` already publishes rate, bounds, device status, error counts, lockout.** `/scan` = 1081 ranges at 40.196 Hz | **Published**; content analysis still ours | - |
+| S-13 | IMU | ROS | `/sensors/imu` 50.008 Hz, `/sensors/imu/raw` 50.062 Hz | Rate **ready**; confirmed live under motion (block B). Yaw drifts about 0.1 °/s, so check liveness only | - |
+| S-14 | Depth camera | both | **RealSense D435i, serial 317622075395, FW 5.17.0.10, enumerated at 5000M.** Present and healthy. Publishes **no** `/diagnostics` and **no** compressed image topic; raw colour is 2.76 MB/frame | **Buildable**, but needs a `diagnostic_updater` wrapper and a compressed transport | - |
+| S-15 | Wheel odometry | ROS | `/odom` 50.022 Hz, but **only after the car has been commanded once** - `vesc_to_odom` latches on the first servo command (see corrections) | Rate **ready** once gated; confirmed under motion at 5.04 m/s (block B) | - |
+| S-17 | LiDAR Ethernet | system | `enP8p1s0` up at 192.168.0.15/24, carrier=1. Ping to **192.168.0.10**: 3/3, 0% loss, 0.187 ms. IP also published by `urg_node` | **Ready** | - |
+| S-18 | Gamepad | both | `/joy` ~**48 Hz** connected. `bluetoothctl info <mac>` → `Connected: yes`. **Charge level unavailable** by #1's route | **Ready** minus charge | G |
+| S-19 | ROS 2 node set | ROS | `/rosapi/nodes` - the only method correct on every attempt. Real list is 8 + 3 | **Ready**; #1's list is wrong | E |
+| S-20 | TF tree | ROS | `/tf` 50.014 Hz, gated by the same servo-command latch as S-15; `/tf_static` is transient-local so **age is meaningless**. Bringup only gives `base_link → laser` | Partial - `map → odom` needs a nav stack | - |
+| S-21 | Localization | ROS | `particle_filter` is not started by bringup | **Unstarted** | - |
+| S-22 | Command mux | ROS | **`ackermann_mux` already publishes which input is live**: `masked`/`unmasked` per input plus `current priority` | **Published**, wrong topic in #1 | H |
+| S-23 | Command freshness | ROS | `mux.yaml` sets `timeout: 0.2` on both inputs; mux publishes live `data age in [sec]`. **VESC-side timeout unknown** | Partial - the safety gap | **D** |
+
+### Already built for us
+
+**What is actually on `/diagnostics` right now.** Two publishers, three statuses, all level 0:
+
+```
+[OK] urg_node: Laser Scan topic status
+       Actual frequency (Hz) 40.217438 · Target 40.000000 · acceptable 38.0-42.0
+
+[OK] urg_node: Hardware Status - "Streaming"
+       Device Status "sensor is working normally" · Locked out False
+       Scan Retrieve Error Count 0 · Lidar Error Code 0
+       IP Address 192.168.0.10 · Product Name UST-10LX · Device ID B2232377
+
+[OK] ackermann_mux: Ackermann mux status - "ok"
+       velocity topics.joystick    unmasked (listening to teleop @ 0.200000s, priority #100)
+       velocity topics.navigation  masked   (listening to drive  @ 0.200000s, priority #10)
+       current priority 0 · loop time in [sec] 0 · data age in [sec] 0
+```
+
+That is **most of S-12 and part of S-17 already done**, including lidar hardware health not available from `/scan` at all, and the sensor's IP - which answers one of #1's open questions from the robot itself. The bounds come from `diagnostics_tolerance: 0.05` in `sensors.yaml`. `Device ID B2232377` is a per-unit serial, which is a free way to show *which car* the page is looking at.
+
+The mux line **answers S-22 outright**. `joystick: unmasked` appeared only once a controller was connected; with none attached both inputs read `masked`. It is a live, event-responsive signal today, and it confirms the 0.2 s input timeout S-23 needs.
+
+> **Caveat:** `/diagnostics` interleaves a separate `DiagnosticArray` from *every* publisher, so a single message is never the whole picture. Merge by `status[].name` over a window - which is exactly what `diagnostic_aggregator` does for you.
+
+**What is genuinely missing is coverage and reach.** Only `ackermann_mux` and `urg_node` self-report; the VESC, odometry and joy nodes publish nothing. And the only viewer is a desktop GUI on a matching ROS install. For nodes we cannot modify, a small node that watches topic liveness and publishes its findings as `DiagnosticStatus` closes the coverage gap without touching their source. The system half now lives in `system_diagnostics.py` (Section 6). The liveness-watching node is not built yet.
+
+### Corrections - checks in #1 that cannot be built as written
+
+- **S-10 reads `state.temperature_pcb`. That field does not exist** - it is commented out in `vesc_msgs/VescState.msg`. The real fields are `temp_fet` and `temp_motor`. Both read `0.0`, and **block B found out why: `vesc_driver` never publishes them.** The accessors `VescPacketValues::temp_fet()` and `::temp_motor()` are implemented correctly (`vesc_packet.cpp:167` and `:176`, reading payload bytes 1-4, which is exactly where `COMM_GET_VALUES` puts them), but `vesc_driver.cpp` assigns every *other* field into the message and silently skips those two - `grep -n 'temp_fet\|temp_motor' vesc_driver.cpp` returns nothing. The `0.0` we kept measuring was a default-initialised ROS field, never a sensor reading. **This is a two-line fix, not a dead subsystem** - and the fix was applied and verified the same day. `temp_fet` now reads a real, load-responsive board temperature; `temp_motor` reads -73.6 C, which is an open-circuit reading from a thermistor that was never fitted. See "The `temp_fet` patch" and "Patch result" below. `current_motor`, `current_input` and `duty_cycle` also read `0.0` at rest, and block B confirmed all three move properly under load. `voltage_input` and `fault_code` were usable throughout (`0 NONE`, `1 OVER_VOLTAGE`, `2 UNDER_VOLTAGE`, `3 DRV8302`, `4 ABS_OVER_CURRENT`, `5 OVER_TEMP_FET`, `6 OVER_TEMP_MOTOR`).
+- **S-22 and S-23 treat `/drive` as the mux output. It is an input.** `mux.yaml` lists it as the `navigation` source. The output is `ackermann_cmd_out`, remapped in `bringup_launch.py` to `ackermann_drive` - but the topic actually on the robot is **`/ackermann_cmd`**, and `/ackermann_drive` does not exist. That remap appears to be a no-op. S-22/S-23 should watch `/ackermann_cmd`, and `/drive` should be expected to have **zero publishers** unless a nav stack is running.
+- **S-19's roll call would fail on a healthy robot.** It lists `robot_state_publisher`, `particle_filter` and the RealSense node - none of which `bringup_launch.py` starts - and drops the `_node` suffix on three VESC nodes. Six false failures out of the box. The measured list is `joy`, `joy_teleop`, `ackermann_to_vesc_node`, `vesc_to_odom_node`, `vesc_driver_node`, `urg_node`, `ackermann_mux`, `static_baselink_to_laser`, plus `rosbridge_websocket`, `rosapi`, `rosapi_params`.
+- **S-18's "an untouched gamepad still publishes at a steady rate" is correct only while connected.** Silent `/joy` is the **no-controller** state, not a fault: not connected → idle; connected → publishing; disconnected mid-run → idle again. Since "controller put down" and "controller died holding the deadman" produce an identical `/joy` signal, **S-18 must check Bluetooth connection state on the system side**, and **S-03 must gate on that** before saying anything about the deadman - otherwise it reports the e-stop failed every time someone sets the controller down. `bluetoothctl info <mac>` reporting `Connected: yes` is the signal that works. `/joy` also runs at ~48 Hz, not the configured `autorepeat_rate: 20.0`; the pad's own event rate dominates, helped by `deadzone: 0.01` turning stick noise into events.
+
+- **`/odom` and `/tf` do not publish until the car has been commanded once. Confirmed in source and on hardware, 2026-09-09.** Measured: `/sensors/core` at 49.990 Hz and `vesc_to_odom_node` present in the node list, but **zero messages on `/odom` or `/tf` in 7 s** on a healthy car. Holding L1 and moving the stick started both at 50.00 Hz immediately.
+
+  The cause is `vesc/vesc_ackermann/src/vesc_to_odom.cpp:102`:
+
+  ```cpp
+  if (use_servo_cmd_ && !last_servo_cmd_) {
+    return;              // early return, before both the /odom publish and the TF broadcast
+  }
+  ```
+
+  `use_servo_cmd_to_calc_angular_velocity` defaults to `true` and `f1tenth_stack/config/vesc.yaml:36` sets it `true`, so the node discards every VESC state message until a `sensors/servo_position_command` arrives. The chain is **controller → `/teleop` → mux → `ackermann_to_vesc_node` → servo command → odometry unlatches**.
+
+  **It is a one-way latch.** `last_servo_cmd_` is assigned at line 190 and never cleared, so:
+
+  | Situation | `/odom`, `/tf` |
+  |---|---|
+  | bringup, controller never touched | **silent indefinitely** - and the car is healthy |
+  | one servo command, ever | **50 Hz forever after**, even if the controller is then switched off |
+
+  **This is a second false-alarm class like the `/joy` one, and the naive fix is also wrong.** Gating on "is a controller connected right now" would report Failed for a car that was driven earlier and then had its pad powered down. The correct rule is: **`/odom` and `/tf` silence is only diagnostic after the car has been commanded once this session** - before that, S-15 and S-20 are `unknown`, not Failed. That is another concrete argument for #1's fourth state.
+
+  Note the corollary for S-15: once latched, `/odom` keeps publishing off VESC state regardless of what the drivetrain is doing, so **`/odom` liveness proves the VESC is alive (S-09), not that odometry is meaningful.** S-15's real check remains the scale comparison under motion.
+- **The thermal-zone EAGAIN is transient and rotates between zones**, so an earlier version of this document was wrong to say "`cv0/1/2` are unreadable, skip them". In one session `baseline_capture.sh` failed on `cv0/1/2` and read `soc1/soc2/tj` fine, while a raw `cat` seconds later did the exact opposite. **Guard every read and retry, or read thermals from `tegrastats`**, which returned all six named zones cleanly on every attempt and needs no sudo.
+
+### One liveness rule is not enough
+
+#1 proposes a general staleness rule: Degraded at 2x the expected period, Failed at 2 s. Applied uniformly to the real topic list it flagged **16 of 23 topics as broken on a completely healthy car.** Topics need a declared class:
+
+| Class | Examples | Rule |
+|---|---|---|
+| `continuous` | `/scan`, `/odom`, `/sensors/*`, `/tf`, `/diagnostics` | rate + staleness; #1's rule applies |
+| `event` | `/teleop`, `/ackermann_cmd`, `/commands/*`, `/joy` | **silence at rest is normal** |
+| `latched` | `/tf_static` | published once, transient-local; **age is meaningless** |
+| `input` | `/drive`, `/commands/motor/{brake,current,...}`, `/joy/set_feedback` | the stack subscribes; **zero publishers is correct** |
+
+Adding those four classes took the same robot from 16 flagged to **0**. A dashboard that lights up red on a healthy car trains students to ignore it, which is worse than not building one. This is a sharper version of #1's own `unknown` finding and it should shape the schema in #8.
+
+### A fourth signal #1 does not have: running-but-silent
+
+#1's states are defined by observable signal, which is right, but three independent ROS signals split "not producing data" into four causes a student needs told apart:
+
+| Node in graph | Publisher exists | Message arrived | State | Meaning |
+|---|---|---|---|---|
+| no | no | no | `NODE_DOWN` | process crashed or never started |
+| yes | yes | no | `SILENT` | alive but producing nothing - unplugged sensor, hung driver |
+| yes | no | no | `NOT_ADVERTISED` | started but failed to open its device |
+| yes | yes | yes | `OK` | healthy |
+
+Verified by breaking the lidar two ways. Same symptom to a student, different diagnosis:
+
+```
+# urg_node process killed
+  urg_node   DOWN        /scan   NODE_DOWN   0 publishers   0 messages
+# urg_node alive, stopped publishing
+  urg_node   UP          /scan   SILENT      1 publisher    0 messages
+```
+
+**The publisher count is the discriminator, and it costs one graph call.**
+
+---
+
+## 4. What this spike already answered
+
+| #1's question | Answer |
+|---|---|
+| Lidar's configured IP | **192.168.0.10** - in `sensors.yaml`, and published on `/diagnostics` by `urg_node` |
+| `joy_teleop` L1/R1 button indices | **L1 = `buttons[4]`, R1 = `buttons[5]`** - from `joy_teleop.yaml` |
+| `/sensors/core` publish rate | **50.020 Hz** measured on-robot |
+| Is there a stale-command watchdog? | **Partly.** `mux.yaml` sets `timeout: 0.2` on both inputs and the mux publishes `data age in [sec]`. VESC-side timeout still unknown |
+| Is the DS4 charge exposed under `/sys/class/power_supply/`? | **No** by that route - four untried alternatives in block G |
+
+**Idle `[MEASURE]` baselines captured:** 6 cores, load 2.28 / 1.29 / 0.96 · `tj-thermal` 51 °C idle on 2026-09-02 (cpu 51, gpu 50, soc 48-50) and 47-50 °C in later sessions · 7.88 GB RAM, ~63% available · NTP synchronised · VESC at `/dev/sensors/vesc -> ttyACM0` · 915 GB NVMe at 4%.
+
+Two surprises worth folding back into #1: **storage is a non-issue**, not the cramped eMMC S-06 assumes; and **the lidar has its own physically separate network**, so S-17 has a dedicated interface to check and lidar traffic never competes with dashboard traffic.
+
+---
+
+## 5. Closing the rest: the on-robot session plan
+
+Blocks A, B and C are done (2026-09-09). Blocks D to I are still open, and F is the one to do first. The procedures for the finished blocks are kept so they can be repeated on other cars. **Blocks D and F need the car on blocks with the wheels free.** Blocks B, C, D and F need a charged pack.
+
+Everything goes into one directory so it can be pasted back into this document:
+
+```bash
+mkdir -p ~/session_$(date +%F) && cd ~/session_$(date +%F)
+hostname; echo "ROS_DOMAIN_ID=$ROS_DOMAIN_ID"      # confirm which car, first line of every log
+```
+
+### Block A - safe reads (COMPLETE, 2026-09-09)
+
+```bash
+bash ~/diag/tools/baseline_capture.sh | tee baseline.txt   # prototype/tools/ in the repo
+ros2 topic echo /sensors/core --once | tee vesc_rest.txt
+ros2 topic echo /diagnostics --once | tee diagnostics_rest.txt
+for z in /sys/class/thermal/thermal_zone*; do echo "$(cat $z/type) $(cat $z/temp 2>/dev/null || echo NA)"; done
+tegrastats --interval 1000 | head -5 | tee tegrastats.txt
+```
+
+**Ran on robot #2, bringup and rosbridge up, no controller attached, pack at 11.3 V.**
+
+| Result | Consequence |
+|---|---|
+| **`tegrastats` needs no sudo** and prints all six named thermal zones plus `VDD_IN 4.94-5.18 W`, `VDD_CPU_GPU_CV`, `VDD_SOC` | **Closes S-02**, and is the better source for S-05 than sysfs. One parse serves both |
+| Idle thermals **47-48 °C** on every zone (`tj@48.031C`) | Lower than the 51 °C first captured. The Healthy floor is ~48 °C, not 51 |
+| **`/odom` and `/tf`: no messages in 7 s** while `/sensors/core` ran at 49.990 Hz | New finding, root-caused in source. Both are gated behind a one-way servo-command latch - see the corrections above |
+| `/scan` **39.826 Hz** by `ros2 topic hz`, but `urg_node` self-reported **40.067 Hz** in the same window | Reinforces "let the node compute the rate". The external measurement reads low even on-robot |
+| Node list: daemon **11 nodes**, `--no-daemon` **7** - missing `urg_node`, `vesc_driver_node`, `vesc_to_odom_node`, `joy_teleop` while `/scan` and `/sensors/core` were demonstrably publishing | **Third contradictory result.** `baseline_capture.sh` labels `--no-daemon` "authoritative" - that label was wrong and has since been fixed in the script |
+| Thermal zones: `baseline_capture.sh` could not read `cv0/1/2`; a raw `cat` seconds later could not read `soc1/soc2/tj` | The EAGAIN is transient and rotates. See corrections |
+| Battery **11.3 V at rest** | 0.2 V above #1's Degraded line, and the first sample we have taken anywhere near it. Record it as a real threshold data point |
+| `controller_id: 77` on the VESC | A second free per-unit serial alongside the lidar's `B2232377`. Either can identify which car the page is showing |
+| Memory 6.22 GB of 7.80 GB available (80%), NVMe 31 G of 915 G used, NTP synchronised, lidar ping 3/3 at 0.224 ms, `enP8p1s0` carrier=1 | S-04, S-06, S-07, S-08, S-17 all confirmed Healthy and buildable as specified |
+
+### Block B - S-10, the motor and its temperatures (COMPLETE, 2026-09-09)
+
+**Before you start, if you repeat this on another car.** Charge or swap the pack first. This block holds throttle for 60+ seconds, a sagging pack skews the numbers, and the Orin runs off the same pack, so a brownout also loses the run. Then connect the controller and drive the car once, because `/odom` and `/tf` stay silent until the first servo command (see the corrections in Section 3):
+
+```bash
+ros2 param get /vesc_to_odom_node use_servo_cmd_to_calc_angular_velocity   # not `use_servo_cmd`
+# connect the pad, hold L1, nudge the stick, then:
+ros2 topic hz /odom
+ros2 topic hz /tf
+```
+
+**Why this block was run.** `temp_fet` and `temp_motor` both read `0.0`, and so do `current_motor`, `current_input` and `duty_cycle`. Every one of those readings was taken with the car stationary and the motor unenergised, which proves nothing. Either the VESC genuinely reports no temperature, or we have simply never looked while it had something to say. That distinction decided whether a tier-1 subsystem exists.
+
+**Step 1 - what firmware the driver is talking to.** The VESC's `COMM_GET_VALUES` reply is a packed byte layout that changes between firmware versions; if `vesc_driver` expects a different version, fields land at the wrong offsets and read as garbage or zero.
+
+```bash
+grep -iE 'firmware|version|vesc' bringup.log | tee vesc_firmware.txt
+ros2 param dump /vesc_driver_node | tee vesc_params.txt
+```
+
+**Step 2 - full field dump at rest**, so there is a before:
+
+```bash
+ros2 topic echo /sensors/core --once | tee vesc_rest_full.txt
+```
+
+Record `temp_fet`, `temp_motor`, `ntc_temp_mos1/2/3`, `current_motor`, `current_input`, `duty_cycle`, `speed`, `voltage_input`, `fault_code`.
+
+**Step 3 - under load. Car on blocks, wheels free, nothing near them.**
+
+```bash
+timeout 90 ros2 topic echo /sensors/core --csv > vesc_load.csv
+```
+
+While that runs: hold **L1**, apply throttle, ramp up and hold for a good 60 seconds. A motor that is turning freely draws very little current, so hold a meaningful throttle rather than blipping it.
+
+**Step 4 - read the result.** Use this table if you repeat the block on another car.
+
+| What `vesc_load.csv` shows | What it means | What to do |
+|---|---|---|
+| `speed`, `current_motor`, `duty_cycle` all move **and** `temp_fet` moves | Everything works | Capture idle and loaded temps as the `[MEASURE]` baseline |
+| Current, duty and speed move but **temps stay exactly `0.0`** | The driver is not copying the temperature fields into the message. This is what robot #2 showed | Apply [the `temp_fet` patch](#the-temp_fet-patch) and run it again |
+| **Nothing moves**, including `speed` | The motor is not being commanded, or the packet layout is wrong | Check `/commands/motor/speed` is non-zero first (`ros2 topic echo /commands/motor/speed`). If commands are flowing and nothing moves, it is a firmware/driver mismatch - a real finding, and a different issue |
+
+**Step 5 - while the wheels are already turning, bank three more subsystems for free.** These all need motion and are otherwise blocked:
+
+```bash
+timeout 60 ros2 topic echo /odom --field twist.twist.linear.x --csv > odom_load.csv    # S-15
+timeout 60 ros2 topic echo /sensors/imu --csv > imu_load.csv                           # S-13
+timeout 60 ros2 topic echo /commands/servo/position --csv > servo_load.csv             # S-11
+```
+
+Steer left and right through the run. S-11 needs commanded steering against observed yaw rate, and this is the only way to get a sample of both.
+
+### Block B results - 2026-09-09
+
+**Firmware, from the bringup banner:**
+
+```
+[vesc_driver_node-5] Connected to VESC with firmware version 6.5
+[vesc_driver_node-5] -=60_MK4=- hardware paired 0
+[urg_node_driver-6] Connected to network device with ID: B2232377
+```
+
+VESC firmware **6.5** on **60_MK4** hardware, so the packet layout the driver assumes is the current one. Lidar `B2232377` - this is also the number that identifies **which car** a dashboard is showing (see Section 6), and `controller_id: 77` from the VESC is the second.
+
+**Under load, on blocks, ~60 s of throttle and full left-right steering:**
+
+| Field | At rest | Under load | Verdict |
+|---|---|---|---|
+| `current_motor` | `0.0` | **peak 51.3 A** | Live |
+| `current_input` | `0.0` | **peak 5.7 A** | Live |
+| `duty_cycle` | `0.0` | **peak 0.351** | Live |
+| `speed` (eRPM) | `0.0` | **peak 22 958** | Live |
+| `voltage_input` | 11.5 V | sags to **11.4 V** | Live, and the sag is only 0.1 V |
+| `fault_code` | 0 | **0 throughout** | Live |
+| `temp_fet` | `0.0` | **`0.0`, every one of ~3 000 samples** | **Never published - driver bug** |
+| `temp_motor` | `0.0` | **`0.0`, every sample** | **Never published - driver bug** |
+| `ntc_temp_mos1/2/3` | `0.0` | `0.0` | Genuinely zero on the wire - see below |
+
+Everything except the temperatures moved, which rules out "the motor was never commanded". And `voltage_input`, `pid_pos_now` (315.0), `controller_id` (77) and `avg_vd`/`avg_vq` all decoded sensibly, which rules out a packet-layout mismatch: those fields sit at offsets 27, 54, 58 and 65-72, so if the byte alignment were wrong they would be garbage too.
+
+**So why exactly `0.0`?** Two different reasons, and it matters which is which:
+
+- **`temp_fet` and `temp_motor` are a driver omission.** `vesc_driver.cpp` populates `voltage_input`, `current_motor`, ..., `ntc_temp_mos1/2/3`, `avg_vd`, `avg_vq` - and never touches `state_msg.state.temp_fet` or `.temp_motor`. The parsing functions exist and are correct; nothing calls them. The published `0.0` is an unassigned message field.
+- **`ntc_temp_mos1/2/3` really are zero on the wire.** These are assigned (`vesc_driver.cpp:185-187`) from payload offsets 59-64, and the neighbouring fields at 54-58 and 65-72 decode correctly, so the read is sound. Most VESC hardware only populates the per-bank MOSFET sensors on multi-bank designs. **Expected. Drop these three from any check.**
+
+#### The `temp_fet` patch
+
+Two lines in `vesc/vesc_driver/src/vesc_driver.cpp`, next to the existing assignments:
+
+```cpp
+    state_msg.state.temp_fet = values->temp_fet();
+    state_msg.state.temp_motor = values->temp_motor();
+```
+
+Then rebuild and restart bringup. On this Jetson the plain build aborts, because the workspace is sourced in `.bashrc` and so `install/` becomes its own underlay, and because six parallel jobs exhaust the ~5 GB of free RAM. This is the command that works:
+
+```bash
+colcon build --packages-select vesc_driver --allow-overriding vesc_driver --parallel-workers 1
+```
+
+Treat the patch as the actual Block B deliverable. It is a defect in a repo we control, found by instrumenting a subsystem we were about to declare dead.
+
+#### Patch result - measured 2026-09-09
+
+Rebuild finished in 24.2 s. Bringup restarted, then a ~16 s capture under sustained throttle (`vesc_temp_load.csv`, 50 Hz, ~800 samples).
+
+| Field | At rest | Under sustained load | Verdict |
+|---|---|---|---|
+| `temp_fet` | **31.4 C** | **31.5 -> 33.3 C**, monotonic | **Live sensor**, responds to load |
+| `temp_motor` | **-73.6 C** | **-74.1 to -75.4 C**, uncorrelated noise | **No thermistor fitted** |
+| `ntc_temp_mos1/2/3` | `0.0` | `0.0` | Unpopulated, exactly as predicted |
+| `fault_code` | 0 | **0 throughout** | Clean run |
+
+**`temp_fet` is real, and it is the S-10 signal we wanted.** It rose 1.8 C in 16 s of roughly 10-15 A average draw, and the rise is monotonic sample to sample. A stuck field or a misaligned byte read would not produce a smooth thermal ramp that tracks the throttle.
+
+**`temp_motor: -73.6` is a better outcome than `0.0` would have been.** A large negative number cannot be an unassigned message field, so it is itself the proof that the patch is reading the wire. It is also not a temperature. It is the open-circuit signature of the VESC's TEMP input with nothing connected: the ratiometric NTC conversion runs off the end of its curve. Across the whole loaded capture it wandered about ±0.6 C at random, with no relationship to current, duty cycle or `temp_fet` - ADC noise on a floating pin, not a thermal signal.
+
+**What the dashboard must do with it.** Render "no sensor fitted", not a number. Both obvious checks fail silently: "warn above 60 C" passes forever, and so does "warn if it reads exactly zero". **Guard on `temp_motor < -20` and treat that as absent hardware.** A student who sees `-73.6 C` on a dashboard files a bug; one who sees "not fitted" learns something true about the car they are driving.
+
+**S-10's `[MEASURE]` baseline is started, not finished.** Idle floor **31.4 C**; 16 s of load buys **33.3 C**, nowhere near steady state. The VESC's own `OVER_TEMP_FET` fault trips near 85 C, so Degraded around 65 C and Failed around 80 C is the sane starting shape - but that needs a multi-minute run to confirm the curve actually flattens below it. **Still open: one 10-minute loaded run to close S-10's thresholds.**
+
+#### The finding this capture produced by accident: voltage cannot be thresholded per sample
+
+`voltage_input` swung **11.0 to 11.2 V inside the same second**, tracking throttle. Peak draw here was **25.3 A motor / 6.46 A input**, and every current spike pulled the rail down. Against #1's Degraded line of 11.1 V, a per-sample threshold on a 50 Hz topic would flip the battery between Healthy and Degraded dozens of times a second while nothing is wrong at all.
+
+**That is a design constraint on the dashboard, not a battery problem, and it generalises to every threshold on a `continuous` topic.** A voltage check has to either evaluate a sag-tolerant window (a rolling minimum or median over several seconds) or qualify the sample by load (`current_input` near zero). Pick one and apply it consistently, or the page will look broken.
+
+Sag is also a real signal in its own right. Earlier in the same session the pack sagged **0.1 V under 51 A**; by this capture it sagged **0.2 V under 25 A**. A pack that sags twice as far for half the current has drained, which makes **sag per amp a better state-of-health indicator than resting voltage** - and it is computable from two fields we already have.
+
+**Also confirmed in the same run:**
+
+| ID | Signal | Evidence | Verdict |
+|---|---|---|---|
+| S-11 | Commanded steering | `/commands/servo/position` swept **0.1178 - 0.9430**, centre **0.5304** | Confirmed. Still no position feedback, so this proves the *command*, not the servo |
+| S-13 | IMU | `/sensors/imu` live; accel z **~1.04 g** at rest, gyro to **±22 °/s** during the maneuver | Confirmed |
+| S-15 | Odometry | `twist.twist.linear.x` reached **5.04 m/s** with the wheels free | Confirmed - and it unlatched exactly as the servo-command latch predicts |
+
+**One caution for anyone reaching for IMU yaw.** Fused yaw drifted from **124.12° to 125.19° in the first 10 s while the car sat still** - roughly 0.1 °/s of uncorrected gyro bias, about 6° per minute. Fine for "is the IMU alive", useless as a heading reference. Check S-13 for liveness and plausibility, never for absolute orientation.
+
+### Block C - S-14, the camera (COMPLETE, 2026-09-09)
+
+```bash
+lsusb | tee lsusb.txt
+lsusb -t | tee lsusb_tree.txt
+for d in /sys/bus/usb/devices/*/; do [ -f "$d/speed" ] && echo "$d $(cat $d/speed)"; done | tee usb_speed.txt
+ros2 launch realsense2_camera rs_launch.py camera_name:=rs &   # the robot's `cam` alias
+ros2 topic list | grep -iE 'camera|color|depth|compress' | tee camera_topics.txt
+ros2 topic hz /camera/rs/color/image_raw   # name depends on camera_name, see finding 2 below
+```
+
+Two more worth grabbing while the camera is up, both parallel to things we already did for the other subsystems:
+
+```bash
+rs-enumerate-devices -s              # serial number + firmware, if librealsense tools are installed
+ros2 topic echo /diagnostics --once  # does realsense2_camera contribute here at all?
+```
+
+The **serial number** is S-14's identity field, the camera's equivalent of the lidar's `B2232377` and the VESC's `controller_id: 77`. **Two different numbers claim that name on this camera.** `rs-enumerate-devices` reports `317622075395`, while the USB descriptor in sysfs (`/sys/bus/usb/devices/2-2/serial`) reports `327743063048`. Both are real; they are not the same field. Label whichever one you display, because an unlabelled mismatch will have someone concluding the wrong camera is plugged in. A dashboard that names the hardware it is talking to is worth far more than one that says "camera". The **`/diagnostics` question** matters because the whole design leans on that topic: if `realsense2_camera` already publishes there, S-14 is mostly free; if it does not, the camera needs its own `diagnostic_updater` wrapper like `/scan` has.
+
+Two things to establish. **Is it there at all** - if `lsusb` shows no Intel device, S-14 cannot be built and the inventory should say so. **What speed did it enumerate at** - `5000` is USB 3.0 and healthy, `480` is USB 2.0 and is exactly the silent Degraded case #1 exists to catch. A snapshot needs a compressed or downscaled frame, never raw (finding 3 below), and **only one process can open a RealSense at a time**, so the backend must never shell out to `rs-capture` while the node is running.
+
+### Block C results - 2026-09-09
+
+**S-14 exists and it is healthy.** The earlier "USB3 device present but `lsusb` matched no RealSense" was simply an unplugged camera.
+
+| Fact | Value |
+|---|---|
+| Model | Intel RealSense **D435i** (`8086:0b3a`) |
+| Serial | **317622075395** |
+| Firmware | 5.17.0.10 |
+| librealsense / ROS wrapper | 2.56.4 / 4.56.4 |
+| USB link | **5000M** on a 10000M root hub; the node self-reports "USB type: 3.2" |
+| Colour stream | 1280x720 @ 30, RGB8 |
+| Depth stream | 848x480 @ 30, Z16 |
+
+The camera enumerated at full USB 3 speed, so **the silent-Degraded case #1 exists to catch is not present on this car.** The check is now fully specified anyway: read `speed` from the camera's sysfs node and compare against 5000.
+
+**The USB topology is worth recording, because it is reassuring.** The camera sits alone on bus 002 behind a Realtek USB 3.0 hub, while the **VESC** (`0483:5740`, 12M) and the **Bluetooth radio** (`13d3:3549`, 12M) share bus 001 behind a USB 2.0 hub. Camera bandwidth therefore cannot starve the motor link or the controller. It also means S-09 and S-18 share a failure domain: if bus 001 resets, you lose the VESC and the gamepad together.
+
+#### Five findings that change the design
+
+**1. The launch command in this document was wrong.** `rs_launch.launch.py` does not exist. The file is `rs_launch.py`, and the robot's `cam` alias already has the working invocation. Corrected above.
+
+**2. Camera topic names depend on the launch invocation, so they cannot be hardcoded.** The `cam` alias passes `camera_name:=rs`, which produces `/camera/rs/color/image_raw`. The wrapper's own default would give `/camera/camera/color/image_raw`, and `cam_full` differs again. **An EXPECTED list with a literal camera topic name will report a false `NODE_DOWN` the moment someone launches with a different alias.** Discover camera topics by prefix (`/camera/`) or by owning node, never by literal name. This is the one place in the stack where the topic map is not fixed.
+
+**3. There are no compressed topics, and raw is not transportable.** The only image topics are `color/image_raw` and `depth/image_rect_raw`. At the default profile that is:
+
+| Stream | Per frame | At 30 Hz |
+|---|---|---|
+| Colour 1280x720 RGB8 | **2.76 MB** | **83 MB/s** |
+| Depth 848x480 Z16 | 814 KB | 24 MB/s |
+
+For comparison, `/scan` is 19 KB per message. **A camera snapshot cannot come off `image_raw` over rosbridge** - a single colour frame is 145 times a lidar scan before JSON encoding inflates it further. Three options, in order of preference: install the `image_transport` compressed plugins and subscribe to `/compressed` (~50 KB), launch at a much smaller colour profile, or have the backend grab and downscale a frame on the robot and ship a JPEG. **Do not put the camera on the live dashboard at all** - make it an on-demand button, which is what the page design already proposed.
+
+**4. `realsense2_camera` does not publish to `/diagnostics`.** The array contained only `urg_node`'s two entries. So S-14 gets no free ride: it needs its own `diagnostic_updater` wrapper, exactly like the one demonstrated for `/scan`. That wrapper is about ten lines and is the same code either way, so this is cost, not risk.
+
+**5. `ros2 topic echo /diagnostics --once` is misleading, and this document used it.** Each publisher sends its own `DiagnosticArray`. `--once` returns **one array from one publisher**, not the union. The sample above showed only `urg_node` and therefore looks like `ackermann_mux` stopped reporting, which is not what happened. **The dashboard must accumulate `/diagnostics` over a window keyed by `status[].name`, never render a single message.** A one-shot read of this topic will make live components look missing. It is now listed in Section 7.
+
+**One cosmetic note.** The `cam` alias passes `rgb_camera.power_line_frequency:=2` and the node warns `Could not set param ... with 3 Range: [0, 2]`. The setting is silently not applied, so the colour stream is not doing 60 Hz flicker compensation. Harmless for diagnostics, worth fixing in the alias.
+
+### The session's own brownout - S-02 validated the hard way
+
+**While the camera was running, the robot dropped off the network entirely.** SSH went to `Connection timed out` and stayed there for minutes before recovering. The pack was later found at **10.9 V**, below #1's Degraded line of 11.1 V and heading for its Failed line.
+
+We cannot prove the low pack caused the dropout rather than the known-flaky WiFi, and the honest record is that both were true at once. But the important part is not the root cause:
+
+> **The dashboard was displaying the live battery voltage the whole time, and nobody was looking at it.**
+
+That is the single strongest argument in this document for the page design, and it arrived by accident. A number that is merely *displayed* does not prevent the failure it predicts. #1's Degraded and Failed levels have to **change how the page looks** - colour, ordering, a banner - and the worst subsystem has to be visible without scrolling. Passive telemetry is what we already have; making it impossible to ignore is the actual deliverable.
+
+Two concrete consequences:
+
+- **S-02 stays tier 1 and gets a real threshold.** 10.9 V is the first observed number on the way down. Combined with the sag finding from block B, the battery check should evaluate a sag-tolerant window and escalate visually, not just print a float.
+- **Add "robot unreachable" as a first-class dashboard state.** The page is served from the robot it monitors, so when the robot browns out the page does not go red, it goes *blank* or stale. A student sees a frozen page, not an alarm. The client must track its own websocket liveness and say **"lost contact with 192.168.1.202 at 14:25:02"** on its own, with no help from ROS. This is the one check that cannot live on the robot.
+
+### Block D - S-23 and S-03, the actual e-stop (car on blocks, two people)
+
+This is the one safety-relevant unknown left in #1, and #1 calls it its highest-priority question. The mux side is confirmed at 200 ms. The VESC's own command timeout is not.
+
+```bash
+# terminal 1
+timeout 60 ros2 topic echo /sensors/core --field state.speed --csv > coastdown.csv
+# terminal 2
+timeout 60 ros2 topic echo /ackermann_cmd --csv > cmd_during_coastdown.csv
+```
+
+Drive on blocks with L1 held, then **kill the link** - hold the controller's PS button until it powers off, or walk it out of range. Note the wall-clock second at which you did it.
+
+Read out of `coastdown.csv`: the time from the last non-zero command to `speed` reaching approximately zero. Read out of `cmd_during_coastdown.csv`: when the mux stopped forwarding. Expect the mux to cut at ~200 ms; the gap between that and the wheels actually stopping is the VESC's timeout plus mechanical coast-down, and **that number is the e-stop**. It belongs on the dashboard.
+
+Do this twice. One sample of a safety number is not a measurement.
+
+### Block E - S-19, the domain ID question (needs a second car)
+
+If robots share a `ROS_DOMAIN_ID`, DDS discovery is multicast and each robot enumerates every other robot's nodes, which **breaks the node roll call directly**.
+
+```bash
+echo $ROS_DOMAIN_ID          # on robot #2 -> 202
+# then the same on any other car
+# then, with both powered up on the same network, on one of them:
+ros2 node list
+```
+
+**Working hypothesis worth testing rather than assuming:** robot #2 uses `ROS_DOMAIN_ID=202`, which looks like a per-robot convention rather than a shared value. If robot #3 reports 203, the risk evaporates and S-19 is safe as designed. If it also reports 202, we need a unique ID per robot or `ROS_LOCALHOST_ONLY=1`, and the page needs a way to show which car it is looking at. Either result is a one-line answer that unblocks a tier-1 check.
+
+### Block F - S-05, the thermal baseline under load (20 min, runs in the background)
+
+Every `[MEASURE]` threshold is a guess until this exists. 70 °C is an Orin-family default, not ours; the idle floor is 47-51 °C.
+
+```bash
+( while true; do
+    printf '%s' "$(date +%s)"
+    for z in /sys/class/thermal/thermal_zone*; do
+      printf ' %s=%s' "$(cat $z/type)" "$(cat $z/temp 2>/dev/null || echo NA)"
+    done; echo
+    sleep 5
+  done ) > thermal_run.txt &
+```
+
+**Log the VESC's own temperature in the same window.** On a car with the `temp_fet` patch (only robot #2 so far), one run closes both S-05 and S-10's thresholds instead of two:
+
+```bash
+( timeout 1200 ros2 topic echo /sensors/core --csv > vesc_thermal_run.csv ) &
+```
+
+That is 50 Hz for 20 minutes, about 60 000 rows and roughly 10 MB - nothing on a 915 GB NVMe. Downsample afterwards; the point is the plateau, not the samples.
+
+Then leave bringup and the camera running and drive for 20 minutes. Take `tj-thermal`'s plateau as Healthy for S-05 and `temp_fet`'s plateau as Healthy for S-10, and set Degraded above each with real headroom. Blocks B and C are finished, so this needs its own session.
+
+**This is the single highest-value block remaining.** It is the only thing standing between the inventory and a complete set of thresholds, it needs no second car and no second person, and it runs unattended in the background while other blocks proceed.
+
+### Block G - S-18, one last attempt at the controller charge
+
+Two negatives are not proof it is impossible, and #1 calls this the cheapest safety-relevant number it has.
+
+```bash
+lsmod | grep -iE 'hid_sony|hid_playstation|hid_generic'   # which driver is bound?
+dmesg | grep -iE 'sony|playstation|hid-' | tail -20
+upower -e                       # then: upower -i <path>
+ls /sys/class/power_supply/ /sys/bus/hid/devices/*/power_supply 2>/dev/null
+```
+
+If all four come up empty, set `Experimental = true` in `/etc/bluetooth/main.conf`, restart `bluetooth.service`, reconnect the pad, and re-run `bluetoothctl info <mac>` - BlueZ hides battery reporting behind that flag. If that also fails, the pad reports charge inside its HID input report and can be read from `/dev/hidraw*`; hacky, well documented, driver-independent. **If none of it works, delete the check from #1** rather than leaving a field nobody can fill.
+
+> **A correction worth recording:** an earlier version of this document inferred that `hid-generic` was bound because `/proc/bus/input/devices` shows `Name="Wireless Controller"`. That reasoning is wrong - **"Wireless Controller" is the DS4's actual product name string**, which Sony ships, so it says nothing about which driver claimed the device.
+
+### Block H - the `/ackermann_drive` remap (15 min, no hardware)
+
+S-22 and S-23 currently name the wrong topic.
+
+```bash
+ros2 topic list | grep -i ackermann
+ros2 topic info -v /ackermann_cmd
+ros2 node info /ackermann_mux
+grep -rn 'ackermann_cmd_out\|ackermann_drive' ~/f1tenth_ws/src/
+```
+
+Establish whether `ackermann_mux` actually honours the remap, and update #1 with whichever topic name is real.
+
+### Block I - the rosbridge ceiling (10 min, do last)
+
+Subscribing to everything unthrottled wedged rosbridge once: TCP still accepted connections but the websocket handshake stopped completing, and it needed a restart. There is no rate limiting and no backpressure. Several students will have the page open at once, so the ceiling matters.
+
+Open the dashboard in 1, then 3, then 6 tabs across two laptops. Watch for rising latency in the "last update" age and for handshakes that never complete. Record the number of clients at which it degrades.
+
+### What to do with the results
+
+Every block writes a file. `scp` the directory back and fold the numbers into Section 3 and Section 4, then update `docs/subsystem-inventory.md` in the same pass - **the `[MEASURE]` and `[CONFIRM]` tags in #1 are the point of the exercise**, and a measurement that stays in a text file on the robot has not closed anything.
+
+---
+
+## 6. Does the page design actually work?
+
+The plan: a student opens `dashboard.html` on their own laptop, points it at a robot's IP, sees ROS diagnostics plus system state, and can press a button to run a check on that robot.
+
+**Verdict: yes. The ROS half and the system half both work on robot #2. The button is still missing.**
+
+### What works today, verified
+
+| Part of the plan | Status |
+|---|---|
+| Page opens on any laptop, nothing installed | **Works.** `dashboard.html` is one self-contained file - inline CSS and JS, no CDN, works with no internet |
+| Connects to a chosen robot by IP | **Works.** It derives the target from wherever it was served, and takes `?url=ws://host:9090` to override |
+| Reads ROS data with no ROS on the laptop | **Works, verified on hardware.** rosbridge translates to JSON on the robot |
+| Reads `/sensors/core` despite `vesc_msgs` being a custom type | **Works.** rosbridge deserializes robot-side, where the package exists |
+| Node roll call, topic liveness, battery, mux mode, `/diagnostics`, `/rosout` | **Works.** All of it is already in the page |
+| Does not fall over when a message is malformed | **Works.** Handler is wrapped; one bad message cannot kill the loop |
+| Shows its own staleness so a frozen page cannot look healthy | **Works.** Per-topic age plus a stale banner |
+
+### The gap
+
+**rosbridge only carries ROS.** Two things in the plan needed more than rosbridge:
+
+1. **System state** - CPU temperature, load, disk, memory, Bluetooth, USB link speed, network carrier. No ROS node publishes any of it. That is S-02, S-04 to S-08, part of S-14, S-17 and part of S-18: **eight of #1's subsystems, four of them tier 1.** Now built, as option (b) below: `prototype/system_diagnostics.py`.
+2. **The button.** There is no way for the page to ask the robot to run something. Not built yet.
+
+### The fix, and why this shape
+
+Two options. **We went with the second.**
+
+**(a) Add an HTTP backend on the robot.** Node or FastAPI serving the page, `/api/*` endpoints for system state, and proxying the websocket so the browser only knows one port. Conventional, and it works.
+
+**(b) Make the system half a ROS node.** One `f1tenth_diagnostics` Python node on the robot that:
+
+- reads `/proc`, `/sys`, `bluetoothctl`, `ping` and so on once a second, and **publishes them as `diagnostic_msgs/DiagnosticArray` on `/diagnostics`** - the same channel and the same schema the lidar and the mux already use;
+- exposes each button as a **ROS service** (`std_srvs/Trigger` for fixed checks, or a small custom service returning stdout as a string);
+- also carries the topic-liveness logic for nodes that do not self-report, closing the coverage gap from Section 3.
+
+`system_diagnostics.py` covers the first bullet. The service handlers and the liveness logic are not written yet; for now the page works out liveness in the browser.
+
+**Why (b) wins:**
+
+- **The client side already exists.** `dashboard.html:263` has a generic `call(service, args)` helper that speaks `op:'call_service'` over the same socket. It is already used for `/rosapi/nodes` and `/rosapi/publishers`. Adding a button is a service name and a render function - no new transport, no new protocol.
+- **One channel, one schema.** No second port, no CORS, no static server, no separate API to document. Everything a student sees arrives the same way.
+- **System state lands in `/diagnostics`**, so `diagnostic_aggregator` and `rqt_robot_monitor` display it for free, and a teammate who prefers a terminal gets it without a browser.
+- **It solves the rate problem.** Section 2 measured `/scan` at 30.5 Hz from off-robot against a real 40.0. Rates computed inside a node on the robot and published as numbers are correct; rates derived in a browser over WiFi are not. The system node should compute them.
+- It is one Python file, and it is the thing #12 was going to build anyway.
+
+Whichever is chosen, the command-running rules are not optional: **whitelist fixed actions**, never an endpoint or service that accepts a command string, and `subprocess.run([...])` with a list, **never `shell=True`**. A backend that runs arbitrary shell commands is remote code execution on the robot.
+
+### Three things to decide before building
+
+**1. rosbridge has no authentication, and it can publish to any topic - including `/drive`.** For students to reach it from their own laptops it must listen on `0.0.0.0`. On a shared lab network with eight cars, **anyone who can open the page can also drive any robot.** Verified: bound to `127.0.0.1` it is reachable locally and refuses connections from the network interface, so this is a live choice, not a theoretical one. Options, for #3 to settle:
+
+- accept it on an isolated lab network and write it down;
+- keep rosbridge on localhost and put a small backend in front that exposes reads only;
+- put a token-checked proxy in front of the websocket.
+
+The read-only-versus-can-restart-nodes question is the same decision and should be settled at the same time.
+
+**2. Which car am I looking at?** One file serves every robot, so the page must say. The lidar's `Device ID` is a free per-unit serial already on `/diagnostics`; hostname works too. Without it, a student on the wrong IP debugs the wrong robot.
+
+**3. Several students at once is a load case, not a detail.** One careless unthrottled client wedged rosbridge. Keep the 200 ms throttle, never subscribe to `/scan` unthrottled to prove it is alive (publisher count plus a slow subscription is far cheaper), and measure the client ceiling - block I.
+
+### What that leaves to build
+
+1. The rest of the node: the topic-liveness bridge for nodes that do not self-report, and the service handlers behind the buttons. The system collectors are done (`system_diagnostics.py`).
+2. An aggregator config listing the eight expected nodes under Sensors / Actuation / Control so a missing node surfaces as `Missing`.
+3. VESC threshold checks on `/sensors/core`. Battery, `fault_code` and `temp_fet` all read correctly (`temp_fet` needs the driver patch); the temperature thresholds wait on block F.
+4. rosbridge in a launch file. Nothing in `f1tenth_system` starts it, despite it being a declared dependency of `f1tenth_stack`; `prototype/start_diagnostics.sh` starts it for now.
+5. The page: buttons and the per-subsystem view over `/diagnostics_agg`. The system panel is done.
+
+The page should not need rewriting as this lands. It already subscribes rather than computing health itself, so moving classification into the node makes it a thinner renderer, not a different one.
+
+---
+
+## 7. Traps that will cost someone a day
+
+Recorded because each one produces a *wrong* reading rather than an obvious failure.
+
+| Trap | What you see | Measured cost |
+|---|---|---|
+| **QoS mismatch** | zero messages from a perfectly healthy publisher | 0 vs **196** messages in 5 s |
+| **Dead node lingers** | a killed node still listed as present | ~16-18 s of false "healthy" |
+| **Dead topic vanishes** | after DDS times out the topic leaves the list entirely | a dead node goes invisible, not red |
+| **One-shot `/diagnostics` read** | live components look missing | `--once` returned only `urg_node`'s array; `ackermann_mux` was publishing fine. Each publisher sends its own `DiagnosticArray`, so a single message is never the union. **Accumulate over a window keyed by `status[].name`.** Confirmed live: `ros2 topic echo /diagnostics --once \| grep 'system:'` printed nothing while the dashboard showed all ten system checks and the topic row read **3 publishers**. Use `--times 10` and grep that |
+| **Hardcoded camera topic names** | false `NODE_DOWN` on a healthy camera | `camera_name:=rs` gives `/camera/rs/...`; the default gives `/camera/camera/...`. Discover by prefix, never by literal |
+| **Per-sample thresholds on 50 Hz topics** | a healthy battery flapping Healthy/Degraded many times a second | `voltage_input` swings 11.0-11.2 V with throttle across #1's 11.1 V line. Use a rolling window or qualify by load |
+| **A field that is never assigned** | a plausible-looking `0.0` forever | three sessions spent measuring `temp_fet: 0.0` that the driver never wrote. **A constant is not a reading** |
+| **Stale ROS daemon** | `ros2 node list` showed 1 node while all topics were live | wrong picture of the graph |
+| **One bad callback** | every topic reads `SILENT`; monitor reports a dead robot that is fine | total blackout |
+| **Custom msg types, native client** | `/sensors/core` undecodable off-robot | values lost, liveness kept |
+| **Off-robot rate measurement** | `/scan` reads 30.5 Hz | 25% low, looks like a real fault |
+| **Unthrottled rosbridge** | server wedges, handshakes stop completing | needs a restart |
+
+**QoS mismatch is the worst one.** QoS is the set of delivery guarantees a publisher advertises and a subscriber requests. If a driver publishes `BEST_EFFORT` (normal for sensors, which would rather drop a frame than wait) and the monitor subscribes `RELIABLE`, DDS refuses to connect them and the monitor receives **nothing from a working sensor**. Read the publisher's advertised QoS with `get_publishers_info_by_topic()` and match it. ROS logs `offering incompatible QoS. No messages will be received`, and `ros2 topic info -v /scan` prints each publisher's full profile.
+
+**Node presence is a slow signal and must not be the primary health check.** After a hard kill, both the rclpy graph API and `ros2 node list` reported the node present for six consecutive polls:
+
+```
+  t(s)   rclpy graph API        ros2 node list       --no-daemon
+   0.0   PRESENT                PRESENT              gone
+  10.8   PRESENT                PRESENT              gone
+  16.3   PRESENT                gone                 gone
+  19.2   gone                   gone                 gone
+```
+
+Message arrival detects the same failure in under a second.
+
+**Neither `ros2 node list` variant is dependable.** Three runs, three different failures: run 1 gave **1 node** with the daemon while all topics were live and was correct with `--no-daemon`; run 2 was correct with the daemon and gave **9 nodes** with `--no-daemon`, missing `/rosapi` and `/static_baselink_to_laser`; run 3 was correct with the daemon and gave **7 nodes** with `--no-daemon`, missing `urg_node`, `vesc_driver_node`, `vesc_to_odom_node` and `joy_teleop` while `/scan` and `/sensors/core` were demonstrably publishing. The daemon caches a stale view; `--no-daemon` does a fresh discovery with a short timeout and misses slow responders. **The only method correct on every attempt was `/rosapi/nodes`** - a long-lived participant that has had time to discover. S-19 should use it, and should tolerate a node briefly missing rather than alarming on one bad sample.
+
+**A callback exception silently kills everything.** An exception inside a subscription callback kills the rclpy executor thread, after which every topic reads `SILENT`. Wrap every callback. The specific thing that threw: **`DiagnosticStatus.level` is a `byte` (`b'\x00'`), not an `int`** - use `int.from_bytes(raw, 'big')`.
+
+**Do not `apt install python3-websockets`.** Ubuntu 22.04 ships 9.1, which crashes on Python 3.10 with `TypeError: As of 3.10, the *loop* parameter was removed from Lock()`. Either `pip3 install -U "websockets>=12"` or use a stdlib-only client.
+
+**`/scan` is bigger than you think.** 1081 ranges at 40 Hz is roughly 19 KB per message and ~780 KB/s as JSON. Always set `throttle_rate` for anything you are only displaying.
+
+**No browser on the robot.** `snapd` is broken on this Jetson - `snap-confine` has lost its file capabilities, so `chromium` refuses to launch and *every* snap fails identically. Firefox is not installed despite `xdg-settings` naming it the default. This never blocked the spike, and it does not block the product either: **the page is meant to be opened on a student's laptop, not on the robot.** Untried fixes are in the appendix.
+
+---
+
+## 8. What this means for the other issues
+
+### #3 - ADR, web app vs status server vs physical indicator
+
+[ADR 0001](../ADR/0001-Diagonstics_form.md) has since proposed the web app. The points below still apply to it.
+
+**1. The web app is viable and cheaper than it looks.** rosbridge is already a declared dependency, already installed, and works. The browser needs no ROS install and no message packages. Verified end to end on real hardware.
+
+**2. "Status server" is largely a false alternative.** rosbridge *is* a status server. The question is not whether to build one but what renders its output, which reduces the ADR to web page versus physical indicator, plus how much logic sits robot-side. Section 6 argues most of it should.
+
+**3. A network-delivered display cannot report its own transport failing, and the failure is silent** - a frozen page looks exactly like a healthy one. Whichever option is chosen needs a visible "last updated" age. This confirms cross-cutting finding 3 in #1, and the page already does it.
+
+**4. The physical indicator has a stronger case than expected, for one specific job.** The robot's only stop is a software deadman over a wireless link and it fails open. Deadman state and controller-link health are the two most safety-relevant indicators, and they are precisely the two a network-delivered display is worst placed to show - the same link failure that loses the deadman may lose the page.
+
+**5. Access control is now a decision, not a detail** - see Section 6. Letting students reach the page from their own machines means rosbridge is LAN-exposed, and rosbridge can drive the robot.
+
+### #8 - health status schema
+
+- **Adopt `diagnostic_msgs`** rather than inventing a parallel format. OK/WARN/ERROR/STALE maps onto Healthy/Degraded/Failed/unknown, and adopting it means `diagnostic_aggregator` and `rqt_robot_monitor` work for free.
+- **Carry a topic class** (`continuous` / `event` / `latched` / `input`). Without it a healthy car reads as 16 broken topics.
+- **Carry `depends_on`**, as #1 already recommends. S-09 failing takes S-01, S-10 and S-15 with it in the same instant.
+- **Distinguish "check could not run" from "check passed"**, per #1's `unknown`. S-11, S-13 and parts of S-15 are only meaningful while moving.
+
+### #4 - interface mockup
+
+Tier-1 subsystems that are **Ready** today and can be mocked against real data: S-01 battery, S-04 load, S-05 thermals, S-12 lidar, S-17 lidar link, S-18 gamepad, S-19 node set. S-03 is ready once it gates on Bluetooth state. S-10 can show battery, fault code and FET temperature (FET temperature on patched cars only). S-14 is confirmed present and can be mocked with presence and USB link speed.
+
+The mockup should also budget space for **three things the spike says the page needs and which are easy to forget**: a visible last-updated age, an identifier for which car is being shown, and a place to put the output of a check that was run on the robot.
+
+---
+
+## Appendix
+
+### The throwaway code
+
+Kept so the results are reproducible. The two scripts worth running are in `prototype/tools/`. `rosbridge_check.py` is a pure-stdlib WebSocket client (no pip, no ROS, no browser) that prints the node list plus live status for `/scan`, `/odom`, `/sensors/core` and `/diagnostics`. `baseline_capture.sh` is a read-only robot dump covering topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, lidar ping, VESC device node and clock, and is what produced the numbers in Section 4.
+
+The other experiment scripts (fake bringup nodes for testing without a robot, the QoS and stale-node probes, the `diagnostic_updater` demo and two small `/diagnostics` merge scripts) ran on a laptop in Docker and were not kept. Their results are recorded in Sections 2, 3 and 7.
+
+The dashboard itself is the exception: `dashboard.html`, `start_diagnostics.sh` and `system_diagnostics.py` in `prototype/` came out of the spike and are the basis of the real page, assessed in Section 6.
+
+### Running against the real robot
+
+```bash
+# on the robot: bringup, system diagnostics, rosbridge and the web server in one go
+~/diag/start_diagnostics.sh
+
+# or by hand, in two terminals
+bringup                                                        # ros2 launch f1tenth_stack bringup_launch.py
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml    # not in any launch file yet
+
+# then, from any machine on the network, with nothing installed
+open http://192.168.1.202:8000/dashboard.html
+```
+
+### Without a robot
+
+The Docker setup with fake nodes was not kept. `node prototype/verify_system.mjs` still checks the page's system panel with no robot.
+
+### Untried fixes for the broken snap
+
+Recorded so nobody re-diagnoses it. Not needed for this project.
+
+```bash
+ls -l /usr/lib/snapd/snap-confine     # want -rwsr-xr-x; the 's' matters
+sudo chmod 4755 /usr/lib/snapd/snap-confine
+sudo apt install --reinstall snapd
+sudo apt install policycoreutils      # provides the missing matchpathcon
+sudo apt install epiphany-browser     # or sidestep snap entirely
+```
