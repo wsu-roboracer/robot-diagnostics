@@ -1,8 +1,9 @@
 # Saman's engineering Log
 
 ## Week 2
-```md
 # Engineering Log - Dashboard Mockup
+
+**Date:** September 14, 2026
 
 ## Work Completed
 
@@ -32,7 +33,7 @@
   - Understand the dashboard without much explanation.
 - Record any confusing parts or missing information.
 - Update the mockup based on the feedback.
-```
+
 ![UI MOCKUP](../Images/image.png)
 
 ## Week 3
