@@ -38,6 +38,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 #stalebar{display:none;padding:9px 16px;background:var(--err);color:#fff;font-weight:600;
   text-align:center;letter-spacing:.3px}
 #stalebar.on{display:block}
+/* Distinct from stalebar: there the robot went quiet, here rosbridge is answering
+   but not sending topic data - a different problem with a different fix. */
+#limitbar{display:none;padding:9px 16px;background:var(--warn);color:#14181d;
+  font-weight:600;text-align:center;letter-spacing:.2px}
+#limitbar.on{display:block}
+#clients.over{color:var(--err)}
+#clients.near{color:var(--warn)}
 
 .wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:13px;padding:13px}
 @media (max-width:1000px){.wrap{grid-template-columns:1fr}}
@@ -55,6 +62,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 .hero .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .hero .v{font-size:1.7rem;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums;
   font-family:ui-monospace,monospace;overflow-wrap:anywhere;min-width:0}
+/* 1.7rem monospace is about 17px per character, and a tile is ~160px of content
+   at the narrowest column, so anything past 8 characters has to step down.
+   `connected` (9) was breaking mid-word into `connecte` / `d` on the car. */
 .hero .v.sm{font-size:1.05rem;line-height:1.2}
 .hero>div{min-width:0}
 .hero .n{font-size:11.5px;color:var(--dim)}
@@ -102,6 +112,18 @@ tr.detail pre{margin:0;padding:10px 14px 12px 32px;overflow:auto;max-height:320p
 .nodes span{font-family:ui-monospace,monospace;font-size:11px;padding:2px 7px;
   border:1px solid var(--line);border-radius:99px;color:var(--dim)}
 .nodes span.extra{border-style:dashed}
+
+/* on-demand checks: a button that makes the robot DO something, then reports back */
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:0 14px 11px}
+.actions button:disabled{opacity:.55;cursor:progress;border-color:var(--line)}
+#joyNote{color:var(--faint);font-size:11.5px;max-width:34ch;line-height:1.35}
+/* `pre`, not `pre-wrap`: the report aligns its labels and indents the fix command,
+   and rewrapping that at a narrow width destroys what makes it readable. Wide
+   content scrolls inside its own box here, the same as the tables above. */
+#joyResult{display:none;margin:0;padding:10px 14px 13px;background:var(--panel2);
+  border-top:1px solid var(--line);font-family:ui-monospace,monospace;font-size:11px;
+  line-height:1.5;white-space:pre;overflow:auto;max-height:300px}
+#joyResult.on{display:block}
 </style>
 </head>
 <body>
@@ -112,11 +134,16 @@ tr.detail pre{margin:0;padding:10px 14px 12px 32px;overflow:auto;max-height:320p
   <input id="wsUrl" spellcheck="false" aria-label="rosbridge address">
   <button id="connectBtn">Connect</button>
   <span class="mono" style="color:var(--faint);font-size:12px" id="summary"></span>
+  <span class="mono" style="color:var(--faint);font-size:12px" id="clients"
+        title="rosbridge serves 10 clients at once; the 11th onward gets nothing.
+Updates only when a client connects or disconnects, so a tab that joined after the
+last change shows - until the next one.">clients -</span>
   <span class="mono" style="margin-left:auto;color:var(--faint);font-size:11.5px"
         id="updated">last update: never</span>
 </header>
 
 <div id="stalebar">NO DATA FROM THE ROBOT - this page may be showing stale values</div>
+<div id="limitbar"></div>
 
 <div class="wrap">
   <div class="colstack">
@@ -166,6 +193,12 @@ tr.detail pre{margin:0;padding:10px 14px 12px 32px;overflow:auto;max-height:320p
         <tbody id="sysDetail"></tbody>
       </table></div>
       <div class="hint"><a href="#" id="sysToggle">show all readings</a></div>
+      <div class="actions">
+        <button id="joyBtn">Run joystick check</button>
+        <span id="joyNote">joy_enumerate_devices on the robot - the only thing that
+          separates "no controller" from "ROS cannot open it"</span>
+      </div>
+      <pre id="joyResult"></pre>
     </div>
 
     <div class="card">
@@ -195,6 +228,13 @@ const $ = id => document.getElementById(id);
 const NODE_POLL_MS = 3000, UI_MS = 500, GRAPH_POLL_MS = 5000;
 const STALE_MS = 2000;          // a continuous topic quiet this long is stale
 const CONN_STALE_MS = 4000;     // nothing at all from rosbridge = warn loudly
+// rosbridge serves exactly this many clients at once (measured 2026-09-16: 5/5,
+// 10/10, 10 of 15, 10 of 25). Number 11 connects, is counted, and is fed nothing.
+const CLIENT_LIMIT = 10;
+// No topic data for this long, while rosbridge is still answering service calls, is
+// the signature of being one of the starved clients. It is NOT the same as the
+// robot going quiet, and it needs a different fix, so it gets its own banner.
+const PUBLISH_STALE_MS = 8000;
 const LIVENESS_THROTTLE = 200;  // ms. NEVER subscribe unthrottled - /scan is ~780 KB/s
                                 // and will wedge rosbridge for everyone.
 
@@ -252,6 +292,7 @@ const FAULTS = {0:'NONE',1:'OVER_VOLTAGE',2:'UNDER_VOLTAGE',3:'DRV8302',
 // robot with no internet.
 // ---------------------------------------------------------------------------
 let ws=null, seq=0, subscribed=new Set(), lastAnything=0;
+let lastPublish=0, connectedAt=0, clients=null;
 const pending=new Map(), topics=new Map();
 let runningNodes=new Set(), diag={}, vesc=null, mux=null;
 const expanded=new Set();      // topics whose row is open
@@ -264,8 +305,11 @@ function call(service, args={}){
   return new Promise((res,rej)=>{
     if(!ws||ws.readyState!==1) return rej(new Error('not connected'));
     const id='c'+(++seq);
-    pending.set(id,res);
-    setTimeout(()=>{ if(pending.delete(id)) rej(new Error('timeout '+service)); },8000);
+    pending.set(id,{res,rej});
+    // 12s, not 8: the joystick check shells out to `ros2 run` on the robot and is
+    // allowed 8s there, so a shorter deadline here would time out a call that is
+    // about to answer. rosapi calls are unaffected - scan() retries every 5s.
+    setTimeout(()=>{ if(pending.delete(id)) rej(new Error('timeout '+service)); },12000);
     send({op:'call_service',service,args,id});
   });
 }
@@ -274,10 +318,12 @@ function connect(url){
   if(ws){ try{ws.onclose=null;ws.close();}catch(e){} }
   topics.clear(); subscribed.clear(); runningNodes=new Set();
   diag={}; vesc=null; mux=null; lastAnything=0;
+  lastPublish=0; connectedAt=0; clients=null;
   setConn('connecting…','');
   try{ ws=new WebSocket(url); }catch(e){ return setConn('bad URL','down'); }
 
-  ws.onopen=()=>{ setConn('connected','up'); scan(); subscribeFixed(); };
+  ws.onopen=()=>{ connectedAt=performance.now(); setConn('connected','up');
+                  scan(); subscribeFixed(); };
   ws.onclose=()=>setConn('disconnected','down');
   ws.onerror=()=>{
     setConn('connection failed','down');
@@ -293,11 +339,21 @@ function connect(url){
 
 function handle(m){
   if(m.op==='service_response'){
-    const cb=pending.get(m.id); if(cb){ pending.delete(m.id); cb(m.values); }
+    const cb=pending.get(m.id); if(!cb) return;
+    pending.delete(m.id);
+    // rosbridge answers a failed call with result:false and an error STRING in
+    // values. Resolving that like a normal reply hands the caller an object
+    // whose every field is undefined - a missing service then renders as an
+    // empty result instead of an error.
+    if(m.result===false) cb.rej(new Error(String(m.values||'service call failed')));
+    else cb.res(m.values);
     return;
   }
   if(m.op!=='publish') return;
   const t=m.topic, now=performance.now();
+  lastPublish=now;                 // tracked apart from lastAnything, which service
+                                   // responses also refresh - see PUBLISH_STALE_MS
+  if(t==='/client_count'){ clients=m.msg.data; return; }
   const s=topics.get(t);
   if(s){ s.count++; s.last=now; if(s.first===null) s.first=now; }
 
@@ -310,6 +366,10 @@ function handle(m){
 // ---- fixed subscriptions: these two are not liveness probes ----
 function subscribeFixed(){
   send({op:'subscribe',topic:'/rosout',throttle_rate:0,queue_length:10});
+  // rosbridge's own count of connected clients. It publishes on change only, so
+  // this reads "-" until someone connects or disconnects - including, usually, our
+  // own arrival, which lands before this subscription is registered.
+  send({op:'subscribe',topic:'/client_count',throttle_rate:0,queue_length:1});
   // /diagnostics and /sensors/core are also in TOPICS, subscribed by scan()
 }
 
@@ -489,7 +549,16 @@ function render(){
 
   // the page must be able to report its own staleness
   const quiet = lastAnything ? now-lastAnything : Infinity;
-  $('stalebar').className = (ws&&ws.readyState===1&&quiet>CONN_STALE_MS)?'on':'';
+  const banner = bannerState(now, {
+    wsOpen: !!(ws && ws.readyState===1), lastAnything, lastPublish, connectedAt,
+    clients, limit: CLIENT_LIMIT, connStaleMs: CONN_STALE_MS,
+    publishStaleMs: PUBLISH_STALE_MS});
+  $('stalebar').className = banner && banner.kind==='stale' ? 'on' : '';
+  $('limitbar').className = banner && banner.kind!=='stale' ? 'on' : '';
+  if(banner && banner.text) $('limitbar').textContent = banner.text;
+  const cl = clientsLabel(clients, CLIENT_LIMIT);
+  $('clients').textContent = cl.text;
+  $('clients').className = cl.cls;
   $('updated').textContent = lastAnything
     ? `last update: ${(quiet/1000).toFixed(1)}s ago` : 'last update: never';
 
@@ -583,6 +652,7 @@ function render(){
 const SYS_LV={0:'var(--ok)',1:'var(--warn)',2:'var(--err)',3:'var(--idle)'};
 const SYS_ORDER=['Thermal','Power','CPU','Memory','Storage','Network',
                  'VESC device','Camera','Gamepad','Clock'];
+const HEAD_MAX_CH=8;           // longest headline the 1.7rem slot fits; see .hero .v.sm
 let sysOpen=false;
 
 // The headline sits in a 1.7rem monospace slot, so it has to be a VALUE, never a
@@ -644,7 +714,7 @@ function renderSystem(){
     if(d.level>worst && d.level!==3) worst=d.level;
     const head=String(sysHeadline(short,d));
     return '<div><span class="k">'+esc(short)+'</span>'
-      +'<span class="v'+(head.length>10?' sm':'')
+      +'<span class="v'+(head.length>HEAD_MAX_CH?' sm':'')
       +'" style="color:'+(SYS_LV[d.level]||'var(--idle)')+'">'
       +esc(head)+'</span>'
       +'<span class="n">'+esc(String(sysNote(short,d)))+'</span></div>';
@@ -667,6 +737,76 @@ function renderSystem(){
   }
 }
 
+// ---- connection health ----
+// Three states the page must tell apart, because the fixes differ:
+//   nothing at all from rosbridge      -> the robot went away
+//   services answer, no topic data     -> WE are a starved client past the limit
+//   more clients than rosbridge serves -> somebody is starved, maybe not us
+// The middle one is the dangerous one: every topic reads SILENT and the page looks
+// exactly like a dead robot, which is what sent a session chasing the wrong thing.
+// /client_count is published on CHANGE only, so a tab that connects after the last
+// change never hears one and keeps whatever it had - observed on the car as one tab
+// reading 2 and another reading 0 with both connected. A page is itself a client, so
+// any count below 1 is provably stale. Say unknown rather than something false; the
+// starved-client detection below does not depend on this number at all.
+function clientsLabel(clients, limit){
+  const known = clients !== null && clients >= 1;
+  if(!known) return {text:'clients -', cls:''};
+  return {text:`clients ${clients} / ${limit}`,
+          cls: clients > limit ? 'over' : clients >= limit-2 ? 'near' : ''};
+}
+
+function bannerState(now, st){
+  if(!st.wsOpen) return null;
+  const quiet = st.lastAnything ? now - st.lastAnything : Infinity;
+  if(quiet > st.connStaleMs) return {kind:'stale'};
+
+  // A starved client never receives a single publish, so "no publish yet" has to
+  // count once we have been connected long enough to expect one.
+  const since = st.lastPublish ? now - st.lastPublish
+              : (st.connectedAt ? now - st.connectedAt : 0);
+  if(since > st.publishStaleMs)
+    return {kind:'starved', text:
+      'rosbridge is answering but sending no topic data - this page is probably past '
+      + 'its client limit (' + st.limit + '). Close another dashboard tab.'};
+
+  if(st.clients !== null && st.clients > st.limit)
+    return {kind:'crowded', text:
+      st.clients + ' clients connected, rosbridge serves ' + st.limit
+      + ' - some dashboards are receiving nothing.'};
+  return null;
+}
+
+// ---- on-demand checks ----
+// The rest of this page only watches. This is the one control that makes the
+// robot run something, over the same websocket, as a std_srvs/Trigger on
+// system_diagnostics.py - no second port, no HTTP endpoint, no custom .srv.
+// The result is deliberately verbose: it is read once, when something is wrong.
+const JOY_SERVICE='/system_diagnostics/joystick_check';
+
+async function runJoyCheck(){
+  const btn=$('joyBtn'), out=$('joyResult');
+  out.className='on';
+  out.style.color='var(--dim)';
+  out.textContent='running '+JOY_SERVICE+' on the robot\u2026 (a few seconds)';
+  btn.disabled=true;
+  try{
+    const r=await call(JOY_SERVICE);
+    out.textContent=r.message||'(the service returned no message)';
+    out.style.color=r.success?'var(--ok)':'var(--warn)';
+  }catch(e){
+    // Distinguish the two ways this fails, because the fixes are different.
+    const missing=/does not exist|unavailable|not available/i.test(e.message);
+    out.style.color='var(--err)';
+    out.textContent=missing
+      ? e.message+'\n\nsystem_diagnostics.py is not running, or is an older copy '
+        +'without the service.\nOn the robot:  ./start_diagnostics.sh'
+      : 'check failed: '+e.message;
+  }finally{
+    btn.disabled=false;
+  }
+}
+
 // ---- boot ----
 // Default target: the host that served this page, so http://<robot>:8000 just works.
 // Override with ?url=ws://host:9090
@@ -676,6 +816,7 @@ $('wsUrl').value = q ? q
   : (location.protocol.startsWith('http') && location.hostname)
     ? `ws://${location.hostname}:9090` : 'ws://localhost:9090';
 
+$('joyBtn').onclick=runJoyCheck;
 $('connectBtn').onclick=()=>connect($('wsUrl').value.trim());
 $('wsUrl').addEventListener('keydown',e=>{ if(e.key==='Enter') connect($('wsUrl').value.trim()); });
 setInterval(render,UI_MS);

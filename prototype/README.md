@@ -2,7 +2,7 @@
 
 Proof of concept from the ROS status spike (#2). Its only job was to show that a web page can display live robot health, so it is scrappy on purpose and not the final tool. The findings are in [docs/ros-status-spike-summary.md](../docs/ros-status-spike-summary.md).
 
-The page is read-only and changes nothing on the car. It shows which nodes are running, which topics are actually publishing, battery voltage, the mux's active control input, everything on `/diagnostics`, a live `/rosout` warning and error feed, and an OS-level system panel. Click a topic row to see its real message data.
+The page is read-only apart from one button, and changes nothing on the car. It shows which nodes are running, which topics are actually publishing, battery voltage, the mux's active control input, everything on `/diagnostics`, a live `/rosout` warning and error feed, and an OS-level system panel. Click a topic row to see its real message data.
 
 ## Files
 
@@ -11,7 +11,7 @@ The page is read-only and changes nothing on the car. It shows which nodes are r
 | `dashboard.html` | The whole page in one file. Inline CSS and JavaScript, no CDN, works with no internet |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
-| `verify_system.mjs` | Runs the page's real system panel code against sample messages. No robot needed: `node verify_system.mjs` |
+| `verify_system.mjs` | Runs the page's real system panel and joystick-check code against sample messages. No robot needed: `node verify_system.mjs` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
 
@@ -111,10 +111,28 @@ The robot system panel covers things ROS does not publish: temperatures, CPU loa
 
 Two readings show words instead of numbers on purpose:
 
-- **Gamepad battery** says *not exposed by this driver*. With the pad connected, no battery entry appears in `/sys/class/power_supply/`, and a blank field would look like a bug.
+- **Gamepad battery** says *not exposed by this driver*, and that is final. The DS4 (`054C:05C4`) binds to `hid-generic`; `hid_sony`, which is what creates `sony_controller_battery_*`, **is not built for this Tegra kernel** (`modprobe: FATAL: Module hid_sony not found in directory /lib/modules/5.15.148-tegra`) and `/sys/bus/hid/drivers/` has no `sony` entry to bind to. `upower -e` lists only `DisplayDevice`. Getting a charge level would mean building a kernel module. A blank field would look like a bug, so the page says why instead.
 - **VESC temp** shows the FET sensor only. The motor has no temperature sensor fitted and reads about -74 C, so the page says *no motor sensor fitted*. `temp_fet` itself needs a two-line fix to `vesc_driver.cpp` that currently only exists on robot #2. Without it the field reads 0.0.
 
-A red banner across the top means the page has heard nothing from the robot for four seconds. A frozen page otherwise looks exactly like a healthy one, so check the "last update" age in the top right before trusting what you see.
+### The joystick check button
+
+The one button on the page that makes the robot do something. It calls a `std_srvs/Trigger` service on `system_diagnostics.py` over the same websocket as everything else, which runs `ros2 run joy joy_enumerate_devices` on the car and reports what it found.
+
+It exists because a silent `/joy` has three causes that look identical on the topic: no controller, a controller that has gone to sleep, and a controller that is paired and working while ROS has no permission to open it. The third one cost most of a session. `joy_enumerate_devices` is the only thing that separates them, and it is too slow to run on a 1 Hz loop, which is what makes it a button.
+
+Press it when `/joy` reads `IDLE` and you expected it not to. It answers with one of:
+
+- **A joystick is readable.** SDL can open the device, so `/joy` will publish once the pad sends events.
+- **No controller is connected.** Expected state, not a fault. Pair one and press it again.
+- **CONTRADICTION: the pad is paired and connected, but SDL cannot open it.** This is the permission trap. `joy` reads `/dev/input/event*`, which is `0660 root:input`, and over NoMachine the login ACL goes to `gdm` rather than to you. Fix is `sudo usermod -aG input $USER`, then log out and back in - already-open shells keep their old groups, including one running bringup.
+
+If the button reports that the service does not exist, `system_diagnostics.py` is not running or is an older copy without it.
+
+There are two banners and they mean different things. A **red** one means the page has heard nothing from the robot for four seconds. A frozen page otherwise looks exactly like a healthy one, so check the "last update" age in the top right before trusting what you see.
+
+An **orange** banner means rosbridge is still answering but has stopped sending topic data, which is what being past the 10-client limit looks like from the starved side - every topic reads SILENT and the page otherwise looks like a dead robot. The header's `clients N / 10` turns amber at 8 and red above 10. It reads `clients -` until the count changes, because rosbridge only publishes `/client_count` on connect and disconnect: everyone already subscribed hears a new client arrive, but the new client itself subscribes after its own event and hears nothing.
+
+The count is advisory - it is there so people can watch the room fill up before anyone gets hurt. It cannot warn the client that is actually being starved, because a starved client receives no topic data at all and `/client_count` is a topic. That is what the orange banner is for, and it needs no subscription to work.
 
 ## Troubleshooting
 
@@ -124,12 +142,14 @@ A red banner across the top means the page has heard nothing from the robot for 
 
 **Nodes look missing that are definitely running.** `ros2 node list` is unreliable: the ROS daemon caches a stale view, and `--no-daemon` misses slow nodes. The page uses `rosapi/nodes`, which has been correct every time. If the terminal and the page disagree, trust the page.
 
-**rosbridge stops responding** (connections are accepted but the page never connects). It has no rate limiting, and a client subscribing to everything unthrottled can wedge it. Restart it. The page throttles all of its own subscriptions.
+**The page connects but every topic reads SILENT.** You are probably past rosbridge's 10-client limit. The page now says so itself with an orange bar - *"rosbridge is answering but sending no topic data"* - and the header shows `clients N / 10`. Closing another tab is the fix, not restarting anything.
+
+**rosbridge stops responding** (connections are accepted but the page never connects). It has no rate limiting, and a client subscribing to everything *unthrottled* can wedge it, which needs a restart. Merely having too many throttled clients does not - that degrades and recovers on its own. The page throttles all of its own subscriptions.
 
 ## Things to know
 
-- Several people can have the page open at once. Each browser is a separate rosbridge client and adds real traffic, and expanding a row subscribes faster. How many it can handle hasn't been measured.
+- **rosbridge serves exactly 10 clients at once** (measured 2026-09-16: 5/5, 10/10, 10 of 15, 10 of 25). Client 11 connects, is counted by `/client_count`, and then receives nothing - which on this page looks identical to a dead robot. Your own open tab is one of the ten, and a tab is a heavier client than most. There is no `max_clients` setting to raise it. It recovers on its own within 30 seconds once clients disconnect.
 - `/scan` is about 1081 values at 40 Hz. Expanded rows summarise large arrays instead of dumping them.
 - rosbridge has no authentication. Anyone who can reach port 9090 can also publish, including to `/drive`, which drives the car. Decide how to handle that before this becomes permanent.
 - Robot #2 uses `ROS_DOMAIN_ID=202`. If two cars on the same network share a domain ID, each sees the other's nodes and the node list mixes them up. Whether other cars use 202 hasn't been checked yet.
-- Buttons that run a check on the robot, like taking a photo, are not built yet.
+- The joystick check is the only button so far. Others that were wanted, like an on-demand camera snapshot, are not built yet.
