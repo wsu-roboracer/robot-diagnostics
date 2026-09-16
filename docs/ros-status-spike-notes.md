@@ -45,7 +45,7 @@ Skip if you know ROS. Everything after this assumes it.
 - **Discovery.** When a node starts, it announces itself over the local network and finds everyone else. There is no central server and nothing to configure. This is why `ros2 node list` can tell you what is currently running, and why our tool can join the network and immediately see the whole robot.
 - **Delivery.** It carries each message from publisher to subscriber directly, across machines if needed, without passing through a broker.
 
-Two consequences matter for us. First, **anything on a topic is readable by anyone on the network**, which is what makes this project possible at all. Second, **discovery happens inside a numbered "domain"** set by the `ROS_DOMAIN_ID` environment variable - two machines with the same number on the same network automatically see each other's nodes. That is a feature right up until several robots share a number, which is an open question for S-19 (Section 5, block E).
+Two consequences matter for us. First, **anything on a topic is readable by anyone on the network**, which is what makes this project possible at all. Second, **discovery happens inside a numbered "domain"** set by the `ROS_DOMAIN_ID` environment variable - two machines with the same number on the same network automatically see each other's nodes. That is a feature right up until several robots share a number, which was an open question for S-19 and is now closed for the two cars checked so far (Section 5, block E).
 
 ### Where the data actually lives
 
@@ -199,7 +199,7 @@ The last column points at the block in Section 5 that still has work to do.
 | S-15 | Wheel odometry | ROS | `/odom` 50.022 Hz, but **only after the car has been commanded once** - `vesc_to_odom` latches on the first servo command (see corrections) | Rate **ready** once gated; confirmed under motion at 5.04 m/s (block B) | - |
 | S-17 | LiDAR Ethernet | system | `enP8p1s0` up at 192.168.0.15/24, carrier=1. Ping to **192.168.0.10**: 3/3, 0% loss, 0.187 ms. IP also published by `urg_node` | **Ready** | - |
 | S-18 | Gamepad | both | `/joy` ~**48 Hz** connected. `bluetoothctl info <mac>` → `Connected: yes`. **Charge level unavailable** by #1's route | **Ready** minus charge | G |
-| S-19 | ROS 2 node set | ROS | `/rosapi/nodes` - the only method correct on every attempt. Real list is 8 + 3 | **Ready**; #1's list is wrong | E |
+| S-19 | ROS 2 node set | ROS | `/rosapi/nodes` - the only method correct on every attempt. Real list is 8 + 3 | **Ready**; #1's list is wrong | done |
 | S-20 | TF tree | ROS | `/tf` 50.014 Hz, gated by the same servo-command latch as S-15; `/tf_static` is transient-local so **age is meaningless**. Bringup only gives `base_link → laser` | Partial - `map → odom` needs a nav stack | - |
 | S-21 | Localization | ROS | `particle_filter` is not started by bringup | **Unstarted** | - |
 | S-22 | Command mux | ROS | **`ackermann_mux` already publishes which input is live**: `masked`/`unmasked` per input plus `current priority` | **Published**, wrong topic in #1 | H |
@@ -318,7 +318,7 @@ Two surprises worth folding back into #1: **storage is a non-issue**, not the cr
 
 ## 5. Closing the rest: the on-robot session plan
 
-Blocks A, B and C are done (2026-09-09). Blocks D to I are still open, and F is the one to do first. The procedures for the finished blocks are kept so they can be repeated on other cars. **Blocks D and F need the car on blocks with the wheels free.** Blocks B, C, D and F need a charged pack.
+Blocks A, B and C are done (2026-09-09). Block E is done (2026-09-14). Blocks D, F, G, H and I are still open, and F is the one to do first. The procedures for the finished blocks are kept so they can be repeated on other cars. **Blocks D and F need the car on blocks with the wheels free.** Blocks B, C, D and F need a charged pack.
 
 Everything goes into one directory so it can be pasted back into this document:
 
@@ -585,7 +585,7 @@ Read out of `coastdown.csv`: the time from the last non-zero command to `speed` 
 
 Do this twice. One sample of a safety number is not a measurement.
 
-### Block E - S-19, the domain ID question (needs a second car)
+### Block E - S-19, the domain ID question (CLOSED, 2026-09-14)
 
 If robots share a `ROS_DOMAIN_ID`, DDS discovery is multicast and each robot enumerates every other robot's nodes, which **breaks the node roll call directly**.
 
@@ -596,7 +596,11 @@ echo $ROS_DOMAIN_ID          # on robot #2 -> 202
 ros2 node list
 ```
 
-**Working hypothesis worth testing rather than assuming:** robot #2 uses `ROS_DOMAIN_ID=202`, which looks like a per-robot convention rather than a shared value. If robot #3 reports 203, the risk evaporates and S-19 is safe as designed. If it also reports 202, we need a unique ID per robot or `ROS_LOCALHOST_ONLY=1`, and the page needs a way to show which car it is looking at. Either result is a one-line answer that unblocks a tier-1 check.
+**Answered on hardware, not just hypothesized.** Robot #2 (`f1-wsu-2`, 192.168.1.202) is `ROS_DOMAIN_ID=202`; robot #6 (`f1-wsu-6`, 192.168.1.206) is `ROS_DOMAIN_ID=206`. Confirms the per-robot convention rather than a shared value.
+
+With both cars powered up and bringup running at the same time on the same lab WiFi, the two dashboards were opened in separate browser tabs (`192.168.1.202:8000/dashboard.html` and `192.168.1.206:8000/dashboard.html`). Each showed only its own 8/8 nodes and its own `/sensors/core` readings, with no bleed-through - DDS discovery stayed within each domain as expected.
+
+S-19's roll call is safe as designed for these two cars. **Still open:** only 2 of the fleet's robots have been checked. Worth a quick `echo $ROS_DOMAIN_ID` pass on the rest to confirm every car has a unique ID before relying on this fleet-wide; if two ever collide, the fix is a unique ID per robot or `ROS_LOCALHOST_ONLY=1`, plus a way for the page to show which car it's looking at.
 
 ### Block F - S-05, the thermal baseline under load (20 min, runs in the background)
 

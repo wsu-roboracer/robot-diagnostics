@@ -138,7 +138,7 @@ The patch is not committed anywhere. It only exists on robot #2, and changing th
 - S-18 and S-03 must check Bluetooth connection state. A silent `/joy` only means no controller is connected, and "controller set down" looks the same on `/joy` as "controller died while driving".
 - S-06: storage is a 915 GB NVMe at 4% used, not a cramped eMMC.
 
-Open questions from #1 that are now answered: the lidar is at 192.168.0.10 on its own Ethernet link; L1 is `buttons[4]` and R1 is `buttons[5]`; `/sensors/core` publishes at 50 Hz; the mux drops an input after 0.2 s of silence; the DS4 charge is not under `/sys/class/power_supply/`.
+Open questions from #1 that are now answered: the lidar is at 192.168.0.10 on its own Ethernet link; L1 is `buttons[4]` and R1 is `buttons[5]`; `/sensors/core` publishes at 50 Hz; the mux drops an input after 0.2 s of silence; the DS4 charge is not under `/sys/class/power_supply/`; and S-19's domain ID risk (2026-09-14) - robot #2 is `ROS_DOMAIN_ID=202` and robot #6 is `206`, confirmed on hardware with both cars up at once, dashboards open in separate tabs, and no node/topic bleed-through between them (only 2 of the fleet checked so far).
 
 ## What this means for the other issues
 
@@ -151,7 +151,6 @@ Open questions from #1 that are now answered: the lidar is at 192.168.0.10 on it
 ## Still open from #1
 
 - **E-stop timing (S-03, S-23).** How long the car takes to stop after the controller link drops. The mux cuts at 0.2 s, but the VESC's own timeout is unknown. Needs two people and the car on blocks.
-- **Domain ID (S-19).** Robot #2 uses `ROS_DOMAIN_ID=202`. If another car uses the same number, each robot sees the other's nodes and the node check breaks. Needs a second car.
 - **Temperatures under load (S-05, S-10).** A 20-minute drive to find where CPU and VESC temperatures level off, so thresholds are based on real numbers. Runs unattended.
 - **Controller battery (S-18).** A few routes are untried. Drop the check if none work.
 - **The `/ackermann_drive` remap (S-22, S-23).** Why the mux output shows up as `/ackermann_cmd`. No hardware needed.
