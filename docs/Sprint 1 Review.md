@@ -28,7 +28,7 @@ One honest sentence per row. "We ran out of time" is acceptable if it's the trut
 
 ### Demo on Monday
 
-The current health dashboard and how it works + concepts
+The current health dashboard prototype and how it works + concepts
 
 ### What we learned
 
@@ -49,6 +49,7 @@ the report — a dead end you documented is a dead end nobody else has to walk d
 | Alex | 15 |
 | Saman | 12 |
 | Luke | 24 |
+| Darrin | 10 |
 
 Honest numbers. A low number with a reason is fine; a made-up number is not.
 
@@ -57,8 +58,8 @@ Honest numbers. A low number with a reason is fine; a made-up number is not.
 Three to five items, roughly. Carryover first, then new work. We'll finalize this together
 in planning — this is your starting proposal, not a commitment.
 
-1.
-2.
+1. Issue #7 Survey Existing ROS diagnostics.
+2. Issue #6 What actually breaks? Interview the instructor.
 3.
 
 ### Retro notes
