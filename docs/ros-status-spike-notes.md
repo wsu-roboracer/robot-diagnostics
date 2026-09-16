@@ -568,22 +568,65 @@ Two concrete consequences:
 - **S-02 stays tier 1 and gets a real threshold.** 10.9 V is the first observed number on the way down. Combined with the sag finding from block B, the battery check should evaluate a sag-tolerant window and escalate visually, not just print a float.
 - **Add "robot unreachable" as a first-class dashboard state.** The page is served from the robot it monitors, so when the robot browns out the page does not go red, it goes *blank* or stale. A student sees a frozen page, not an alarm. The client must track its own websocket liveness and say **"lost contact with 192.168.1.202 at 14:25:02"** on its own, with no help from ROS. This is the one check that cannot live on the robot.
 
-### Block D - S-23 and S-03, the actual e-stop (car on blocks, two people)
+### Block D - S-23 and S-03, the actual e-stop (CLOSED, 2026-09-16)
 
 This is the one safety-relevant unknown left in #1, and #1 calls it its highest-priority question. The mux side is confirmed at 200 ms. The VESC's own command timeout is not.
 
+**Correction to the earlier version of this block: `ros2 topic echo --csv` prints the message fields and no timestamp**, so the CSVs it produces cannot answer a timing question at all. Noting the wall-clock second by hand does not work either - the interval being measured is about 200 ms. Use `prototype/tools/estop_capture.py`, which subscribes to all four topics at once, records an arrival time per message, and prints the intervals.
+
 ```bash
-# terminal 1
-timeout 60 ros2 topic echo /sensors/core --field state.speed --csv > coastdown.csv
-# terminal 2
-timeout 60 ros2 topic echo /ackermann_cmd --csv > cmd_during_coastdown.csv
+# on the robot, with bringup running and THE CAR ON BLOCKS
+python3 ~/diag/tools/estop_capture.py --kill-after
 ```
 
-Drive on blocks with L1 held, then **kill the link** - hold the controller's PS button until it powers off, or walk it out of range. Note the wall-clock second at which you did it.
+Hold the deadman (L1) and bring the wheels up to a steady speed during the countdown. It disconnects the pad for you at a known moment. Let the wheels coast to a stop, then Ctrl+C.
 
-Read out of `coastdown.csv`: the time from the last non-zero command to `speed` reaching approximately zero. Read out of `cmd_during_coastdown.csv`: when the mux stopped forwarding. Expect the mux to cut at ~200 ms; the gap between that and the wheels actually stopping is the VESC's timeout plus mechanical coast-down, and **that number is the e-stop**. It belongs on the dashboard.
+**Do not try to drop the link by hand.** Measured 2026-09-16: the DS4 will not power off from the PS button while sticks and buttons are active, so the first attempt at this block recorded `/joy` still publishing five seconds after the last command - a run that measured a deadman release, not a link loss. Walking out of range works but adds the Bluetooth supervision timeout to every number. `bluetoothctl disconnect` reaches ROS by the identical path: `joy` stops receiving events and `/joy` stops publishing. Reconnect with the PS button or `bluetoothctl connect <mac>`.
 
-Do this twice. One sample of a safety number is not a measurement.
+Without `--kill-after` the script still detects this and says so rather than printing a negative interval. It writes `estop_<timestamp>.csv` and prints:
+
+```
+  link lost -> mux stopped forwarding    200.0 ms
+  mux stopped -> motor cmd stopped         0.4 ms
+  motor cmd stopped -> wheels stopped   1200.0 ms
+  TOTAL: link lost -> wheels stopped    1400.4 ms
+```
+
+- **`link lost -> mux stopped forwarding`** is the 200 ms from `mux.yaml`, measured rather than assumed. The script flags it if it is not in the 100-400 ms band.
+- **`mux stopped -> motor cmd stopped`** should be ~0: `ackermann_to_vesc_node` reacts to each message as it arrives and has no timeout of its own.
+- **`motor cmd stopped -> wheels stopped`** is the VESC's own command timeout plus mechanical coast-down. **This is the unknown the block exists to measure**, and the total is the number that belongs on the dashboard.
+
+Separating the VESC's timeout from the coast is not possible from these topics alone - if it matters, repeat at two different speeds, since the coast component scales with speed and the timeout does not.
+
+Do this twice. One sample of a safety number is not a measurement. The arithmetic has a no-hardware check: `python3 estop_capture.py --self-test`.
+
+### Block D results - robot #2, 2026-09-16, car on blocks
+
+Three captures. Link dropped with `bluetoothctl disconnect` at a known moment, deadman held throughout.
+
+| | quarter speed | full, run 1 | full, run 2 |
+|---|---|---|---|
+| disconnect -> `/joy` stopped | 17.0 ms | 16.9 ms | 18.1 ms |
+| disconnect -> last drive command | ~18 ms | 19.4 ms | 22.2 ms |
+| last drive command -> last motor command | 0.2 ms | 0.2 ms | 0.2 ms |
+| **coast to wheels stopped** | 281.3 ms | 879.7 ms | 913.5 ms |
+| **TOTAL** | ~300 ms | **899.3 ms** | **935.9 ms** |
+| peak speed | not recorded | 5.05 m/s | 5.04 m/s |
+
+**The software is not what stops the car.** The command chain dies **19-22 ms** after the link drops, of which **17-18 ms is Bluetooth teardown** and about 2 ms is the whole ROS path. That latency is the same at quarter speed and full speed, as it should be - it is not a function of how fast the car is going.
+
+**`mux.yaml`'s 0.2 s timeout is irrelevant to stopping, and the earlier assumption that it delays the output was wrong.** `ackermann_mux` forwards message by message; the timeout governs when a quiet input is *masked for priority*, not how long the output is held. Measured pass-through from `/ackermann_cmd` to `/commands/motor/speed` was **0.2 ms** in all three runs. S-23's "stale command watchdog" question is answered: there is no stale-command window to speak of.
+
+**Everything else is coast-down, and it scales with speed.** Two samples at 5.05 m/s gave 880 ms and 914 ms - a spread of 4%, so the number is repeatable. Equivalent deceleration is about **5.6 m/s²**.
+
+**The caveat that must travel with these numbers: the car was on blocks with the wheels unloaded.** This measures drivetrain coast-down, not a stopping distance. On the ground the vehicle's mass keeps the wheels driven for longer, so real stopping takes **more** time and distance, not less. Multiplying 5.05 m/s by 0.9 s gives roughly 2 m, but that figure is optimistic and should not be quoted as a stopping distance without an on-ground measurement.
+
+**What belongs on the dashboard:** the fixed ~20 ms of software latency is worth stating once, in documentation, not as a live tile - it does not vary. What varies is speed, and the useful live statement is that the car coasts for about a second from full speed after losing its controller.
+
+**Two things this block uncovered along the way:**
+
+- **`/joy` goes `IDLE` the instant the link drops** (17 ms), and the GAMEPAD tile agreed - both channels correctly reported the disconnect. This is the S-18 two-channel design working: `/joy` alone reads `IDLE` for "pad set down", "pad died" and "ROS cannot open the device" alike, and only the GAMEPAD tile separates the first two.
+- **The GAMEPAD tile lagged by up to a full 10 s probe cycle**, because `bluetoothctl` runs on the slow thread. For a tile S-03 depends on, that was too slow. Fixed 2026-09-16: `system_diagnostics.py` now lists `/dev/input/js*` in the 1 Hz path, which vanishes the moment the pad disconnects, and uses `bluetoothctl` only for the device name. Detection is now sub-second.
 
 ### Block E - S-19, the domain ID question (CLOSED, 2026-09-14)
 
@@ -643,24 +686,90 @@ If all four come up empty, set `Experimental = true` in `/etc/bluetooth/main.con
 
 > **A correction worth recording:** an earlier version of this document inferred that `hid-generic` was bound because `/proc/bus/input/devices` shows `Name="Wireless Controller"`. That reasoning is wrong - **"Wireless Controller" is the DS4's actual product name string**, which Sony ships, so it says nothing about which driver claimed the device.
 
-### Block H - the `/ackermann_drive` remap (15 min, no hardware)
+### Block H - the `/ackermann_drive` remap (CLOSED, 2026-09-16)
 
-S-22 and S-23 currently name the wrong topic.
+**Answered from the repo alone, no robot involved.** The remap is a no-op on a topic
+that does not exist.
 
-```bash
-ros2 topic list | grep -i ackermann
-ros2 topic info -v /ackermann_cmd
-ros2 node info /ackermann_mux
-grep -rn 'ackermann_cmd_out\|ackermann_drive' ~/f1tenth_ws/src/
-```
+`ackermann_mux.cpp:91` creates its publisher on the literal name `"ackermann_cmd"`.
+`bringup_launch.py:121` remaps `ackermann_cmd_out` to `ackermann_drive` - a name the
+node never uses, so nothing is renamed and `/ackermann_drive` was never going to
+appear. The chain still works because `ackermann_to_vesc.cpp:68` subscribes to
+`"ackermann_cmd"` as well, so both ends meet on the unremapped default.
 
-Establish whether `ackermann_mux` actually honours the remap, and update #1 with whichever topic name is real.
+`ackermann_cmd_out` is the name an older version of `ackermann_mux` published on, and
+the upstream README still documents it. The remap is inherited dead config.
 
-### Block I - the rosbridge ceiling (10 min, do last)
+- **S-22 and S-23 watch `/ackermann_cmd`.** Confirmed.
+- **The fix is to DELETE `bringup_launch.py:121`**, not to repair it. Making the remap
+match (`('ackermann_cmd', 'ackermann_drive')`) would move the mux's output to
+`/ackermann_drive` while `ackermann_to_vesc` still subscribes to `ackermann_cmd`,
+silently breaking the drive chain. That is the trap waiting for whoever tidies this up.
+- **Deferred on purpose (2026-09-16).** It is inert, so there is no hurry, and it
+touches `f1tenth_system` rather than this repo. Fold it into the next round of work
+that goes into that codebase properly. Until then the config asserts a topic that has
+never existed, which is a documentation problem, not a behaviour one.
 
-Subscribing to everything unthrottled wedged rosbridge once: TCP still accepted connections but the websocket handshake stopped completing, and it needed a restart. There is no rate limiting and no backpressure. Several students will have the page open at once, so the ceiling matters.
+### Block I - the rosbridge ceiling (CLOSED, 2026-09-16)
 
-Open the dashboard in 1, then 3, then 6 tabs across two laptops. Watch for rising latency in the "last update" age and for handshakes that never complete. Record the number of clients at which it degrades.
+**rosbridge serves exactly 10 simultaneous clients. Client 11 onward connects,
+registers, and receives nothing.**
+
+Measured on robot #2 with `rosbridge_check.py` run N ways at once, each client
+subscribing to `/scan`, `/odom`, `/sensors/core` and `/diagnostics` at a 500 ms
+throttle for 8 s:
+
+| Clients | Served | Load average |
+|---|---|---|
+| 5 | 5/5 | 1.95 |
+| 10 | **10/10** | 1.78 |
+| 15 | **10**/15 | 1.67 |
+| 25 | **10**/25 | 1.56 |
+
+Ten, exactly, every time. The number does not move with machine load, which was
+idle-ish throughout on 6 cores, so this is not resource exhaustion.
+
+What else the runs established:
+
+- **There is no connection cap.** `/client_count` peaked at 26 during a 25-client run
+(25 clients plus one browser tab), so rosbridge registers every client and only then
+fails to feed the surplus.
+- **The starved clients report "connected, but no messages."** The handshake completes
+and the subscribe is accepted. On the dashboard that is indistinguishable from a dead
+robot - the page renders, every topic reads SILENT, and nothing says "you are client
+number 14".
+- **It recovers on its own within 30 s** once the load stops - a single client scored
+1/1 immediately after every overload run. **This corrects the earlier note in this
+section**: the wedge that needed a restart was a client subscribed *unthrottled*, not
+merely too many clients. Throttled clients degrade and recover.
+- **Peak rosbridge CPU was 137%**, so it uses more than one core and a single-threaded
+event loop is not the whole story.
+- **There is no `max_clients` argument.** The full launch argument list is port,
+address, ssl, certfile, keyfile, retry_startup_delay, fragment_timeout,
+delay_between_messages, max_message_size, unregister_timeout, use_compression,
+call_services_in_new_thread, send_action_goals_in_new_thread, and the three globs.
+Nothing raises the limit.
+
+**Cause not identified, and deliberately not chased further.** The leading theory was a
+default `ThreadPoolExecutor` (6 cores + 4 = 10), but `grep` found no
+`ThreadPoolExecutor`, `max_workers`, `num_threads` or `MultiThreadedExecutor` anywhere
+in the installed `rosbridge_server` or `rosbridge_library`. Since there is no knob to
+turn either way, knowing the cause would not change what we do.
+
+**What this means for the team.** Ten is comfortably more than this project needs, but
+the failure mode is bad: silent, and it looks like a broken robot rather than a busy
+server. Two consequences:
+
+- **Your own dashboard tab counts as one of the ten.** A demo room with ten laptops
+open is exactly at the limit and the eleventh person sees a dead-looking page.
+- **The page should subscribe to `/client_count` and show it.** It is already published,
+costs nothing, and turns the worst failure mode into a visible number. Ideally the page
+says "14 clients connected - rosbridge serves 10" rather than going quiet.
+
+Method note for anyone repeating this: close every dashboard tab first. An open tab is a
+heavier client than any test client (about 16 topics at a 200 ms throttle including
+`/scan`) and it occupies one of the ten slots, which made the first three attempts at
+this measurement unreproducible.
 
 ### What to do with the results
 
