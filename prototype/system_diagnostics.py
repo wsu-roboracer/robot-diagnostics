@@ -18,16 +18,28 @@ polling endpoint.
 Read-only. No sudo. Safe to run alongside bringup.
 """
 
+import grp
 import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 
-import rclpy
-from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from rclpy.node import Node
+try:
+    import rclpy
+    from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+    from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.node import Node
+    from std_srvs.srv import Trigger
+except ImportError:
+    # --self-test exercises the pure decision logic, which is the part worth
+    # checking and the part that has no business needing a sourced ROS install.
+    if "--self-test" not in sys.argv:
+        raise
+    Node = object
 
 OK, WARN, ERROR, STALE = 0, 1, 2, 3
 
@@ -69,6 +81,101 @@ def run(cmd, timeout=4):
         return ""
 
 
+def probe(cmd, timeout=8):
+    """Like run(), but the caller can tell "tool missing" from "printed nothing".
+
+    joy_enumerate_devices printing zero rows is the whole signal we are after, so
+    an absent `ros2` binary must never be allowed to look like zero joysticks.
+    """
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        return p.returncode, (p.stdout + p.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return None, f"timed out after {timeout}s"
+    except (FileNotFoundError, OSError) as e:
+        return None, str(e)
+
+
+def parse_joy_devices(out):
+    """Pull "<id>: <name>" out of joy_enumerate_devices' table.
+
+    Confirmed on robot #2, 2026-09-16 - colon-separated, one header row, one rule:
+
+        ID : GUID                             : GamePad : Mapped : Joystick Device Name
+        ---------------------------------------------------------------------------
+         0 : 050000004c050000c405000000010000 :    true :   true : PS4 Controller
+
+    Only rows whose first field is a number are devices, which drops the header
+    and the rule without having to recognise either of them.
+    """
+    devices = []
+    for line in out.splitlines():
+        fields = [f.strip() for f in line.split(":")]
+        if len(fields) >= 2 and fields[0].isdigit():
+            devices.append(f"{fields[0]}: {fields[-1]}")
+    return devices
+
+
+def in_input_group():
+    try:
+        return grp.getgrnam("input").gr_gid in os.getgroups()
+    except KeyError:
+        return False
+
+
+def joy_verdict(rc, out, devices, connected, in_group):
+    """Turn the joystick evidence into (usable_by_ros, human-readable report).
+
+    Pure so it can be asserted without a robot: `python3 system_diagnostics.py
+    --self-test`. The interesting row is (0 devices, pad connected) - the seat-ACL
+    trap, where everything else on the page says the controller is fine and only
+    ROS cannot read it. Before this check that state was indistinguishable from
+    "nobody plugged a controller in".
+    """
+    if rc is None:
+        return False, "could not run joy_enumerate_devices: " + out
+
+    grp_note = "yes" if in_group else "NO  <- this is almost certainly the problem"
+    lines = [
+        f"{'joy_enumerate_devices:':<30}{len(devices)} device(s)"
+        + (" -> " + "; ".join(devices) if devices else ""),
+        f"{'bluetooth connected:':<30}{'yes' if connected else 'no'}",
+        f"{'`input` group (this process):':<30}{grp_note}",
+    ]
+
+    # The verdict always carries what the command actually printed. The table
+    # format is confirmed (robot #2, 2026-09-16) but it is a human-facing CLI
+    # table, not an API, and a future column would make the parser wrong silently.
+    # Side by side, a parser miss reads as a disagreement instead of a verdict.
+    raw = ["", "raw output:"] + ["  " + ln for ln in (out.splitlines() or ["(nothing printed)"])]
+
+    if devices:
+        if connected:
+            return True, "\n".join(lines + [
+                "", "OK - SDL can open the device, so /joy will publish as soon as",
+                "the pad sends events."] + raw)
+        return True, "\n".join(lines + [
+            "", "A joystick is readable but no Bluetooth link is up - a wired pad,",
+            "or some other device SDL counts as a joystick."] + raw)
+
+    if connected:
+        return False, "\n".join(lines + [
+            "",
+            "CONTRADICTION: the pad is paired and connected, but SDL cannot open it.",
+            "`joy` on Humble reads /dev/input/event*, not js0, and that node is 0660",
+            "root:input. Over NoMachine the logind uaccess ACL goes to gdm, never to",
+            "you, so /joy stays silent on a working controller.",
+            "",
+            "Fix:  sudo usermod -aG input $USER    then log out and back in",
+            "      (already-open shells keep the old groups, bringup included)",
+        ] + raw)
+
+    return False, "\n".join(lines + [
+        "", "No controller is connected. Pair one, then run this again - a silent",
+        "/joy is expected in this state and is not a fault.",
+    ] + raw)
+
+
 def status(name, level, message, values, hardware_id=""):
     s = DiagnosticStatus()
     s.name = name
@@ -97,8 +204,39 @@ class SystemDiagnostics(Node):
         threading.Thread(target=self._slow_loop, daemon=True).start()
 
         self.create_timer(1.0, self.tick)
+
+        # On-demand checks live behind a service, not the 1 Hz loop: this one
+        # shells out to `ros2 run`, which is far too slow to run on a clock. Its
+        # own callback group + a MultiThreadedExecutor keep the several seconds it
+        # blocks for off the publish timer - otherwise the whole dashboard would
+        # go stale while the check runs and look like a robot fault.
+        self.create_service(Trigger, "~/joystick_check", self.joystick_check,
+                            callback_group=MutuallyExclusiveCallbackGroup())
+
         self.get_logger().info(
-            f"publishing system diagnostics on /diagnostics ({self.ncores} cores)")
+            f"publishing system diagnostics on /diagnostics ({self.ncores} cores); "
+            "service ~/joystick_check ready")
+
+    # ---------- on-demand checks, called from the dashboard ----------
+
+    def joystick_check(self, _request, response):
+        """Answer "why is /joy silent?" - the one question /joy itself cannot.
+
+        A silent /joy has three causes that look identical on the topic: no pad,
+        a sleeping pad, and a pad that ROS has no permission to open. Only
+        joy_enumerate_devices separates the third, and it is the expensive one to
+        run, which is what makes it a button rather than a tile.
+        """
+        # 8s: `ros2 run` pays DDS discovery on every invocation and is slow on the
+        # Jetson. The page allows 12s, so this must fail first and say so.
+        rc, out = probe(["ros2", "run", "joy", "joy_enumerate_devices"], timeout=8)
+        devices = parse_joy_devices(out)
+        pad = self._slow_get("pad") or {}
+        response.success, response.message = joy_verdict(
+            rc, out, devices, bool(pad.get("connected")), in_input_group())
+        self.get_logger().info(f"joystick_check: {len(devices)} device(s), "
+                               f"success={response.success}")
+        return response
 
     # ---------- fast probes: pure sysfs reads, safe at 1 Hz ----------
 
@@ -328,7 +466,18 @@ class SystemDiagnostics(Node):
         pad = self._slow_get("pad")
         if pad is None:
             return status("system: Gamepad", STALE, "not probed yet", [])
-        vals = [("js devices", ", ".join(pad["js"]) or "none"),
+        # /dev/input/js* disappears the moment the pad disconnects, and listing a
+        # directory is cheap enough to do here at 1 Hz. bluetoothctl, which names the
+        # device, only runs every SLOW_PERIOD, so relying on it alone left this tile
+        # reading `connected` for up to 10 s after the link had gone. Measured on the
+        # car during the block D e-stop runs: /joy went IDLE instantly while this
+        # tile lagged a full probe cycle. S-03 depends on this tile to tell "the
+        # operator let go" from "the operator lost the car", so it has to be prompt.
+        try:
+            js = sorted(p for p in os.listdir("/dev/input") if p.startswith("js"))
+        except OSError:
+            js = []
+        vals = [("js devices", ", ".join(js) or "none"),
                 ("bluetooth", "connected" if pad["connected"] else "not connected")]
         if pad.get("name"):
             vals.append(("device", f"{pad['name']} ({pad.get('mac', '?')})"))
@@ -340,9 +489,11 @@ class SystemDiagnostics(Node):
             # power_supply entry appears even with the pad connected. Say so
             # rather than showing a blank field that looks like a bug.
             vals.append(("battery %", "not exposed by this driver"))
-        if pad["connected"] and pad["js"]:
+        if pad["connected"] and js:
             return status("system: Gamepad", OK, "connected", vals)
-        if pad["js"]:
+        if js:
+            # Also the normal state for the first few seconds after connecting,
+            # while the bluetoothctl probe catches up.
             return status("system: Gamepad", WARN, "js device but no BT link", vals)
         return status("system: Gamepad", WARN, "no controller connected", vals)
 
@@ -402,11 +553,60 @@ class SystemDiagnostics(Node):
         self.pub.publish(msg)
 
 
+# Captured verbatim from robot #2 on 2026-09-16.
+JOY_SAMPLE = """\
+ID : GUID                             : GamePad : Mapped : Joystick Device Name
+-------------------------------------------------------------------------------
+ 0 : 050000004c050000c405000000010000 :    true :   true : PS4 Controller"""
+
+
+def self_test():
+    """`python3 system_diagnostics.py --self-test` - no ROS, no robot, no hardware."""
+    # The header and the rule are not devices, and the name is the last field,
+    # not the whole row.
+    assert parse_joy_devices(JOY_SAMPLE) == ["0: PS4 Controller"], parse_joy_devices(JOY_SAMPLE)
+    header = JOY_SAMPLE.rsplit("\n", 1)[0]
+    assert parse_joy_devices(header) == [], "the header alone must read as zero devices"
+    assert parse_joy_devices("") == []
+
+    devices = parse_joy_devices(JOY_SAMPLE)
+    ok, msg = joy_verdict(0, JOY_SAMPLE, devices, True, True)
+    assert ok and "OK -" in msg, msg
+    assert "0: PS4 Controller" in msg and "050000004c05" not in msg.split("raw output:")[0], msg
+
+    ok, msg = joy_verdict(0, "", [], True, False)
+    assert not ok, msg
+    assert "CONTRADICTION" in msg and "usermod -aG input" in msg, msg
+
+    ok, msg = joy_verdict(0, "", [], False, True)
+    assert not ok and "No controller is connected" in msg, msg
+    assert "CONTRADICTION" not in msg, "a missing pad must not be reported as a permission fault"
+
+    ok, msg = joy_verdict(None, "No such file or directory: 'ros2'", [], True, True)
+    assert not ok and "could not run" in msg, msg
+
+    # Every verdict has to carry what the command actually printed, so a parser
+    # that misreads an unfamiliar output format shows up as a visible
+    # disagreement instead of a confident wrong answer.
+    for args in ((0, JOY_SAMPLE, devices, True, True), (0, header, [], True, False),
+                 (0, header, [], False, True)):
+        body = joy_verdict(*args)[1]
+        assert "raw output:" in body, body
+    assert "PS4 Controller" in joy_verdict(0, JOY_SAMPLE, [], False, True)[1], \
+        "the raw table must survive even when the parser found nothing in it"
+
+    print("joy_verdict self-test passed")
+
+
 def main():
+    if "--self-test" in sys.argv:
+        return self_test()
     rclpy.init()
     node = SystemDiagnostics()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
