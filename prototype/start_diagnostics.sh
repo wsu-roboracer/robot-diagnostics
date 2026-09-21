@@ -237,24 +237,8 @@ if [ "$WANT_SERVER" = 1 ]; then
   if port_open "$PORT"; then
     ok "something already listening on $PORT"
   else
-    # dashboard_backup.html is kept around on purpose as a rollback copy, not
-    # a second dashboard - block it so a stale tab or a typo'd URL can't load it.
     start webserver "$LOGDIR/webserver.log" \
-      python3 -c '
-import http.server, sys
-port, directory = int(sys.argv[1]), sys.argv[2]
-blocked = {"dashboard_backup.html"}
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        if self.path.lstrip("/").split("?")[0] in blocked:
-            self.send_error(404, "File not found")
-            return
-        super().do_GET()
-http.server.ThreadingHTTPServer(
-    ("0.0.0.0", port),
-    lambda *a, **kw: Handler(*a, directory=directory, **kw),
-).serve_forever()
-' "$PORT" "$SERVE_DIR"
+      python3 -m http.server "$PORT" --bind 0.0.0.0 --directory "$SERVE_DIR"
     if wait_for 10 port_open "$PORT"; then ok "serving $SERVE_DIR on :$PORT"
     else bad "web server failed - see $LOGDIR/webserver.log"; fi
   fi
