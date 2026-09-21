@@ -35,13 +35,6 @@
   box-sizing: border-box;
 }
 
-/* An author `display` rule outranks the UA stylesheet's
-   [hidden]{display:none}, so .stream-box img and .stream-fallback
-   would both stay on screen when toggled. Settle it once. */
-[hidden] {
-  display: none !important;
-}
-
 body {
   margin: 0;
   background: var(--bg);
@@ -365,30 +358,58 @@ input {
   display: block;
 }
 
-.stream-fallback {
+.stream-message {
   color: #cfcfcf;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 13px;
   padding: 16px;
+  text-align: center;
+}
+
+.camera-controls {
   display: flex;
-  flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
-  overflow: auto;
-  max-height: 100%;
+  flex-wrap: wrap;
+  margin-top: 11px;
 }
 
-.stream-fallback strong {
-  color: #fff;
-  font-size: 14px;
+.camera-controls input {
+  flex: 1;
+  min-width: 170px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: monospace;
+  font-size: 12px;
 }
 
-.stream-fallback pre {
-  margin: 0;
-  font-size: 11px;
-  color: #8fd3a0;
-  white-space: pre-wrap;
-  word-break: break-word;
+.snapshot {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.snapshot img {
+  width: 100%;
+  display: block;
+  border-radius: 6px;
+  background: #111;
+}
+
+.snapshot-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* the save link reuses the button styling, so it needs the bits
+   an <a> does not get for free */
+a.check-btn {
+  display: inline-block;
+  text-decoration: none;
+  color: inherit;
 }
 
 .readout-grid {
@@ -432,8 +453,21 @@ input {
 }
 
 /* ----------------------------------------------------------
-   CARDS
+   TOP STATUS CARDS
 ---------------------------------------------------------- */
+
+.summary-grid {
+  display: grid;
+  grid-template-columns:
+    1.05fr
+    1fr
+    1fr
+    1.25fr
+    1fr
+    1.6fr;
+  gap: 20px;
+  margin-top: 27px;
+}
 
 .summary-card {
   border: 1px solid var(--border);
@@ -446,6 +480,27 @@ input {
   color: #555;
   font-weight: 700;
   font-size: 16px;
+}
+
+.summary-card .big {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-card .small {
+  margin-top: 7px;
+  color: #555;
+  font-size: 14px;
+}
+
+.overall-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .overall-icon {
@@ -466,6 +521,30 @@ input {
   font-size: 22px;
   font-weight: 900;
   line-height: 1.1;
+}
+
+.diagnostics-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.diag-number {
+  text-align: center;
+}
+
+.diag-number strong {
+  font-size: 31px;
+  display: block;
+  line-height: 1;
+}
+
+.diag-number span {
+  display: block;
+  margin-top: 6px;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .ok-color {
@@ -1328,6 +1407,10 @@ tr.topic-detail pre {
 ---------------------------------------------------------- */
 
 @media (max-width: 1350px) {
+  .summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .critical-grid {
     grid-template-columns: 1fr;
   }
@@ -1352,6 +1435,10 @@ tr.topic-detail pre {
 
   .header-right {
     align-items: flex-start;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .live-grid {
@@ -1481,21 +1568,29 @@ tr.topic-detail pre {
       </h2>
 
       <div class="stream-box">
-        <img id="camStream" alt="Live camera stream" hidden>
+        <img id="cameraImage" alt="Live camera stream" hidden>
 
-        <div class="stream-fallback" id="camFallback">
-          <strong>No video stream.</strong>
-          <div>
-            This needs <span class="mono">web_video_server</span> and the
-            RealSense node running on the robot:
-          </div>
-          <pre>ros2 launch realsense2_camera rs_launch.py camera_name:=rs
-ros2 run web_video_server web_video_server</pre>
-          <div>
-            Topic names depend on the launch alias, so set the stream
-            URL under Advanced → Connection if yours differs.
-          </div>
-          <button class="check-btn" id="camRetry">Retry stream</button>
+        <div class="stream-message" id="camMessage">Not connected</div>
+      </div>
+
+      <div class="camera-controls">
+        <input id="cameraUrl" spellcheck="false"
+               aria-label="camera stream URL"
+               value="http://192.168.1.202:8082/camera.mjpg">
+
+        <button class="check-btn" id="cameraConnectBtn">Connect Camera</button>
+        <button class="check-btn" id="cameraSnapBtn">Take Picture</button>
+      </div>
+
+      <div class="card-hint" id="cameraHint" hidden></div>
+
+      <div class="snapshot" id="snapshot" hidden>
+        <img id="snapshotImage" alt="Captured camera frame">
+
+        <div class="snapshot-actions">
+          <a class="check-btn" id="snapshotSave" download>Save PNG</a>
+          <button class="check-btn" id="snapshotClose">Close</button>
+          <span class="live-tag" id="snapshotTime"></span>
         </div>
       </div>
     </div>
@@ -1773,19 +1868,6 @@ ros2 run web_video_server web_video_server</pre>
 
             <div class="card-hint" id="connHint"
                  style="margin:0;padding:0 13px 13px"></div>
-
-            <div class="connection-box" style="padding-top:0">
-              <input id="videoUrl" spellcheck="false"
-                     aria-label="camera stream URL">
-              <button id="videoBtn">Set stream</button>
-            </div>
-
-            <div class="card-hint"
-                 style="margin:0;padding:0 13px 13px">
-              web_video_server MJPEG URL. The topic name depends on the
-              launch alias — <span class="mono">camera_name:=rs</span>
-              gives <span class="mono">/camera/rs/color/image_raw</span>.
-            </div>
           </div>
 
         </div>
@@ -4777,57 +4859,130 @@ function renderLidar() {
 /* ==========================================================
    CAMERA STREAM
 
-   web_video_server serves MJPEG over its own HTTP port, so the
-   frames never touch rosbridge and never spend a slot in its
-   10-client budget. The page just points an <img> at it.
-
-   The topic name is NOT fixed: the robot's `cam` alias passes
-   camera_name:=rs, giving /camera/rs/color/image_raw, while the
-   wrapper's default gives /camera/camera/... — so this has to be
-   configurable rather than hardcoded.
+   A plain MJPEG stream over HTTP. The browser renders it in an
+   <img> all by itself, so there is no ROS image topic, no
+   rosbridge traffic and no library involved — just a URL.
 ========================================================== */
 
-const DEFAULT_VIDEO_TOPIC = "/camera/rs/color/image_raw";
-const VIDEO_PORT = 8080;
+function setCameraStatus(text, color) {
 
-function defaultVideoUrl() {
-
-  const host = location.hostname || "localhost";
-
-  return (
-    `http://${host}:${VIDEO_PORT}/stream` +
-    `?topic=${DEFAULT_VIDEO_TOPIC}&quality=60`
-  );
+  $("camTag").textContent = text;
+  $("camTag").style.color = color;
 }
 
-function startVideo(url) {
+function connectCamera(url) {
 
-  const image = $("camStream");
+  const image = $("cameraImage");
 
-  $("camTag").textContent = "connecting";
-  $("camTag").style.color = "#777";
+  if (!url) {
+
+    setCameraStatus("NO STREAM", "var(--failed)");
+    $("camMessage").textContent = "Enter a camera URL first.";
+    $("camMessage").hidden = false;
+    image.hidden = true;
+    return;
+  }
+
+  setCameraStatus("CONNECTING", "#777");
 
   image.hidden = true;
-  $("camFallback").hidden = false;
+
+  $("camMessage").textContent = "Connecting…";
+  $("camMessage").hidden = false;
 
   image.onload = () => {
     image.hidden = false;
-    $("camFallback").hidden = true;
-    $("camTag").textContent = "live";
-    $("camTag").style.color = "var(--healthy)";
+    $("camMessage").hidden = true;
+    setCameraStatus("LIVE", "var(--healthy)");
   };
 
   image.onerror = () => {
     image.hidden = true;
-    $("camFallback").hidden = false;
-    $("camTag").textContent = "no stream";
-    $("camTag").style.color = "var(--failed)";
+    $("camMessage").textContent = "No stream at " + url;
+    $("camMessage").hidden = false;
+    setCameraStatus("NO STREAM", "var(--failed)");
   };
 
-  /* A cache-buster, so Retry actually re-requests rather than
-     re-showing the browser's failed response. */
+  /* On a reconnect the browser may hand back its cached copy of
+     a failed request, so the retry would never leave the page.
+     A timestamp makes it a new URL. Skipped on the first connect
+     to keep the plain URL intact. */
   image.src =
-    url + (url.indexOf("?") < 0 ? "?" : "&") + "t=" + Date.now();
+    image.getAttribute("src")
+      ? url + (url.indexOf("?") < 0 ? "?" : "&") + "t=" + Date.now()
+      : url;
+}
+
+/* ==========================================================
+   TAKE PICTURE
+
+   Copies whatever frame is on screen into a canvas and turns it
+   into a PNG the browser can save. No library, no round trip to
+   the robot — the frame is already here.
+========================================================== */
+
+function showCameraHint(text) {
+
+  $("cameraHint").textContent = text;
+  $("cameraHint").hidden = !text;
+}
+
+function takePicture() {
+
+  const image = $("cameraImage");
+
+  if (image.hidden || !image.naturalWidth) {
+
+    showCameraHint(
+      "No live frame to capture — connect the camera first.");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+
+  canvas.getContext("2d").drawImage(image, 0, 0);
+
+  let data;
+
+  try {
+
+    data = canvas.toDataURL("image/png");
+
+  } catch (error) {
+
+    /* Drawing an image served by another origin "taints" the
+       canvas, and the browser then refuses to let the page read
+       the pixels back. The video keeps working — only the
+       capture is blocked. The fix is on the camera server:
+       send an Access-Control-Allow-Origin header. */
+    showCameraHint(
+      "The browser blocked reading this frame. The camera server " +
+      "does not send an Access-Control-Allow-Origin header, so the " +
+      "page can show the video but cannot copy its pixels. The " +
+      "stream itself is fine.");
+    return;
+  }
+
+  const stamp = new Date();
+
+  $("snapshotImage").src = data;
+  $("snapshotSave").href = data;
+
+  $("snapshotSave").download =
+    "camera-" +
+    stamp.toISOString().slice(0, 19).replace(/[:T]/g, "-") +
+    ".png";
+
+  $("snapshotTime").textContent =
+    canvas.width + "×" + canvas.height + " · " +
+    stamp.toLocaleTimeString();
+
+  $("snapshot").hidden = false;
+
+  showCameraHint("");
 }
 
 /* ==========================================================
@@ -5116,18 +5271,20 @@ $("sysToggle").onclick = () => {
   renderSystemTiles();
 };
 
-$("camRetry").onclick =
-  () => startVideo($("videoUrl").value.trim());
+$("cameraConnectBtn").onclick =
+  () => connectCamera($("cameraUrl").value.trim());
 
-$("videoBtn").onclick =
-  () => startVideo($("videoUrl").value.trim());
-
-$("videoUrl").addEventListener("keydown", event => {
+$("cameraUrl").addEventListener("keydown", event => {
 
   if (event.key === "Enter") {
-    startVideo($("videoUrl").value.trim());
+    connectCamera($("cameraUrl").value.trim());
   }
 });
+
+$("cameraSnapBtn").onclick = takePicture;
+
+$("snapshotClose").onclick =
+  () => { $("snapshot").hidden = true; };
 
 /* ==========================================================
    CONNECTION FORM
@@ -5149,16 +5306,17 @@ $("wsUrl").value =
 $("robotIp").textContent =
   location.hostname || "unknown";
 
-/* ?video=<url> overrides the stream, the same way ?url= overrides
-   rosbridge — useful when the page is opened from a laptop rather
-   than served off the robot. */
+/* The input carries the working URL as its value in the HTML.
+   ?video=<url> overrides it, the same way ?url= overrides
+   rosbridge, for a different robot or a different port. */
 const queryVideo =
   new URLSearchParams(location.search).get("video");
 
-$("videoUrl").value =
-  queryVideo || defaultVideoUrl();
+if (queryVideo) {
+  $("cameraUrl").value = queryVideo;
+}
 
-startVideo($("videoUrl").value);
+connectCamera($("cameraUrl").value.trim());
 
 $("connectBtn").onclick = () => {
 
