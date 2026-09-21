@@ -88,7 +88,7 @@ Neither alone can tell a student "the cable fell out" versus "the driver crashed
 | #1 left open | Where it lands now |
 |---|---|
 | 6 explicit open questions (watchdog timeout, VESC command timeout, `/sensors/core` rate, lidar IP, DS4 charge, L1/R1 indices) | 4 answered, 1 answered negative, 1 still open - Section 5 |
-| Every `[MEASURE]` threshold | idle baseline captured; under-load baseline still missing - Section 5, block F |
+| Every `[MEASURE]` threshold | idle baseline captured. The under-load temperature baseline (block F) was dropped 2026-09-21: the professor said the 20-minute run is not needed to measure temperatures, so those thresholds stay provisional |
 | Four `[CONFIRM]` tags | 3 confirmed, 1 refuted - Section 3 |
 | **The unstated assumption that each check is readable at all** | four checks are not buildable as written - Section 3 |
 
@@ -186,12 +186,12 @@ The last column points at the block in Section 5 that still has work to do.
 | S-02 | Compute power rail | system | **`tegrastats` runs with no sudo** and reports `VDD_IN` / `VDD_CPU_GPU_CV` / `VDD_SOC` in mW (4.94-5.18 W idle), plus `/proc/uptime` reset detection | **Ready** | done |
 | S-03 | Deadman | both | `/joy` → `buttons[4]` L1, `buttons[5]` R1, confirmed from `joy_teleop.yaml`. **Must gate on Bluetooth connection state** (S-18) | **Ready** | D |
 | S-04 | CPU / GPU load | system | `/proc/loadavg`. **6 cores**, 1.95 / 1.37 / 1.10 idle | **Ready** | - |
-| S-05 | Thermals | system | **`tj-thermal` is the junction temperature #1 asks for.** 47-51 °C idle across all zones over three sessions. **Read it from `tegrastats`**, not sysfs - see the EAGAIN correction below | **Ready**, threshold unbaselined | F |
+| S-05 | Thermals | system | **`tj-thermal` is the junction temperature #1 asks for.** 47-51 °C idle across all zones over three sessions. **Read it from `tegrastats`**, not sysfs - see the EAGAIN correction below | **Ready.** Provisional threshold stands; loaded run dropped 2026-09-21 | F (dropped) |
 | S-06 | Storage | system | **915 GB NVMe at 4% used**, 837 GB free. Not the cramped eMMC #1 assumes | **Ready**, low risk | - |
 | S-07 | Memory | system | `/proc/meminfo`. 7.88 GB, ~63% available, swap unused | **Ready** | - |
 | S-08 | Clock sync | system | `timedatectl` → `NTPSynchronized=yes`, TZ America/Denver | **Ready**, healthy | - |
 | S-09 | VESC link | both | `/sensors/core` rate **50.020 Hz** (answers #1's `[CONFIRM]`) + `/dev/sensors/vesc -> ttyACM0` present | **Ready** | - |
-| S-10 | Brushless motor | ROS | `fault_code`, `speed`, `current_motor`, `current_input`, `duty_cycle` all **confirmed live under load**. `temp_fet` is **live after a two-line driver fix** (31.4 C idle, climbing under load). `temp_motor` has **no thermistor fitted** - it reads -73.6 C and must be rendered as "absent", never as a temperature | **Buildable.** Thresholds need one long loaded run | F |
+| S-10 | Brushless motor | ROS | `fault_code`, `speed`, `current_motor`, `current_input`, `duty_cycle` all **confirmed live under load**. `temp_fet` is **live after a two-line driver fix** (31.4 C idle, climbing under load). `temp_motor` has **no thermistor fitted** - it reads -73.6 C and must be rendered as "absent", never as a temperature | **Buildable.** Provisional thresholds stand; loaded run dropped 2026-09-21 | F (dropped) |
 | S-11 | Steering servo | ROS | `/commands/servo/position` exists; needs yaw rate from S-13 or S-15 while moving | **Confirmed** under motion (block B); still no position feedback | - |
 | S-12 | LiDAR | ROS | **`urg_node` already publishes rate, bounds, device status, error counts, lockout.** `/scan` = 1081 ranges at 40.196 Hz | **Published**; content analysis still ours | - |
 | S-13 | IMU | ROS | `/sensors/imu` 50.008 Hz, `/sensors/imu/raw` 50.062 Hz | Rate **ready**; confirmed live under motion (block B). Yaw drifts about 0.1 °/s, so check liveness only | - |
@@ -318,7 +318,7 @@ Two surprises worth folding back into #1: **storage is a non-issue**, not the cr
 
 ## 5. Closing the rest: the on-robot session plan
 
-Blocks A, B and C are done (2026-09-09). Block E is done (2026-09-14). Blocks D, F, G, H and I are still open, and F is the one to do first. The procedures for the finished blocks are kept so they can be repeated on other cars. **Blocks D and F need the car on blocks with the wheels free.** Blocks B, C, D and F need a charged pack.
+Blocks A, B and C are done (2026-09-09). Block E is done (2026-09-14). Blocks D, G, H and I were closed on 2026-09-16. Block F was dropped on 2026-09-21, so nothing is open. The procedures are kept so they can be repeated on other cars. **Block D needed the car on blocks with the wheels free.** Blocks B, C and D needed a charged pack, and so would F if anyone ever runs it.
 
 Everything goes into one directory so it can be pasted back into this document:
 
@@ -472,7 +472,7 @@ Rebuild finished in 24.2 s. Bringup restarted, then a ~16 s capture under sustai
 
 **What the dashboard must do with it.** Render "no sensor fitted", not a number. Both obvious checks fail silently: "warn above 60 C" passes forever, and so does "warn if it reads exactly zero". **Guard on `temp_motor < -20` and treat that as absent hardware.** A student who sees `-73.6 C` on a dashboard files a bug; one who sees "not fitted" learns something true about the car they are driving.
 
-**S-10's `[MEASURE]` baseline is started, not finished.** Idle floor **31.4 C**; 16 s of load buys **33.3 C**, nowhere near steady state. The VESC's own `OVER_TEMP_FET` fault trips near 85 C, so Degraded around 65 C and Failed around 80 C is the sane starting shape - but that needs a multi-minute run to confirm the curve actually flattens below it. **Still open: one 10-minute loaded run to close S-10's thresholds.**
+**S-10's `[MEASURE]` baseline is started, not finished.** Idle floor **31.4 C**; 16 s of load buys **33.3 C**, nowhere near steady state. The VESC's own `OVER_TEMP_FET` fault trips near 85 C, so Degraded around 65 C and Failed around 80 C is the sane starting shape - but nothing has confirmed the curve actually flattens below it. **The 10-minute loaded run that would have closed this was dropped on 2026-09-21**: the professor said the run is not needed to measure temperatures. These stay the working thresholds, unvalidated under load.
 
 #### The finding this capture produced by accident: voltage cannot be thresholded per sample
 
@@ -645,9 +645,11 @@ With both cars powered up and bringup running at the same time on the same lab W
 
 S-19's roll call is safe as designed for these two cars. **Still open:** only 2 of the fleet's robots have been checked. Worth a quick `echo $ROS_DOMAIN_ID` pass on the rest to confirm every car has a unique ID before relying on this fleet-wide; if two ever collide, the fix is a unique ID per robot or `ROS_LOCALHOST_ONLY=1`, plus a way for the page to show which car it's looking at.
 
-### Block F - S-05, the thermal baseline under load (20 min, runs in the background)
+### Block F - S-05, the thermal baseline under load (DROPPED 2026-09-21)
 
-Every `[MEASURE]` threshold is a guess until this exists. 70 °C is an Orin-family default, not ours; the idle floor is 47-51 °C.
+> **Dropped.** The professor said we do not need to do the 20-minute run to measure temperatures. His reason was not recorded. The procedure below is kept in case anyone wants it, and nothing else in this document depends on it. Without it, the S-05 and S-10 temperature thresholds stay at the provisional values in Section 3.
+
+70 °C is an Orin-family default, not ours; the idle floor is 47-51 °C.
 
 ```bash
 ( while true; do
@@ -669,7 +671,7 @@ That is 50 Hz for 20 minutes, about 60 000 rows and roughly 10 MB - nothing on a
 
 Then leave bringup and the camera running and drive for 20 minutes. Take `tj-thermal`'s plateau as Healthy for S-05 and `temp_fet`'s plateau as Healthy for S-10, and set Degraded above each with real headroom. Blocks B and C are finished, so this needs its own session.
 
-**This is the single highest-value block remaining.** It is the only thing standing between the inventory and a complete set of thresholds, it needs no second car and no second person, and it runs unattended in the background while other blocks proceed.
+This was the last open measurement from #1. It needed no second car and no second person and would have run unattended, which is why it was ranked first before it was dropped.
 
 ### Block G - S-18, one last attempt at the controller charge
 
@@ -771,6 +773,303 @@ heavier client than any test client (about 16 topics at a 200 ms throttle includ
 `/scan`) and it occupies one of the ten slots, which made the first three attempts at
 this measurement unreproducible.
 
+### Robot #2: WiFi, thermal trip points and CPU power mode (2026-09-21)
+
+Taken to support the green, yellow and red ranges proposed in
+[instructor-interview.md](instructor-interview.md) (#6). All read-only, no sudo except
+`nvpmodel`. Robot #2, idle, bringup state not recorded.
+
+**WiFi** (`wlP1p1s0`, `192.168.1.202`, gateway `192.168.1.1`). Every source works without sudo.
+
+Four runs, with the robot about 10 ft from the router. Only the laptop moved between them, and
+these commands read the robot's own link, so all four are the same spot.
+
+| | Value |
+|---|---|
+| Network | `turtlebot_network`, 5 GHz (5765 MHz) |
+| Signal | -41, -42, -42, -43 dBm. Link quality 69 on the first run |
+| rx bitrate | 780 MBit/s in every run (VHT-MCS 9, 80 MHz, 2 streams) |
+| tx bitrate | 468 MBit/s (MCS 5) on the first run, 351 MBit/s (MCS 4) on the other three |
+| Ping to gateway | 0% loss in all four: 10 of 10, then three runs of 20 of 20. Round trip min / avg / max between 1.360 and 3.194 ms |
+| Errors, drops, discarded, missed beacons | all 0 (read on the first run) |
+
+- This is the good case. A run with a dashboard streaming, and the robot far from the router,
+  are not measured.
+- `tx_bytes` was 1.03 GB against `rx_bytes` at 166 MB. The robot is the server for every open
+  dashboard, so its sending rate includes the dashboard's own traffic.
+- The noise column in `/proc/net/wireless` reads -256. It is a placeholder.
+- The tx bitrate fell from 468 to 351 MBit/s at the same signal, so the link rate adapts by
+  itself and is not a stable number to threshold.
+- Ten pings took 9 seconds. A background check needs a short burst with a hard timeout.
+
+**Thermal trip points** (`trip_point_*_type` and `_temp`, identical across the zones of a
+given kind):
+
+| Zone | Trips |
+|---|---|
+| `tj-thermal` | active 35 C, active 74 C, active 95 C, critical 104.5 C |
+| `cpu`, `gpu`, `soc0/1/2`, `cv0/1/2` | passive 99 C, critical 104.5 C, passive 70 C |
+
+"Active" is a fan step, "passive" is throttling and "critical" is shutdown. The module has a
+heatsink and fan, seen in a photo of robot #2 (an Orin Nano, JetPack 6.2 per the team), even though the
+`tegrastats` line shows no fan field. Idle in the same capture:
+tj 49.8 C, cpu 49.7 C, gpu 49.8 C, soc 47.2 to 49.4 C.
+
+**Power mode:** `nvpmodel -q` reports **15W** (mode 0). `cpuinfo_max_freq` and
+`scaling_max_freq` both read **1 510 400 kHz**, so the governor is not capping below the
+hardware limit. The CPUs idled at 729 to 883 MHz. Rest of the `tegrastats` line: RAM 2041 of
+7621 MB, swap 0 of 3810 MB, CPU 0 to 3%, **`GR3D_FREQ` 0%** (GPU load is available here),
+`VDD_IN` 4859 mW.
+
+Not seen: what the clocks do under a real heavy run. It was decided not to chase that. CPU load
+and board temperature are shown instead, with the caveat that the 15 W cap can slow the CPU
+without heat.
+
+**WiFi: what to read.** All of it works without sudo on robot #2. The interface is `wlP1p1s0`,
+not `wlan0`.
+
+| To show | Source |
+|---|---|
+| Signal and link rate | `signal`, `rx bitrate` and `tx bitrate` in `iw dev wlP1p1s0 link`, and `/proc/net/wireless` |
+| Sending and receiving | The change in `/sys/class/net/wlP1p1s0/statistics/tx_bytes` and `rx_bytes` between samples |
+| Packet loss and round trip | `ping` to the default gateway, plus `tx_errors`, `rx_errors`, `tx_dropped` and `rx_dropped` in the same directory and the discarded columns of `/proc/net/wireless` |
+
+Design notes for the WiFi check:
+
+- **Ping the gateway, not the internet.** The robot does not need internet, so an outside outage
+  would read as a robot fault.
+- **Two vantage points.** The list above is the robot's view of its own link. The person
+  watching has their own link to the same router, and a bad router shows up on both. A browser
+  cannot send ICMP pings, but it can time a call to the robot and notice gaps in arriving
+  messages, which the page's existing websocket-liveness tracking makes a small addition. When
+  the robot cannot be reached at all, the page should say what to check: that the viewer is on
+  the same WiFi as the robot, and that the robot is powered.
+- **Colour on signal, packet loss and round trip.** The transmit link rate is not stable enough
+  to colour, and the sending rate includes the dashboard's own traffic.
+- **No capacity test.** Link rate is the negotiated rate, and the send and receive rates only
+  show what the robot happens to be doing. Measuring how fast the link could go needs an active
+  test such as `iperf3`, which loads the link the dashboard is using and would itself look like
+  a fault while it runs. The team's reading of "speed" is that the network is up, without
+  packet loss or high ping.
+- **WiFi and battery can look alike.** On 2026-09-09 the robot vanished from the network with
+  the pack at 10.9 V, and the cause was never separated. The Jetson runs off the same pack, so
+  a sagging pack can drop the link. Read a red WiFi tile next to a yellow or red battery tile
+  together.
+- The Omarchy WiFi panel on a laptop shows the same set (ping, packet loss, receiving, sending,
+  downloaded, uploaded) and is how a bad network has been spotted in the past.
+
+### Robot #2: the lidar's single connection and orphaned nodes (2026-09-21)
+
+Found while working on #6. Starting instances from different computers while one is already
+running, or running `./start_diagnostics.sh`, then `--stop`, then starting it again, makes
+`urg_node` repeat this every 2.5 seconds. It stays that way until the machine is turned off and
+on:
+
+```
+[urg_node]: Error connecting to Hokuyo: Could not open network Hokuyo:
+192.168.0.10:10940
+could not open ethernet port.
+```
+
+The lidar is powered and the network is fine, so the `lidar` ping alias passes, and so does the
+prototype's own lidar link check, which is also a ping.
+
+**Cause.** While the error was showing:
+
+- One old `urg_node_driver` (PID 4647) was running with **no bringup launch process above it**.
+  Its parent was PID 1 and it had been running for 1 hour 51 minutes, so it was an orphan from
+  a run about two hours earlier.
+- It held an established connection to the lidar (`ESTAB`, port 10940).
+- The new bringup's driver (PID 15378) was stuck in `SYN-SENT`. The lidar never answered its
+  connection attempt.
+- Ping to the lidar worked (0.14 to 0.23 ms), and a plain connection attempt from bash also got
+  no answer.
+
+So the lidar takes one connection at a time, and the orphan was holding it. Killing the orphan
+(`kill 4647`) stopped the errors, and `/scan` then ran steadily at 39.9 Hz, so the new driver
+reconnects by itself once the connection is free. Turning the robot off and on cleared it
+because that killed the orphan.
+
+**Why `start_diagnostics.sh` did not catch it.** It finds processes by name pattern. The
+pattern includes the launch process (`bringup_launch.py`) but not the node processes it starts.
+When the launch process dies and leaves a node behind, that node is invisible to `--stop`, to
+`--status` and to the "a bringup is already running" guard, and `--stop` reports "all stopped"
+while it lives. The script's own success check is fooled too: it only looks for `urg_node` in
+`ros2 node list`, and the orphan's node is still in the graph.
+
+**How the launch process died.** At about 12:10 someone ran `./start_diagnostics.sh` on a
+second connection while a bringup was already running on another. The guard refused, as
+intended, but then **killed the bringup it had just detected**. The exit trap that runs the full
+stop is installed before the guard, so the guard's `exit 1` fires it. A refused run therefore
+runs `stop_all`, which sweeps every process matching the name patterns. That kills the running
+launch process but not the nodes it started, and they become orphans.
+
+This was reproduced with stand-in processes and a stubbed `ros2`: the fake bringup was alive
+before the refused run and dead after it, its child node survived, and the refused run exited
+0. It has not been reproduced on the robot with the real nodes. The robot's copy of
+`start_diagnostics.sh` has the same checksum as the one on `main` (`5f82c45f...72c9`), so this is
+how the current script behaves. The sweep also matches any `python -m http.server` on the robot,
+and `grep -v "\-\-stop"` prints a stray-backslash warning on this grep.
+
+**How many orphans.** A full listing found **11, in two sets**, all with parent PID 1. Five came
+from the old run (`joy_teleop`, `ackermann_to_vesc`, `vesc_to_odom`, `ackermann_mux` and the
+static transform publisher, besides the lidar driver that was killed). Six came from a run about
+16 minutes before that listing: the same five plus a `joy_node`. Next to the current bringup that
+is duplicate publishers on the same topics, including a second full control chain from the
+joystick to the motor commands. Two `joy_node`s also means two programs reading the controller,
+and duplicate publishers make the dashboard's rates read high. The first listing only matched
+`/opt/ros`, so the VESC and mux nodes, which live in the workspace, needed a second look:
+
+```bash
+ps -eo pid,ppid,etime,cmd | grep -E '/opt/ros/humble/(lib|bin)|f1tenth_ws' | grep -v grep
+```
+
+**What the dashboard needs.** The lidar has three states, and the prototype only tells two apart:
+
+| State | What the prototype shows |
+|---|---|
+| Link down | Red, from the ping check |
+| **Link up, this bringup's driver not connected** | **Nothing. Reads as reachable** |
+| Connected, scans flowing | Rate check, green |
+
+The middle state should be red, with a message that the lidar answers but the driver cannot
+connect, and that a leftover driver from an earlier run may be holding it. Whether an orphaned
+driver keeps publishing scans while the new one fails is unknown. This is the node roll call
+being green while the lidar is not connected.
+
+**How to tell, on the robot, while the error is showing:**
+
+```bash
+pgrep -af 'urg_node|bringup_launch'    # more than one driver, or a driver with no launch?
+ss -tan | grep 10940                    # who holds the connection, and who is stuck in SYN-SENT
+ps -o pid,ppid,etime,cmd -p <pid>       # how old is the suspect, and what is its parent
+```
+
+| Result | Meaning |
+|---|---|
+| A `urg_node_driver` with no `bringup_launch` process, and a parent PID of 1 | An orphan from an earlier run. This is what was found |
+| Two drivers, each under a launch process | Two bringups running at once |
+| No driver, but a connection in `ESTAB` or a `WAIT` state | The robot's side of the connection is stuck |
+| No driver, no connection, ping works, the lidar still refuses | The lidar itself is holding the slot |
+
+**Still to do.** Make `start_diagnostics.sh` see the node processes, so `--stop`, `--status` and
+the bringup guard catch an orphan; keep the guard's refusal from running the full stop; and give
+the launch process time to shut its children down before it is killed. That is a change to the
+script and needs testing on the robot. It waits on the camera work happening on the robot now.
+
+### Robot #2: battery run-down test (2026-09-21)
+
+Run to find where this car actually loses power, which #1's battery lines and the 2026-09-09 and
+2026-09-16 events could not say. Two watchers ran at once.
+
+**Laptop, reachability watcher.** Every 5 seconds it fetches the dashboard page from the robot
+with a 2 second timeout and prints UP or DOWN with the time. It only proves the robot's web
+server answers, so it would stay UP if bringup died while the server survived. It runs off the
+robot, so it survives the robot dying.
+
+```bash
+while true; do curl -s -m 2 -o /dev/null http://192.168.1.202:8000/dashboard.html && s=UP || s=DOWN; echo "$(date +%T) $s"; sleep 5; done | tee ~/dash_watch.log
+```
+
+**Robot, battery logger.** It subscribes to `/sensors/core` (about 50 Hz) and writes every 50th
+`voltage_input` reading with a timestamp, so about one line per second, to `~/diag/batt.log`.
+The file is on the robot's disk, so it survives the robot dying and rebooting.
+
+```bash
+PYTHONUNBUFFERED=1 ros2 topic echo /sensors/core --field state.voltage_input | awk '$0!="---" && ++n%50==0 {print strftime("%F %T"), $0; fflush()}' >> ~/diag/batt.log &
+```
+
+**Result**
+
+| | |
+|---|---|
+| Laptop watcher | last UP at 14:30:28, first DOWN at 14:30:35, so power was lost between 14:30:28 and 14:30:33 |
+| Manual reading | about 10.4 V at 14:25:25, read off the dashboard. Nothing recorded it. The test was meant to start there |
+| Robot log | 30 lines, about one per second, from about 14:29:50 (9.3 V) to 14:30:21 (**8.8 V**, the last line written). They carry three burst timestamps (14:30:00, 14:30:10, 14:30:21), so about ten lines share each stamp |
+| Fall rate | about 0.25 V per minute from 10.4 V to 9.3 V (1.1 V in about 4.5 minutes), then about 1 V per minute from 9.3 V to 8.8 V (0.5 V in about 30 seconds). Four times faster below 10 V |
+| Whole run | about five minutes from the 10.4 V reading to power loss at about 14:30:30 |
+
+**The robot lost power at 8.8 V or below, about 2.9 V per cell on a 3S pack, measured by the
+VESC. The car was idle**: bringup and the dashboard were running, but it was not driving. That
+is close to the resting voltage, and the car would read a higher voltage at the moment it died
+while driving. The log timestamps come from buffered output arriving in bursts about 10 seconds
+apart, so the ten lines sharing a stamp are really one line per second. The last few seconds
+before power loss were never written, so the true final voltage is a little below 8.8 V. The
+10.4 V figure is a single manual reading, so the 10.4 to 9.3 V stretch is approximate.
+
+**What it means for the ranges**
+
+- **Red at #1's 10.5 V is too late.** The pack falls off a cliff below about 10 V (about 3.3 V
+  per cell). From 10.4 V the car had about five minutes at idle, and it was falling four times
+  faster below 10 V. Driving draws far more current than idle (the spike saw up to 6.5 A of input
+  current, against about 5 W for the Jetson alone), so with the car moving there would be much
+  less than five minutes between red and power loss. An earlier note here judged the margin in
+  volts, 1.7 V, which was the wrong measure. **Red should fire earlier: below 11.1 V, which is
+  #1's own healthy floor (3.7 V per cell), with yellow above it up to about 11.6 V.** Yellow is a
+  buffer: the pack still runs fine, and it is time to get a replacement ready, while red means
+  replace it soon. The 11.6 V line is a convention, and the idle test does not prove either
+  number, but the professor has signed off on both.
+- **The 2026-09-09 dropout was most likely not the pack running out.** The pack was found at
+  10.9 V, and this run shows the car keeps running until 8.8 V or lower. The WiFi was also
+  flaky that day, and it is now the likelier cause.
+- **Nothing on the car protects the pack.** #1 puts permanent LiPo damage below roughly 9.9 V
+  (3.3 V per cell), and the car kept running to 8.8 V or lower. The dashboard's red line is the
+  only warning a student gets before the pack is damaged.
+- The pack went to about 2.9 V per cell at idle, so check its cell voltages and condition
+  before reuse.
+
+**Not established.** Which part gave out first: the VESC's undervoltage cutoff, the minimum
+input of the DC-DC converter that feeds the Jetson, or the pack itself. It does not change the
+ranges. It is one pack, one run and one car, and the car was idle. The curve above 10.4 V was
+not recorded, because the logger only produced real voltages from about 14:29:50, so how long
+yellow lasts is unknown. The professor signed off on the ranges without that curve. A driving run
+logged from a full pack and stopped around 11 V would give it, using the logger above, if anyone
+wants it later.
+
+The dashboard's battery lines are `BATT_WARN = 11.1` and `BATT_ERR = 10.5` in
+`prototype/dashboard.html`, and would change to match if these numbers are adopted.
+
+### Camera feature as merged (PR #35, 2026-09-21)
+
+Saman Chapagain's PR #35 added the camera to `prototype/dashboard.html` on `main`. The same day
+PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a change to
+`start_diagnostics.sh`, so the script is unchanged.
+
+- **How it works.** The page shows a plain MJPEG stream from
+  `http://192.168.1.202:8082/camera.mjpg` in an `<img>`. There is no ROS image topic and no
+  rosbridge traffic. **Connect Camera** takes the URL, and **Take Picture** draws the current
+  frame to a canvas and offers it as a PNG.
+- **Frame rate.** The pipeline asks for 640x480 at 30 fps, and the stream looks like 10 to 20
+  fps by eye. Not measured. The research doc measured the ROS colour topic at 25 to 28 fps.
+- **This is not the design the spike recommended** (a compressed topic through rosbridge, see
+  block C), and it sidesteps the raw-frame limits: the 2.76 MB frames never touch rosbridge.
+- **How the server is built.** [Camera Streaming Research](Camera%20Streaming%20Research.pdf)
+  (PR #36) documents it. `gst-launch-1.0` reads the RealSense colour stream straight from its
+  V4L2 device, `/dev/video4`, encodes each frame as JPEG and serves it on TCP port 8081. A small
+  Python HTTP server, `/tmp/camera_http.py`, reads that port and serves it as
+  `http://192.168.1.202:8082/camera.mjpg`. GStreamer was already installed, `ffmpeg` was not, and
+  `image_transport` offers only the raw transport.
+- **It is a temporary setup, not part of the repo.** Nothing on `main` starts either piece, and
+  `start_diagnostics.sh` does not. The script lives in `/tmp` on the robot, which is cleared on
+  reboot, so the camera stream disappears whenever the robot restarts, as it does when the pack
+  dies. The build is described in the PDF, but the script itself is not saved anywhere shared.
+  That is the same problem as the VESC patch.
+- **It bypasses the ROS camera node.** It reads the V4L2 device directly, so it does not need
+  the `cam` alias. Whether it can run at the same time as `cam` is untested: the research
+  launched the ROS node only to confirm the camera worked, then switched to GStreamer.
+- **Ports 8081 and 8082 are both open** with no authentication, reachable by anyone on the
+  WiFi. Port 8081 is the raw stream and 8082 is the HTTP one. That is video of the room, and the
+  access-control question in Section 6 applies to both.
+- **Snapshots need CORS headers.** The page can show the video, but reading a frame back is
+  blocked unless the camera server sends `Access-Control-Allow-Origin`. The page says so when
+  that happens.
+- **The default URL is robot #2's address.** Other cars need it changed in the box.
+- **Not built yet:** the lidar radar view. The page computes summary statistics from `/scan`
+  (minimum, maximum, count of finite returns), and a comment notes a plot could draw from the
+  same message. The Network tile also reads a `wifi signal` value that `system_diagnostics.py`
+  does not publish, so it falls back to counting links that are up.
+- A `.DS_Store` file was committed in the same merge. It should be removed and ignored.
+
 ### What to do with the results
 
 Every block writes a file. `scp` the directory back and fold the numbers into Section 3 and Section 4, then update `docs/subsystem-inventory.md` in the same pass - **the `[MEASURE]` and `[CONFIRM]` tags in #1 are the point of the exercise**, and a measurement that stays in a text file on the robot has not closed anything.
@@ -844,7 +1143,7 @@ The read-only-versus-can-restart-nodes question is the same decision and should 
 
 1. The rest of the node: the topic-liveness bridge for nodes that do not self-report, and the service handlers behind the buttons. The system collectors are done (`system_diagnostics.py`).
 2. An aggregator config listing the eight expected nodes under Sensors / Actuation / Control so a missing node surfaces as `Missing`.
-3. VESC threshold checks on `/sensors/core`. Battery, `fault_code` and `temp_fet` all read correctly (`temp_fet` needs the driver patch); the temperature thresholds wait on block F.
+3. VESC threshold checks on `/sensors/core`. Battery, `fault_code` and `temp_fet` all read correctly (`temp_fet` needs the driver patch); the temperature thresholds use the provisional values, since block F was dropped.
 4. rosbridge in a launch file. Nothing in `f1tenth_system` starts it, despite it being a declared dependency of `f1tenth_stack`; `prototype/start_diagnostics.sh` starts it for now.
 5. The page: buttons and the per-subsystem view over `/diagnostics_agg`. The system panel is done.
 
@@ -870,6 +1169,8 @@ Recorded because each one produces a *wrong* reading rather than an obvious fail
 | **Custom msg types, native client** | `/sensors/core` undecodable off-robot | values lost, liveness kept |
 | **Off-robot rate measurement** | `/scan` reads 30.5 Hz | 25% low, looks like a real fault |
 | **Unthrottled rosbridge** | server wedges, handshakes stop completing | needs a restart |
+| **The lidar takes one connection** | `urg_node` loops "could not open ethernet port" while `ping` passes | an orphaned driver held it for 1 h 51 min. Only killing it, or a reboot, frees it |
+| **Killing a launch leaves its nodes running** | `--stop` says "all stopped" while nodes live | 11 orphans on robot #2, including a second control chain. A refused second `start_diagnostics.sh` kills the running bringup and orphans its nodes |
 
 **QoS mismatch is the worst one.** QoS is the set of delivery guarantees a publisher advertises and a subscriber requests. If a driver publishes `BEST_EFFORT` (normal for sensors, which would rather drop a frame than wait) and the monitor subscribes `RELIABLE`, DDS refuses to connect them and the monitor receives **nothing from a working sensor**. Read the publisher's advertised QoS with `get_publishers_info_by_topic()` and match it. ROS logs `offering incompatible QoS. No messages will be received`, and `ros2 topic info -v /scan` prints each publisher's full profile.
 
@@ -901,7 +1202,7 @@ Message arrival detects the same failure in under a second.
 
 ### #3 - ADR, web app vs status server vs physical indicator
 
-[ADR 0001](../ADR/0001-Diagonstics_form.md) has since proposed the web app. The points below still apply to it.
+[ADR 0001](adr/0001-Diagonstics_form.md) has since proposed the web app. The points below still apply to it.
 
 **1. The web app is viable and cheaper than it looks.** rosbridge is already a declared dependency, already installed, and works. The browser needs no ROS install and no message packages. Verified end to end on real hardware.
 
@@ -919,6 +1220,17 @@ Message arrival detects the same failure in under a second.
 - **Carry a topic class** (`continuous` / `event` / `latched` / `input`). Without it a healthy car reads as 16 broken topics.
 - **Carry `depends_on`**, as #1 already recommends. S-09 failing takes S-01, S-10 and S-15 with it in the same instant.
 - **Distinguish "check could not run" from "check passed"**, per #1's `unknown`. S-11, S-13 and parts of S-15 are only meaningful while moving.
+- **The thresholds are proposed in [instructor-interview.md](instructor-interview.md)**, one row
+  per item in the professor's top band, with the basis for each number. He has signed off on
+  them, and the rows marked *convention* have no measurement behind them. That document also
+  lists where each item's data comes from and where its range is defined.
+- **WiFi needs a schema entry.** S-16 was dropped from #1, but the professor asked for WiFi
+  speed, packet loss and traffic. A replacement carrying signal, round trip, packet loss and
+  send and receive rates fits the same states. Sources and design are in the WiFi entry in
+  Section 5.
+- **The lidar needs three states, not two**: link down, link up with the driver not connected,
+  and connected with scans flowing. A ping-only link check cannot tell the middle one from
+  healthy.
 
 ### #4 - interface mockup
 
