@@ -35,6 +35,13 @@
   box-sizing: border-box;
 }
 
+/* An author `display` rule outranks the UA stylesheet's
+   [hidden]{display:none}, so .stream-box img and .stream-fallback
+   would both stay on screen when toggled. Settle it once. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -81,6 +88,28 @@ input {
   flex-direction: column;
   align-items: flex-end;
   gap: 12px;
+}
+
+.overall-pill {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 16px 10px 12px;
+}
+
+.overall-note {
+  color: #555;
+  font-size: 12px;
+  margin-top: 2px;
+  max-width: 34ch;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   white-space: nowrap;
 }
 
@@ -131,21 +160,280 @@ input {
 }
 
 /* ----------------------------------------------------------
-   TOP STATUS CARDS
+   PRIORITY BAND
 ---------------------------------------------------------- */
 
-.summary-grid {
+.critical-grid {
   display: grid;
-  grid-template-columns:
-    1.05fr
-    1fr
-    1fr
-    1.25fr
-    1fr
-    1.6fr;
-  gap: 20px;
-  margin-top: 27px;
+  grid-template-columns: minmax(290px, 1fr) 2.3fr;
+  gap: 18px;
+  margin-top: 24px;
 }
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 18px;
+}
+
+/* A metric is a number with a threshold, so it carries its own
+   verdict: the left edge and the bar say good / eh / bad at a
+   glance, and the number is there for when that is not enough. */
+.metric {
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--unknown);
+  background: var(--panel);
+  padding: 12px 13px;
+  min-width: 0;
+}
+
+.metric .label {
+  color: #555;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.metric .sub {
+  font-weight: 400;
+  font-size: 11px;
+  color: #888;
+}
+
+.metric .value {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 9px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.metric .value.small {
+  font-size: 19px;
+}
+
+.metric .note {
+  margin-top: 5px;
+  color: #555;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #ececec;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--unknown);
+  transition: width .3s ease, background .3s ease;
+}
+
+.metric.g-ok       { border-left-color: var(--healthy); }
+.metric.g-warn     { border-left-color: var(--degraded); }
+.metric.g-bad      { border-left-color: var(--failed); }
+.metric.g-unknown  { border-left-color: var(--unknown); }
+
+.metric.g-ok      .value { color: var(--healthy); }
+.metric.g-warn    .value { color: #c59600; }
+.metric.g-bad     .value { color: var(--failed); }
+.metric.g-unknown .value { color: var(--unknown); }
+
+.metric.g-ok      .bar > i { background: var(--healthy); }
+.metric.g-warn    .bar > i { background: var(--degraded); }
+.metric.g-bad     .bar > i { background: var(--failed); }
+
+/* ----------------------------------------------------------
+   HARDWARE STRIP
+---------------------------------------------------------- */
+
+.hw-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.hw {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 13px;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 11px;
+  align-items: start;
+  background: var(--panel);
+}
+
+.hw-icon {
+  font-size: 23px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.hw-name {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.hw-state {
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: .04em;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hw-state .health-dot {
+  width: 11px;
+  height: 11px;
+}
+
+.hw-detail {
+  color: #555;
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+.hw.healthy  { background: var(--healthy-soft); border-color: #bfe4c8; }
+.hw.degraded { background: var(--degraded-soft); border-color: #e8d488; }
+.hw.failed   { background: var(--failed-soft); border-color: #f2a9a4; }
+.hw.unknown  { background: var(--unknown-soft); }
+
+/* ----------------------------------------------------------
+   LIVE DATA
+---------------------------------------------------------- */
+
+.live-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.live-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 0;
+}
+
+.live-card h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.live-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.stream-box {
+  background: #111;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stream-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.stream-fallback {
+  color: #cfcfcf;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  overflow: auto;
+  max-height: 100%;
+}
+
+.stream-fallback strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.stream-fallback pre {
+  margin: 0;
+  font-size: 11px;
+  color: #8fd3a0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.readout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px;
+}
+
+.readout-grid > div {
+  min-width: 0;
+}
+
+.readout-grid .k {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.readout-grid .v {
+  display: block;
+  margin-top: 5px;
+  font-size: 21px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.readout-grid .n {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #666;
+}
+
+.diag-inline {
+  display: flex;
+  gap: 10px;
+}
+
+/* ----------------------------------------------------------
+   CARDS
+---------------------------------------------------------- */
 
 .summary-card {
   border: 1px solid var(--border);
@@ -160,68 +448,24 @@ input {
   font-size: 16px;
 }
 
-.summary-card .big {
-  font-size: 36px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin-top: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.summary-card .small {
-  margin-top: 7px;
-  color: #555;
-  font-size: 14px;
-}
-
-.overall-row {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
 .overall-icon {
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 37px;
+  font-size: 28px;
   font-weight: 900;
   background: var(--unknown);
   flex: none;
 }
 
 .overall-text {
-  font-size: 29px;
+  font-size: 22px;
   font-weight: 900;
-}
-
-.diagnostics-numbers {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.diag-number {
-  text-align: center;
-}
-
-.diag-number strong {
-  font-size: 31px;
-  display: block;
-  line-height: 1;
-}
-
-.diag-number span {
-  display: block;
-  margin-top: 6px;
-  font-weight: 700;
-  font-size: 12px;
+  line-height: 1.1;
 }
 
 .ok-color {
@@ -266,6 +510,29 @@ input {
   margin-top: 4px;
   font-size: 13px;
   color: #666;
+}
+
+.battery-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #ececec;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.battery-bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--unknown);
+  transition: width .35s ease, background .35s ease;
+}
+
+.gauge-caption {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
 }
 
 .battery-gauge {
@@ -774,12 +1041,299 @@ input {
 }
 
 /* ----------------------------------------------------------
+   CLIENT LIMIT BANNER
+
+   Distinct from #staleBar: there the robot went quiet, here
+   rosbridge is answering but not sending topic data. Different
+   problem, different fix, so it gets its own banner.
+---------------------------------------------------------- */
+
+#limitBar {
+  display: none;
+  margin-top: 12px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: var(--degraded-soft);
+  color: #6b4b00;
+  border: 1px solid #e3c14a;
+  font-weight: 700;
+  text-align: center;
+}
+
+#limitBar.show {
+  display: block;
+}
+
+#clientsFooter.near strong {
+  color: #b58600;
+}
+
+#clientsFooter.over strong {
+  color: var(--failed);
+}
+
+/* ----------------------------------------------------------
+   ROBOT SYSTEM TILES
+---------------------------------------------------------- */
+
+.sys-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sys-tile {
+  background: var(--panel);
+  padding: 10px 11px;
+  min-width: 0;
+}
+
+.sys-tile .k {
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+/* The headline sits in a fixed slot, so anything past
+   HEAD_MAX_CHARS characters has to step down a size rather
+   than break mid-word. */
+.sys-tile .v {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.sys-tile .v.small {
+  font-size: 15px;
+}
+
+.sys-tile .n {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #666;
+}
+
+.card-hint {
+  color: #666;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #0b63c5;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+/* ----------------------------------------------------------
+   ON-DEMAND CHECKS
+---------------------------------------------------------- */
+
+.check-row {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.check-note {
+  color: #666;
+  font-size: 12px;
+  line-height: 1.35;
+  max-width: 34ch;
+}
+
+.check-btn {
+  background: white;
+  border: 1px solid #c8c8c8;
+  border-radius: 7px;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.check-btn:hover {
+  background: #f5f5f5;
+}
+
+.check-btn:disabled {
+  opacity: .55;
+  cursor: progress;
+}
+
+/* `pre`, not `pre-wrap`: the report aligns its labels and
+   indents the fix command, and rewrapping destroys that. */
+#joyResult {
+  display: none;
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  max-height: 300px;
+}
+
+#joyResult.show {
+  display: block;
+}
+
+/* ----------------------------------------------------------
+   TOPIC ROWS
+---------------------------------------------------------- */
+
+tr.topic-row {
+  cursor: pointer;
+}
+
+tr.topic-row:hover,
+tr.topic-row.open {
+  background: var(--panel-soft);
+}
+
+.caret {
+  display: inline-block;
+  width: 10px;
+  font-size: 9px;
+  color: #888;
+  margin-right: 5px;
+  transition: transform .12s;
+}
+
+tr.topic-row.open .caret {
+  transform: rotate(90deg);
+  color: var(--orange);
+}
+
+tr.topic-detail > td {
+  padding: 0;
+  background: var(--panel-soft);
+}
+
+tr.topic-detail pre {
+  margin: 0;
+  padding: 9px 12px 11px 26px;
+  max-height: 300px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-meta {
+  padding: 7px 12px 0 26px;
+  font-family: monospace;
+  font-size: 10.5px;
+  color: #777;
+}
+
+.why {
+  color: #777;
+  font-size: 11px;
+  margin-top: 3px;
+  white-space: normal;
+  max-width: 28ch;
+}
+
+.sub-tag {
+  color: var(--orange);
+  font-size: 10px;
+  margin-left: 6px;
+  font-family: monospace;
+}
+
+.state-pill {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.s-OK,
+.s-DRIVEN {
+  color: #1c9a31;
+}
+
+.s-SILENT,
+.s-NODE_DOWN,
+.s-MISSING {
+  color: var(--failed);
+}
+
+.s-NOT_ADVERTISED,
+.s-STALE,
+.s-SLOW {
+  color: #b58600;
+}
+
+.s-IDLE,
+.s-INPUT,
+.s-WAITING,
+.s-ABSENT,
+.s-UNKNOWN {
+  color: #8a8a8a;
+}
+
+.node-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 10px 12px;
+  color: #666;
+  font-size: 12px;
+  align-items: center;
+}
+
+.node-chips span {
+  font-family: monospace;
+  font-size: 11px;
+  padding: 2px 7px;
+  border: 1px dashed var(--border);
+  border-radius: 99px;
+}
+
+.advanced-card h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+/* ----------------------------------------------------------
    RESPONSIVE
 ---------------------------------------------------------- */
 
 @media (max-width: 1350px) {
-  .summary-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .critical-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .live-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .main-grid {
@@ -800,7 +1354,11 @@ input {
     align-items: flex-start;
   }
 
-  .summary-grid {
+  .live-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .battery-card {
     grid-template-columns: 1fr;
   }
 
@@ -827,19 +1385,32 @@ input {
   <!-- HEADER -->
   <div class="top-header">
     <div class="title">
-      <h1>System Status</h1>
+      <h1>Robot Status</h1>
       <p>Real-time overview of robot health</p>
     </div>
 
     <div class="header-right">
-      <div class="last-updated" id="lastUpdated">
-        last updated: never
+      <div class="overall-pill">
+        <div class="overall-icon" id="overallIcon">?</div>
+
+        <div>
+          <div class="overall-text" id="overallStatus">UNKNOWN</div>
+          <div class="overall-note" id="overallNote">
+            Waiting for robot data
+          </div>
+        </div>
       </div>
 
-      <button class="refresh-btn" id="refreshBtn">
-        <span class="refresh-symbol">⟳</span>
-        Refresh
-      </button>
+      <div class="header-actions">
+        <div class="last-updated" id="lastUpdated">
+          last updated: never
+        </div>
+
+        <button class="refresh-btn" id="refreshBtn">
+          <span class="refresh-symbol">⟳</span>
+          Refresh
+        </button>
+      </div>
     </div>
   </div>
 
@@ -847,69 +1418,22 @@ input {
     NO DATA FROM THE ROBOT — this page may be showing stale information
   </div>
 
-  <!-- TOP SUMMARY CARDS -->
-  <section class="summary-grid">
+  <div id="limitBar"></div>
 
-    <div class="summary-card">
-      <div class="label">Overall Status</div>
+  <!-- ==========================================================
+       PRIORITY BAND
 
-      <div class="overall-row">
-        <div class="overall-icon" id="overallIcon">?</div>
-        <div class="overall-text" id="overallStatus">UNKNOWN</div>
-      </div>
-
-      <div class="small" id="overallNote">
-        Waiting for robot data
-      </div>
-    </div>
-
-    <div class="summary-card">
-      <div class="label">Online Nodes</div>
-      <div class="big ok-color" id="onlineNodes">0</div>
-      <div class="small" id="nodeExpected">of 8 expected</div>
-    </div>
-
-    <div class="summary-card">
-      <div class="label">Active Topics</div>
-      <div class="big ok-color" id="activeTopics">0</div>
-      <div class="small" id="topicExpected">waiting for ROS graph</div>
-    </div>
-
-    <div class="summary-card">
-      <div class="label">Diagnostics</div>
-
-      <div class="diagnostics-numbers">
-        <div class="diag-number">
-          <strong class="ok-color" id="diagOk">0</strong>
-          <span class="ok-color">OK</span>
-        </div>
-
-        <div class="diag-number">
-          <strong class="warn-color" id="diagWarn">0</strong>
-          <span class="warn-color">WARN</span>
-        </div>
-
-        <div class="diag-number">
-          <strong class="err-color" id="diagError">0</strong>
-          <span class="err-color">ERROR</span>
-        </div>
-
-        <div class="diag-number">
-          <strong class="unknown-color" id="diagStale">0</strong>
-          <span class="unknown-color">STALE</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="summary-card">
-      <div class="label">Uptime</div>
-      <div class="big" id="uptime">--:--:--</div>
-      <div class="small" id="uptimeNote">Waiting for system diagnostics</div>
-    </div>
+       Battery first — it is the single biggest cause of trouble
+       on this car, and a flat pack looks like a dozen unrelated
+       faults. Then the compute metrics that explain "the board
+       started dropping data": CPU, RAM, GPU, temperature, link.
+       Everything else lives below this fold.
+  =========================================================== -->
+  <section class="critical-grid">
 
     <div class="summary-card battery-card">
       <div class="battery-main">
-        <div class="label">Battery Status</div>
+        <div class="label">Battery</div>
 
         <div class="battery-voltage" id="batteryVoltage">
           --.- V
@@ -917,6 +1441,10 @@ input {
 
         <div class="battery-note" id="batteryNote">
           Waiting for /sensors/core
+        </div>
+
+        <div class="battery-bar">
+          <div class="battery-bar-fill" id="batteryBar"></div>
         </div>
       </div>
 
@@ -928,9 +1456,116 @@ input {
           <div class="gauge-center"></div>
         </div>
 
-        <div style="text-align:center;font-weight:700;font-size:12px;color:#666"
-             id="batteryPercent">
-          --
+        <div class="gauge-caption" id="batteryPercent">--</div>
+      </div>
+    </div>
+
+    <div class="metrics" id="metricTiles"></div>
+
+  </section>
+
+  <!-- ==========================================================
+       HARDWARE STRIP — the things students actually ask about
+  =========================================================== -->
+  <section class="hw-strip" id="hwStrip"></section>
+
+  <!-- ==========================================================
+       LIVE DATA — not "is it connected", but what it is seeing
+  =========================================================== -->
+  <section class="live-grid">
+
+    <div class="live-card">
+      <h2>
+        <span>Camera</span>
+        <span class="live-tag" id="camTag">no stream</span>
+      </h2>
+
+      <div class="stream-box">
+        <img id="camStream" alt="Live camera stream" hidden>
+
+        <div class="stream-fallback" id="camFallback">
+          <strong>No video stream.</strong>
+          <div>
+            This needs <span class="mono">web_video_server</span> and the
+            RealSense node running on the robot:
+          </div>
+          <pre>ros2 launch realsense2_camera rs_launch.py camera_name:=rs
+ros2 run web_video_server web_video_server</pre>
+          <div>
+            Topic names depend on the launch alias, so set the stream
+            URL under Advanced → Connection if yours differs.
+          </div>
+          <button class="check-btn" id="camRetry">Retry stream</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="live-card">
+      <h2>
+        <span>LiDAR</span>
+        <span class="live-tag" id="lidarTag">waiting</span>
+      </h2>
+
+      <div class="readout-grid">
+        <div>
+          <span class="k">Points</span>
+          <span class="v" id="lidarPoints">—</span>
+        </div>
+
+        <div>
+          <span class="k">Nearest</span>
+          <span class="v" id="lidarMin">—</span>
+        </div>
+
+        <div>
+          <span class="k">Farthest</span>
+          <span class="v" id="lidarMax">—</span>
+        </div>
+
+        <div>
+          <span class="k">Field of view</span>
+          <span class="v" id="lidarFov">—</span>
+        </div>
+      </div>
+
+      <div class="card-hint" id="lidarHint">
+        Live from <span class="mono">/scan</span>.
+      </div>
+    </div>
+
+    <div class="live-card">
+      <h2><span>ROS Graph</span></h2>
+
+      <div class="readout-grid">
+        <div>
+          <span class="k">Online nodes</span>
+          <span class="v" id="onlineNodes">0</span>
+          <span class="n" id="nodeExpected">of 8 expected</span>
+        </div>
+
+        <div>
+          <span class="k">Active topics</span>
+          <span class="v" id="activeTopics">0</span>
+          <span class="n" id="topicExpected">waiting for ROS graph</span>
+        </div>
+
+        <div>
+          <span class="k">Uptime</span>
+          <span class="v" id="uptime">--:--:--</span>
+          <span class="n" id="uptimeNote">waiting for system diagnostics</span>
+        </div>
+
+        <div>
+          <span class="k">Diagnostics</span>
+
+          <span class="v diag-inline">
+            <span class="ok-color" id="diagOk">0</span>
+            <span class="warn-color" id="diagWarn">0</span>
+            <span class="err-color" id="diagError">0</span>
+            <span class="unknown-color" id="diagStale">0</span>
+          </span>
+
+          <span class="n">ok · warn · error · stale</span>
         </div>
       </div>
     </div>
@@ -974,6 +1609,47 @@ input {
       </div>
 
       <div class="side-card square">
+        <h2 style="display:flex;justify-content:space-between;gap:10px;
+                   align-items:baseline">
+          <span>Robot System</span>
+          <span id="sysSummary"
+                style="font-size:13px;font-weight:400;color:#777">
+            not reporting
+          </span>
+        </h2>
+
+        <div class="sys-tiles" id="sysTiles"></div>
+
+        <div class="card-hint" id="sysHint">
+          Waiting for system_diagnostics — start it on the robot with
+          <span class="mono">./start_diagnostics.sh</span>
+        </div>
+
+        <div class="card-hint">
+          <button class="link-btn" id="sysToggle">show all readings</button>
+        </div>
+
+        <div class="scroll" id="sysReadings" style="display:none"></div>
+      </div>
+
+      <div class="side-card square">
+        <h2>On-Demand Checks</h2>
+
+        <div class="check-row">
+          <button class="check-btn" id="joyBtn">
+            Run joystick check
+          </button>
+
+          <span class="check-note">
+            joy_enumerate_devices on the robot — the only thing that
+            separates “no controller” from “ROS cannot open it”
+          </span>
+        </div>
+
+        <pre id="joyResult"></pre>
+      </div>
+
+      <div class="side-card square">
         <h2>Recent Diagnostics</h2>
         <div class="recent-list" id="recentDiagnostics"></div>
       </div>
@@ -994,7 +1670,11 @@ input {
         <div class="advanced-grid">
 
           <div class="advanced-card">
-            <h3>Topics</h3>
+            <h3>
+              <span>Topics</span>
+              <span style="font-weight:400;color:#777;font-size:12px"
+                    id="topicSummary">click a row for live data</span>
+            </h3>
 
             <div class="scroll">
               <table class="raw-table">
@@ -1014,7 +1694,11 @@ input {
           </div>
 
           <div class="advanced-card">
-            <h3>Nodes</h3>
+            <h3>
+              <span>Nodes</span>
+              <span style="font-weight:400;color:#777;font-size:12px"
+                    id="nodeSummary"></span>
+            </h3>
 
             <div class="scroll">
               <table class="raw-table">
@@ -1027,6 +1711,8 @@ input {
 
                 <tbody id="nodeRows"></tbody>
               </table>
+
+              <div class="node-chips" id="extraNodes"></div>
             </div>
           </div>
 
@@ -1080,8 +1766,25 @@ input {
             <h3>Connection</h3>
 
             <div class="connection-box">
-              <input id="wsUrl" spellcheck="false">
+              <input id="wsUrl" spellcheck="false"
+                     aria-label="rosbridge address">
               <button id="connectBtn">Connect</button>
+            </div>
+
+            <div class="card-hint" id="connHint"
+                 style="margin:0;padding:0 13px 13px"></div>
+
+            <div class="connection-box" style="padding-top:0">
+              <input id="videoUrl" spellcheck="false"
+                     aria-label="camera stream URL">
+              <button id="videoBtn">Set stream</button>
+            </div>
+
+            <div class="card-hint"
+                 style="margin:0;padding:0 13px 13px">
+              web_video_server MJPEG URL. The topic name depends on the
+              launch alias — <span class="mono">camera_name:=rs</span>
+              gives <span class="mono">/camera/rs/color/image_raw</span>.
             </div>
           </div>
 
@@ -1106,6 +1809,14 @@ input {
     <span>
       Status:
       <strong id="connectionFooter">CONNECTING</strong>
+    </span>
+
+    <span id="clientsFooter"
+          title="rosbridge serves 10 clients at once; the 11th onward gets nothing.
+Updates only when a client connects or disconnects, so a tab that joined after the
+last change shows — until the next one.">
+      Clients:
+      <strong id="clientsValue">—</strong>
     </span>
   </div>
 
@@ -1142,13 +1853,59 @@ const GRAPH_POLL_MS = 5000;
 
 const STALE_MS = 2000;
 const CONNECTION_STALE_MS = 4000;
+
+/* NEVER subscribe unthrottled — /scan is ~780 KB/s and will
+   wedge rosbridge for every other client. */
 const LIVENESS_THROTTLE = 200;
+
+/* An expanded row resubscribes faster so the values move. */
+const DETAIL_THROTTLE = 100;
+
+/* rosbridge serves exactly this many clients at once
+   (measured 2026-09-16: 5/5, 10/10, 10 of 15, 10 of 25).
+   Number 11 connects, is counted, and is fed nothing. */
+const CLIENT_LIMIT = 10;
+
+/* No topic data for this long, while rosbridge is still
+   answering service calls, is the signature of being one of
+   the starved clients. It is NOT the robot going quiet, and it
+   needs a different fix, so it gets its own banner. */
+const PUBLISH_STALE_MS = 8000;
 
 const BATT_WARN = 11.1;
 const BATT_ERR = 10.5;
 const BATT_FULL = 12.6;
 
+/* VESC FET temperature. Measured idle 31.4 °C; the controller's
+   own OVER_TEMP_FET fault trips near 85 °C. */
+const FET_WARN = 65;
+const FET_ERR = 80;
+
+/* temp_motor has no thermistor fitted on this car and reads
+   about -74 °C, the open-circuit value. Anything below this is
+   "no sensor", never a temperature. */
 const MOTOR_ABSENT = -20;
+
+const SYS_PREFIX = "system: ";
+
+const SYS_ORDER = [
+  "Thermal",
+  "Power",
+  "CPU",
+  "Memory",
+  "Storage",
+  "Network",
+  "VESC device",
+  "Camera",
+  "Gamepad",
+  "Clock"
+];
+
+/* Longest headline the tile's large slot fits before it has to
+   step down a size — see .sys-tile .v.small. */
+const HEAD_MAX_CHARS = 8;
+
+const JOY_SERVICE = "/system_diagnostics/joystick_check";
 
 const EXPECTED_NODES = [
   "/joy",
@@ -1161,6 +1918,15 @@ const EXPECTED_NODES = [
   "/static_baselink_to_laser"
 ];
 
+/* Topic classes. A single liveness rule flags ~16 of 23 topics
+   as broken on a healthy car; these four classes take that to
+   zero.
+     continuous — publishes on a clock. Silence is a fault.
+     event      — publishes only on operator/nav input.
+                  Silence at rest is NORMAL.
+     latched    — transient-local, sent once. Age is meaningless.
+     input      — the stack SUBSCRIBES to it. Zero publishers is
+                  correct. */
 const CONTINUOUS = "continuous";
 const EVENT = "event";
 const LATCHED = "latched";
@@ -1169,57 +1935,71 @@ const INPUT = "input";
 const TOPICS = {
   "/scan": {
     cls: CONTINUOUS,
-    owner: "/urg_node"
+    owner: "/urg_node",
+    sub: "S-12"
   },
 
   "/odom": {
     cls: CONTINUOUS,
-    owner: "/vesc_to_odom_node"
+    owner: "/vesc_to_odom_node",
+    sub: "S-15"
   },
 
   "/sensors/core": {
     cls: CONTINUOUS,
-    owner: "/vesc_driver_node"
+    owner: "/vesc_driver_node",
+    sub: "S-01/09/10"
   },
 
   "/sensors/imu": {
     cls: CONTINUOUS,
-    owner: "/vesc_driver_node"
+    owner: "/vesc_driver_node",
+    sub: "S-13"
   },
 
   "/sensors/imu/raw": {
     cls: CONTINUOUS,
-    owner: "/vesc_driver_node"
+    owner: "/vesc_driver_node",
+    sub: "S-13"
   },
 
   "/tf": {
     cls: CONTINUOUS,
-    owner: "/vesc_to_odom_node"
+    owner: "/vesc_to_odom_node",
+    sub: "S-20"
   },
 
   "/diagnostics": {
     cls: CONTINUOUS,
-    owner: "/urg_node"
+    owner: "/urg_node",
+    node: "urg_node, ackermann_mux"
   },
 
   "/tf_static": {
     cls: LATCHED,
-    owner: "/static_baselink_to_laser"
+    owner: "/static_baselink_to_laser",
+    sub: "S-20"
   },
 
+  /* NOTE: the real mux output is /ackermann_cmd. The remap to
+     /ackermann_drive in bringup_launch.py appears to be a
+     no-op — that topic does not exist. */
   "/ackermann_cmd": {
     cls: EVENT,
-    owner: "/ackermann_mux"
+    owner: "/ackermann_mux",
+    sub: "S-22"
   },
 
   "/joy": {
     cls: EVENT,
-    owner: "/joy"
+    owner: "/joy",
+    sub: "S-18"
   },
 
   "/teleop": {
     cls: EVENT,
-    owner: "/joy_teleop"
+    owner: "/joy_teleop",
+    sub: "S-03"
   },
 
   "/commands/motor/speed": {
@@ -1239,33 +2019,50 @@ const TOPICS = {
 
   "/laser_status": {
     cls: EVENT,
-    owner: "/urg_node"
+    owner: "/urg_node",
+    sub: "S-12"
   },
 
   "/drive": {
-    cls: INPUT
+    cls: INPUT,
+    node: "nav stack, not running",
+    sub: "S-23"
   },
 
   "/commands/motor/brake": {
-    cls: INPUT
+    cls: INPUT,
+    node: "vesc_driver subscribes"
   },
 
   "/commands/motor/current": {
-    cls: INPUT
+    cls: INPUT,
+    node: "vesc_driver subscribes"
   },
 
   "/commands/motor/duty_cycle": {
-    cls: INPUT
+    cls: INPUT,
+    node: "vesc_driver subscribes"
   },
 
   "/commands/motor/position": {
-    cls: INPUT
+    cls: INPUT,
+    node: "vesc_driver subscribes"
   },
 
   "/joy/set_feedback": {
-    cls: INPUT
+    cls: INPUT,
+    node: "joy subscribes"
   }
 };
+
+const BAD_TOPIC_STATES = new Set([
+  "SILENT",
+  "STALE",
+  "SLOW",
+  "NODE_DOWN",
+  "MISSING",
+  "NOT_ADVERTISED"
+]);
 
 const FAULTS = {
   0: "NONE",
@@ -1291,11 +2088,28 @@ const subscribed = new Set();
 let runningNodes = new Set();
 let diag = {};
 let vesc = null;
+let mux = null;
+let scanStats = null;
 
 let lastAnything = 0;
+
+/* Tracked apart from lastAnything, which service responses also
+   refresh — see PUBLISH_STALE_MS. */
+let lastPublish = 0;
+let connectedAt = 0;
+let clients = null;
+
 let totalGraphTopics = 0;
 
 let logStarted = false;
+let sysOpen = false;
+
+const expanded = new Set();     // topics whose row is open
+const latestMsg = new Map();    // topic -> newest msg, only while open
+const rowEls = new Map();       // topic -> the row's live elements
+
+let tableKey = "";              // rebuild the table only when the
+                                // topic set itself changes
 
 /* ==========================================================
    HELPERS
@@ -1401,15 +2215,19 @@ function call(service, args = {}) {
 
     const id = "call_" + (++sequence);
 
-    pending.set(id, resolve);
+    pending.set(id, { resolve, reject });
 
+    /* 12s, not 8: the joystick check shells out to `ros2 run`
+       on the robot and is allowed 8s there, so a shorter
+       deadline would time out a call that is about to answer.
+       rosapi calls are unaffected — scan() retries every 5s. */
     setTimeout(() => {
 
       if (pending.delete(id)) {
         reject(new Error("timeout " + service));
       }
 
-    }, 8000);
+    }, 12000);
 
     send({
       op: "call_service",
@@ -1454,8 +2272,17 @@ function connect(url) {
 
   diag = {};
   vesc = null;
+  mux = null;
+  scanStats = null;
+
+  expanded.clear();
+  latestMsg.clear();
 
   lastAnything = 0;
+  lastPublish = 0;
+  connectedAt = 0;
+  clients = null;
+
   totalGraphTopics = 0;
 
   setConnectionState("connecting", false);
@@ -1472,7 +2299,11 @@ function connect(url) {
 
   ws.onopen = () => {
 
+    connectedAt = performance.now();
+
     setConnectionState("connected", true);
+
+    $("connHint").textContent = "";
 
     subscribeFixed();
 
@@ -1487,6 +2318,10 @@ function connect(url) {
   ws.onerror = () => {
 
     setConnectionState("connection failed", false);
+
+    $("connHint").textContent =
+      "Cannot reach rosbridge. On the robot: " +
+      "ros2 launch rosbridge_server rosbridge_websocket_launch.xml";
   };
 
   ws.onmessage = event => {
@@ -1504,7 +2339,15 @@ function connect(url) {
       return;
     }
 
-    handleMessage(message);
+    /* Never let one bad message kill the loop. */
+    try {
+
+      handleMessage(message);
+
+    } catch (error) {
+
+      console.error("handler", error);
+    }
   };
 }
 
@@ -1523,7 +2366,25 @@ function handleMessage(message) {
 
       pending.delete(message.id);
 
-      callback(message.values);
+      /* rosbridge answers a failed call with result:false and an
+         error STRING in values. Resolving that like a normal
+         reply hands the caller an object whose every field is
+         undefined — a missing service then renders as an empty
+         result instead of an error. */
+      if (message.result === false) {
+
+        callback.reject(
+          new Error(
+            String(
+              message.values || "service call failed"
+            )
+          )
+        );
+
+      } else {
+
+        callback.resolve(message.values);
+      }
     }
 
     return;
@@ -1533,6 +2394,14 @@ function handleMessage(message) {
 
   const topicName = message.topic;
   const now = performance.now();
+
+  lastPublish = now;
+
+  if (topicName === "/client_count") {
+
+    clients = message.msg.data;
+    return;
+  }
 
   const topic = topics.get(topicName);
 
@@ -1546,6 +2415,10 @@ function handleMessage(message) {
     }
   }
 
+  if (expanded.has(topicName)) {
+    latestMsg.set(topicName, message.msg);
+  }
+
   if (topicName === "/diagnostics") {
     onDiagnostics(message.msg);
   }
@@ -1557,6 +2430,49 @@ function handleMessage(message) {
   else if (topicName === "/sensors/core") {
     onVesc(message.msg);
   }
+
+  else if (topicName === "/scan") {
+    onScan(message.msg);
+  }
+}
+
+/* "Is the LiDAR connected" is a much weaker question than "what
+   is it seeing". These are the cheap summary statistics of the
+   scan we already receive — a full radar plot draws from the
+   same message. ~1081 ranges at the 5 Hz liveness throttle is
+   nothing, but never do this work unthrottled. */
+function onScan(message) {
+
+  const ranges = message.ranges || [];
+
+  let min = Infinity;
+  let max = -Infinity;
+  let finite = 0;
+
+  for (const value of ranges) {
+
+    /* Out-of-range readings come back as inf (and sometimes 0),
+       and averaging those in would report a wall at 0 m. */
+    if (typeof value === "number" && isFinite(value) && value > 0) {
+
+      finite++;
+
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+  }
+
+  const span =
+    Number(message.angle_max) - Number(message.angle_min);
+
+  scanStats = {
+    points: ranges.length,
+    finite,
+    min: finite ? min : null,
+    max: finite ? max : null,
+    fov: Number.isFinite(span) ? span * 180 / Math.PI : null,
+    at: performance.now()
+  };
 }
 
 /* ==========================================================
@@ -1571,6 +2487,120 @@ function subscribeFixed() {
     throttle_rate: 0,
     queue_length: 10
   });
+
+  /* rosbridge's own count of connected clients. It publishes on
+     change only, so this reads "—" until someone connects or
+     disconnects — including, usually, our own arrival, which
+     lands before this subscription is registered. */
+  send({
+    op: "subscribe",
+    topic: "/client_count",
+    throttle_rate: 0,
+    queue_length: 1
+  });
+}
+
+/* Expanding a row makes it resubscribe faster, so the values
+   actually move while you are watching them. */
+function toggleTopic(name) {
+
+  if (expanded.has(name)) {
+
+    expanded.delete(name);
+    latestMsg.delete(name);
+
+    send({ op: "unsubscribe", topic: name });
+
+    send({
+      op: "subscribe",
+      topic: name,
+      throttle_rate: LIVENESS_THROTTLE,
+      queue_length: 1
+    });
+
+  } else {
+
+    expanded.add(name);
+
+    send({ op: "unsubscribe", topic: name });
+
+    send({
+      op: "subscribe",
+      topic: name,
+      throttle_rate: DETAIL_THROTTLE,
+      queue_length: 1
+    });
+  }
+
+  const row = rowEls.get(name);
+
+  if (!row) return;
+
+  const open = expanded.has(name);
+
+  row.tr.classList.toggle("open", open);
+
+  row.detail.style.display = open ? "" : "none";
+
+  if (open) {
+    row.pre.textContent = "waiting for a message…";
+  }
+}
+
+/* Big arrays (LaserScan has 1081 ranges) are summarised, not
+   dumped. */
+function summarize(value) {
+
+  if (Array.isArray(value)) {
+
+    if (value.length > 12) {
+
+      const numbers =
+        value.filter(
+          item =>
+            typeof item === "number" &&
+            isFinite(item)
+        );
+
+      const head =
+        value.slice(0, 6).map(
+          item =>
+            typeof item === "number"
+              ? +item.toFixed(3)
+              : item
+        );
+
+      let stat = "";
+
+      if (numbers.length) {
+
+        stat =
+          `, finite ${numbers.length}` +
+          `, min ${Math.min(...numbers).toFixed(2)}` +
+          `, max ${Math.max(...numbers).toFixed(2)}`;
+      }
+
+      return (
+        `[${value.length} items${stat}] ` +
+        `first 6: ${JSON.stringify(head)}`
+      );
+    }
+
+    return value.map(summarize);
+  }
+
+  if (value && typeof value === "object") {
+
+    const out = {};
+
+    for (const key of Object.keys(value)) {
+      out[key] = summarize(value[key]);
+    }
+
+    return out;
+  }
+
+  return value;
 }
 
 /* ==========================================================
@@ -1683,6 +2713,26 @@ function onDiagnostics(message) {
       ),
       receivedAt: now
     };
+
+    /* ackermann_mux reports which input is unmasked, which is
+       the only place the car says what is actually driving it. */
+    if (status.name.indexOf("ackermann_mux") === 0) {
+
+      const values = diag[status.name].values;
+
+      const joystick =
+        values["velocity topics.joystick"] || "";
+
+      const navigation =
+        values["velocity topics.navigation"] || "";
+
+      mux =
+        joystick.indexOf("unmasked") >= 0
+          ? "teleop"
+          : navigation.indexOf("unmasked") >= 0
+          ? "autonomous"
+          : "idle";
+    }
   });
 }
 
@@ -1748,14 +2798,23 @@ function onLog(message) {
     `(${message.name || "?"}) ` +
     `${message.msg || ""}`;
 
+  /* Only follow the tail if the reader is already at it —
+     otherwise a burst of warnings yanks the line they were
+     reading out from under them. */
+  const atBottom =
+    log.scrollHeight -
+      log.scrollTop -
+      log.clientHeight < 40;
+
   log.appendChild(div);
 
-  while (log.children.length > 200) {
+  while (log.children.length > 300) {
     log.removeChild(log.firstChild);
   }
 
-  log.scrollTop =
-    log.scrollHeight;
+  if (atBottom) {
+    log.scrollTop = log.scrollHeight;
+  }
 }
 
 /* ==========================================================
@@ -1830,6 +2889,72 @@ function classifyTopic(topic) {
   }
 
   return "OK";
+}
+
+function ownerLabel(spec) {
+
+  return (
+    spec.node ||
+    (spec.owner || "publisher").replace(/^\//, "")
+  );
+}
+
+/* Every state gets a sentence saying what it means, because
+   "IDLE" on its own reads like a fault when it is normal. */
+function topicReason(topic, state) {
+
+  const spec = TOPICS[topic.name] || {};
+
+  switch (state) {
+
+    case "OK":
+      return spec.cls === EVENT
+        ? "input arriving"
+        : "publishing";
+
+    case "IDLE":
+      return "no input right now, normal at rest";
+
+    case "INPUT":
+      return "subscribed by the stack, nothing publishes it";
+
+    case "DRIVEN":
+      return "something is publishing commands";
+
+    case "WAITING":
+      return "latched, no message yet";
+
+    case "SILENT":
+      return "publisher exists, zero messages ever";
+
+    case "STALE":
+      return (
+        "last message " +
+        (
+          (performance.now() - topic.last) / 1000
+        ).toFixed(1) +
+        "s ago"
+      );
+
+    case "NODE_DOWN":
+      return "topic exists but has no publisher";
+
+    case "MISSING":
+      return (
+        "not in the graph — " +
+        ownerLabel(spec) +
+        " not running"
+      );
+
+    case "NOT_ADVERTISED":
+      return (
+        ownerLabel(spec) +
+        " running but not publishing this"
+      );
+
+    default:
+      return "";
+  }
 }
 
 /* ==========================================================
@@ -1907,6 +3032,9 @@ function subsystemData() {
 
       vescHealth = "healthy";
 
+      /* A driver fix made temp_fet real; before it, this field
+         was an unassigned 0.0 that would have rendered as a
+         perfectly healthy 0 °C forever. */
       if (
         Number.isFinite(vesc.tempFet) &&
         vesc.tempFet > MOTOR_ABSENT
@@ -1916,6 +3044,20 @@ function subsystemData() {
           "FET temperature: " +
           vesc.tempFet.toFixed(1) +
           " °C";
+
+        if (vesc.tempFet >= FET_ERR) {
+
+          vescHealth = "failed";
+
+          vescDetail += " — over temperature";
+        }
+
+        else if (vesc.tempFet >= FET_WARN) {
+
+          vescHealth = "degraded";
+
+          vescDetail += " — running hot";
+        }
       }
 
       else {
@@ -1924,6 +3066,45 @@ function subsystemData() {
           "VESC responding normally";
       }
     }
+  }
+
+  /* CONTROL MODE */
+
+  let controlHealth = "unknown";
+  let controlDetail =
+    "Waiting for ackermann_mux diagnostics";
+
+  if (mux === "teleop") {
+
+    controlHealth = "healthy";
+    controlDetail =
+      "Teleop input unmasked — joystick has the car";
+  }
+
+  else if (mux === "autonomous") {
+
+    controlHealth = "healthy";
+    controlDetail =
+      "Navigation input unmasked — autonomous control";
+  }
+
+  /* Idle is not a fault: at rest, with no deadman held, this is
+     exactly what a healthy car reports. Same reasoning as the
+     EVENT topic class. */
+  else if (mux === "idle") {
+
+    controlHealth = "healthy";
+    controlDetail =
+      "Idle — no deadman held, normal at rest";
+  }
+
+  else if (
+    !runningNodes.has("/ackermann_mux")
+  ) {
+
+    controlHealth = "failed";
+    controlDetail =
+      "/ackermann_mux is not running";
   }
 
   /* LIDAR */
@@ -2147,6 +3328,16 @@ function subsystemData() {
       source: "/sensors/core",
       health: batteryHealth,
       details: batteryDetail
+    },
+
+    {
+      id: "control",
+      icon: "⇄",
+      name: "Control Mode",
+      subtitle: mux ? mux : "Command Mux",
+      source: "/ackermann_mux",
+      health: controlHealth,
+      details: controlDetail
     }
   ];
 }
@@ -2520,6 +3711,8 @@ function renderBattery() {
     $("batteryNeedle").style.transform =
       "rotate(-90deg)";
 
+    $("batteryBar").style.width = "0";
+
     return;
   }
 
@@ -2573,6 +3766,16 @@ function renderBattery() {
 
     $("batteryNeedle").style.transform =
       `rotate(${angle}deg)`;
+
+    $("batteryBar").style.width =
+      estimate + "%";
+
+    $("batteryBar").style.background =
+      voltage < BATT_ERR
+        ? "var(--failed)"
+        : voltage < BATT_WARN
+        ? "var(--degraded)"
+        : "var(--healthy)";
   }
 }
 
@@ -2640,6 +3843,92 @@ function renderNetwork() {
    ADVANCED TOPICS
 ========================================================== */
 
+function setText(element, value) {
+
+  if (element && element.textContent !== value) {
+    element.textContent = value;
+  }
+}
+
+/* Built once, then updated in place: rebuilding the whole table
+   twice a second destroys an expanded row and any text the
+   reader has selected. */
+function buildTopicTable(names) {
+
+  const body = $("topicRows");
+
+  body.innerHTML = "";
+  rowEls.clear();
+
+  for (const name of names) {
+
+    const spec = TOPICS[name] || {};
+
+    const tr = document.createElement("tr");
+
+    tr.className = "topic-row";
+
+    tr.innerHTML = `
+      <td class="mono">
+        <div>
+          <span class="caret">&#9654;</span>${escapeHtml(name)}${
+            spec.sub
+              ? `<span class="sub-tag">${escapeHtml(spec.sub)}</span>`
+              : ""
+          }
+        </div>
+
+        <div class="why" style="padding-left:15px">${escapeHtml(
+          topics.get(name).type || ownerLabel(spec)
+        )}</div>
+      </td>
+
+      <td>
+        <span class="state-pill"></span>
+        <div class="why"></div>
+      </td>
+
+      <td></td>
+      <td></td>
+      <td></td>
+    `;
+
+    const detail = document.createElement("tr");
+
+    detail.className = "topic-detail";
+    detail.style.display = "none";
+
+    detail.innerHTML =
+      '<td colspan="5">' +
+      '<div class="detail-meta"></div>' +
+      "<pre></pre>" +
+      "</td>";
+
+    tr.onclick = () => toggleTopic(name);
+
+    body.appendChild(tr);
+    body.appendChild(detail);
+
+    rowEls.set(name, {
+      tr,
+      detail,
+      pre: detail.querySelector("pre"),
+      meta: detail.querySelector(".detail-meta"),
+      state: tr.querySelector(".state-pill"),
+      why: tr.querySelectorAll(".why")[1],
+      pubs: tr.children[2],
+      msgs: tr.children[3],
+      age: tr.children[4]
+    });
+
+    if (expanded.has(name)) {
+
+      tr.classList.add("open");
+      detail.style.display = "";
+    }
+  }
+}
+
 function renderTopicTable() {
 
   const now =
@@ -2648,49 +3937,75 @@ function renderTopicTable() {
   const names =
     [...topics.keys()].sort();
 
-  $("topicRows").innerHTML =
-    names.map(name => {
+  const key = names.join("|");
 
-      const topic =
-        topics.get(name);
+  if (key !== tableKey) {
 
-      const state =
-        classifyTopic(topic);
+    tableKey = key;
+    buildTopicTable(names);
+  }
 
-      const age =
-        topic.last === null
-          ? "-"
-          : (
-              (now - topic.last) /
-              1000
-            ).toFixed(2) + "s";
+  let bad = 0;
 
-      return `
-        <tr>
+  for (const name of names) {
 
-          <td class="mono">
-            ${escapeHtml(name)}
-          </td>
+    const topic = topics.get(name);
+    const state = classifyTopic(topic);
+    const row = rowEls.get(name);
 
-          <td>
-            ${escapeHtml(state)}
-          </td>
+    if (BAD_TOPIC_STATES.has(state)) bad++;
 
-          <td>
-            ${topic.pubs}
-          </td>
+    if (!row) continue;
 
-          <td>
-            ${topic.count}
-          </td>
+    setText(row.state, state);
 
-          <td>
-            ${age}
-          </td>
+    row.state.className = "state-pill s-" + state;
 
-        </tr>
-      `;
-    }).join("");
+    setText(row.why, topicReason(topic, state));
+    setText(row.pubs, String(topic.pubs));
+    setText(row.msgs, String(topic.count));
+
+    setText(
+      row.age,
+      topic.last === null
+        ? "-"
+        : ((now - topic.last) / 1000).toFixed(2) + "s"
+    );
+
+    if (expanded.has(name)) {
+
+      const message = latestMsg.get(name);
+
+      if (message !== undefined) {
+
+        row.pre.textContent =
+          JSON.stringify(summarize(message), null, 2);
+      }
+
+      const span =
+        topic.first !== null && topic.last !== null
+          ? (topic.last - topic.first) / 1000
+          : 0;
+
+      const rate =
+        span > 0.5 && topic.count > 1
+          ? ((topic.count - 1) / span).toFixed(1) + " Hz"
+          : "-";
+
+      setText(
+        row.meta,
+        `${topic.type || ""}    rate ${rate}    ` +
+        `${topic.count} msgs`
+      );
+    }
+  }
+
+  $("topicSummary").textContent =
+    names.length
+      ? bad
+        ? `${bad} needing attention`
+        : "all nominal"
+      : "click a row for live data";
 }
 
 /* ==========================================================
@@ -2729,6 +4044,297 @@ function renderNodeTable() {
         </tr>
       `;
     }).join("");
+
+  let down = 0;
+
+  EXPECTED_NODES.forEach(name => {
+    if (!runningNodes.has(name)) down++;
+  });
+
+  $("nodeSummary").textContent =
+    `${EXPECTED_NODES.length - down} / ` +
+    `${EXPECTED_NODES.length} up`;
+
+  /* Anything running that we did not expect. Usually harmless,
+     occasionally the duplicate node that explains a fight over
+     a topic. */
+  const extra =
+    [...runningNodes]
+      .filter(
+        name => !EXPECTED_NODES.includes(name)
+      )
+      .sort();
+
+  $("extraNodes").innerHTML =
+    extra.length
+      ? "also running: " +
+        extra
+          .map(
+            name =>
+              `<span>${escapeHtml(name)}</span>`
+          )
+          .join("")
+      : "";
+}
+
+/* ==========================================================
+   ROBOT SYSTEM TILES
+
+   These values come from system_diagnostics.py, which reads the
+   OS-level things ROS does not publish (temperatures, disk,
+   network, USB devices) and republishes them as a standard
+   DiagnosticArray. No extra transport, no second port, and
+   rqt_robot_monitor sees exactly the same data.
+========================================================== */
+
+const SYS_LEVEL_COLOR = {
+  0: "var(--healthy)",
+  1: "#c59600",
+  2: "var(--failed)",
+  3: "var(--unknown)"
+};
+
+/* The headline sits in a fixed slot, so it has to be a VALUE,
+   never a sentence. Everything explanatory belongs in
+   systemNote() underneath. Level 3 reads `unknown` — the probe
+   has not run yet, which is not the same as OK. */
+function systemHeadline(short, item) {
+
+  const values = item.values || {};
+
+  if (item.level === 3) return "unknown";
+
+  /* the tick() error handler's shape */
+  if (values["probe"]) return "probe failed";
+
+  switch (short) {
+
+    case "Thermal":
+      return values["tj-thermal"] || "?";
+
+    case "CPU":
+      return values["load 1m"] !== undefined
+        ? values["load 1m"]
+        : "?";
+
+    case "Memory":
+      return values["available %"] !== undefined
+        ? values["available %"] + "%"
+        : "?";
+
+    case "Storage":
+      return values["used %"] !== undefined
+        ? values["used %"] + "%"
+        : "?";
+
+    case "Power":
+      return values["uptime"] || "?";
+
+    case "Camera":
+      return values["link speed"] || "absent";
+
+    case "Network":
+      return (
+        Object.keys(values).filter(
+          key => /carrier=1/.test(values[key])
+        ).length + " up"
+      );
+
+    case "Gamepad":
+      return values["bluetooth"] === "connected"
+        ? "connected"
+        : "none";
+
+    case "VESC device":
+      return item.level === 0 ? "present" : "MISSING";
+
+    case "Clock":
+      return values["NTPSynchronized"] === "yes"
+        ? "synced"
+        : "NOT SYNCED";
+
+    default:
+      return item.level === 0 ? "ok" : "check";
+  }
+}
+
+function systemNote(short, item) {
+
+  const values = item.values || {};
+
+  /* problems explain themselves */
+  if (item.level !== 0 || values["probe"]) {
+    return item.message || "";
+  }
+
+  switch (short) {
+
+    case "Thermal":
+      return (
+        "junction, " +
+        Object.keys(values).filter(
+          key => key.endsWith("thermal")
+        ).length +
+        " zones"
+      );
+
+    case "CPU":
+      return values["cores"]
+        ? values["cores"] + " cores"
+        : item.message;
+
+    case "Memory":
+      return values["available"]
+        ? values["available"] + " free"
+        : item.message;
+
+    case "Storage":
+      return values["free"]
+        ? values["free"] + " free"
+        : item.message;
+
+    case "Camera":
+      return values["product"] || item.message;
+
+    case "Gamepad":
+      return values["battery %"]
+        ? "battery " + values["battery %"]
+        : item.message;
+
+    default:
+      return item.message || "";
+  }
+}
+
+function systemShortNames() {
+
+  const byShort = {};
+
+  Object.keys(diag)
+    .filter(
+      name => name.indexOf(SYS_PREFIX) === 0
+    )
+    .forEach(name => {
+      byShort[name.slice(SYS_PREFIX.length)] = diag[name];
+    });
+
+  const shorts =
+    SYS_ORDER.filter(short => byShort[short])
+      .concat(
+        Object.keys(byShort)
+          .filter(
+            short => SYS_ORDER.indexOf(short) < 0
+          )
+          .sort()
+      );
+
+  return { byShort, shorts };
+}
+
+function renderSystemTiles() {
+
+  const { byShort, shorts } = systemShortNames();
+
+  $("sysHint").style.display =
+    shorts.length ? "none" : "block";
+
+  $("sysToggle").style.display =
+    shorts.length ? "" : "none";
+
+  if (!shorts.length) {
+
+    $("sysTiles").innerHTML = "";
+
+    $("sysSummary").textContent = "not reporting";
+    $("sysSummary").style.color = "#777";
+
+    $("sysReadings").style.display = "none";
+
+    return;
+  }
+
+  /* STALE (3) means "not probed yet", which is the fourth state
+     — unknown. It must not be allowed to masquerade as the
+     worst level. */
+  let worst = 0;
+
+  $("sysTiles").innerHTML =
+    shorts.map(short => {
+
+      const item = byShort[short];
+
+      if (item.level > worst && item.level !== 3) {
+        worst = item.level;
+      }
+
+      const head =
+        String(systemHeadline(short, item));
+
+      return `
+        <div class="sys-tile">
+
+          <span class="k">${escapeHtml(short)}</span>
+
+          <span class="v${
+            head.length > HEAD_MAX_CHARS ? " small" : ""
+          }" style="color:${
+            SYS_LEVEL_COLOR[item.level] || "var(--unknown)"
+          }">${escapeHtml(head)}</span>
+
+          <span class="n">${escapeHtml(
+            String(systemNote(short, item))
+          )}</span>
+
+        </div>
+      `;
+    }).join("");
+
+  $("sysSummary").textContent =
+    worst === 2
+      ? "ERROR"
+      : worst === 1
+      ? "WARN"
+      : shorts.length + " checks OK";
+
+  $("sysSummary").style.color =
+    worst === 2
+      ? "var(--failed)"
+      : worst === 1
+      ? "#c59600"
+      : "#777";
+
+  /* Every raw key/value the probes reported. Folded away by
+     default — it is long, and it is only read when a tile has
+     already said something is wrong. */
+  $("sysReadings").style.display =
+    sysOpen ? "" : "none";
+
+  $("sysToggle").textContent =
+    sysOpen ? "hide all readings" : "show all readings";
+
+  if (!sysOpen) return;
+
+  $("sysReadings").innerHTML = `
+    <table class="raw-table">
+      <tbody>
+        ${shorts.map(short => {
+
+          const values = byShort[short].values || {};
+
+          return (
+            `<tr><td colspan="2" style="color:#777;` +
+            `font-weight:700">${escapeHtml(short)}</td></tr>` +
+            Object.keys(values).map(key =>
+              `<tr><td class="mono">${escapeHtml(key)}</td>` +
+              `<td class="mono" style="text-align:right">${
+                escapeHtml(String(values[key]))
+              }</td></tr>`
+            ).join("")
+          );
+        }).join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 /* ==========================================================
@@ -2820,6 +4426,605 @@ function renderCounts() {
 }
 
 /* ==========================================================
+   PRIORITY METRICS
+
+   The band at the top of the page. These are the numbers that
+   answer "the board started dropping data, why" — which is the
+   question this dashboard exists for. Thresholds mirror
+   system_diagnostics.py so the page and the node never disagree
+   about what counts as bad.
+========================================================== */
+
+/* Returns a grade from a value and two thresholds. `higherIsBad`
+   covers load and temperature; the inverse covers headroom
+   figures like available memory. */
+function gradeValue(value, warn, bad, higherIsBad = true) {
+
+  if (!Number.isFinite(value)) return "unknown";
+
+  if (higherIsBad) {
+    return value >= bad ? "bad" : value >= warn ? "warn" : "ok";
+  }
+
+  return value <= bad ? "bad" : value <= warn ? "warn" : "ok";
+}
+
+function gradeFromLevel(level) {
+
+  if (level === 0) return "ok";
+  if (level === 1) return "warn";
+  if (level === 2) return "bad";
+
+  return "unknown";
+}
+
+const numberOr = (raw, fallback = NaN) => {
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+function metricTiles() {
+
+  const cpu     = diag[SYS_PREFIX + "CPU"];
+  const memory  = diag[SYS_PREFIX + "Memory"];
+  const gpu     = diag[SYS_PREFIX + "GPU"];
+  const thermal = diag[SYS_PREFIX + "Thermal"];
+  const network = diag[SYS_PREFIX + "Network"];
+
+  const tiles = [];
+
+  /* ---- CPU ---------------------------------------------- */
+  {
+    const values = (cpu && cpu.values) || {};
+
+    /* A true utilisation percentage is the number worth showing,
+       but system_diagnostics.py currently publishes load average
+       only. Load is not utilisation — 6.0 on 6 cores is 100%
+       busy, and on a Jetson it is also what a thermally capped
+       board looks like. Show load honestly until `usage %`
+       appears, rather than relabelling it. */
+    const usage = numberOr(values["usage %"]);
+    const load = numberOr(values["load 1m"]);
+    const cores = numberOr(values["cores"], 0);
+
+    if (Number.isFinite(usage)) {
+
+      tiles.push({
+        id: "cpu",
+        label: "CPU",
+        sub: cores ? cores + " cores" : "",
+        value: Math.round(usage) + "%",
+        pct: usage,
+        note: Number.isFinite(load) ? "load " + load.toFixed(2) : "",
+        grade: gradeValue(usage, 80, 95)
+      });
+
+    } else if (Number.isFinite(load) && cores) {
+
+      /* load / cores is the closest honest proxy, and it is the
+         same ratio the node grades on. */
+      const ratio = 100 * load / cores;
+
+      tiles.push({
+        id: "cpu",
+        label: "CPU",
+        sub: cores + " cores",
+        value: load.toFixed(2),
+        pct: ratio,
+        note: "load average · " + Math.round(ratio) + "% of cores",
+        grade: gradeValue(ratio, 100, 200)
+      });
+
+    } else {
+
+      tiles.push({
+        id: "cpu",
+        label: "CPU",
+        value: "—",
+        note: cpu ? cpu.message : "waiting for system_diagnostics",
+        grade: "unknown"
+      });
+    }
+  }
+
+  /* ---- Memory ------------------------------------------- */
+  {
+    const values = (memory && memory.values) || {};
+    const available = numberOr(values["available %"]);
+
+    tiles.push({
+      id: "ram",
+      label: "RAM",
+      sub: values["total"] || "",
+      value: Number.isFinite(available)
+        ? Math.round(100 - available) + "%"
+        : "—",
+      pct: Number.isFinite(available) ? 100 - available : null,
+      note: Number.isFinite(available)
+        ? (values["available"] || Math.round(available) + "%") + " free"
+        : (memory ? memory.message : "waiting for system_diagnostics"),
+      /* MEM_WARN / MEM_ERR in system_diagnostics.py are headroom
+         figures, so they invert when shown as "used". */
+      grade: gradeValue(available, 20, 10, false)
+    });
+  }
+
+  /* ---- GPU ---------------------------------------------- */
+  {
+    const values = (gpu && gpu.values) || {};
+    const usage = numberOr(values["usage %"]);
+
+    tiles.push({
+      id: "gpu",
+      label: "GPU",
+      sub: values["freq"] || "",
+      value: Number.isFinite(usage) ? Math.round(usage) + "%" : "—",
+      pct: Number.isFinite(usage) ? usage : null,
+      /* Nothing publishes this yet. Say so plainly — an
+         unmeasured subsystem is `unknown`, never a healthy 0%. */
+      note: gpu
+        ? gpu.message
+        : "not reported — needs GR3D_FREQ from tegrastats",
+      grade: gpu ? gradeValue(usage, 85, 97) : "unknown"
+    });
+  }
+
+  /* ---- Temperature -------------------------------------- */
+  {
+    const values = (thermal && thermal.values) || {};
+
+    /* tj-thermal is the Jetson's junction temperature and the
+       one the spec asks for; on any other board it is absent and
+       naming another zone "junction" would be a confident wrong
+       label. */
+    const junction = numberOr(values["tj-thermal"]);
+    const gpuTemp = numberOr(values["gpu-thermal"]);
+
+    tiles.push({
+      id: "temp",
+      label: "Temperature",
+      sub: "junction",
+      value: Number.isFinite(junction)
+        ? junction.toFixed(1) + " °C"
+        : "—",
+      /* 40 °C to the 85 °C error line is the range worth seeing;
+         below 40 the bar would always read empty. */
+      pct: Number.isFinite(junction)
+        ? Math.max(0, Math.min(100, (junction - 40) / 45 * 100))
+        : null,
+      note: Number.isFinite(gpuTemp)
+        ? "GPU " + gpuTemp.toFixed(1) + " °C"
+        : (thermal ? thermal.message : "waiting for system_diagnostics"),
+      grade: thermal
+        ? (Number.isFinite(junction)
+            ? gradeValue(junction, 70, 85)
+            : gradeFromLevel(thermal.level))
+        : "unknown"
+    });
+  }
+
+  /* ---- Network ------------------------------------------ */
+  {
+    const values = (network && network.values) || {};
+
+    const up =
+      Object.keys(values).filter(
+        key => /carrier=1/.test(values[key])
+      ).length;
+
+    const signal = numberOr(values["wifi signal"]);
+
+    tiles.push({
+      id: "wifi",
+      label: "Network",
+      sub: network ? up + " up" : "",
+      value: network
+        ? (Number.isFinite(signal)
+            ? signal + " dBm"
+            : up + " link" + (up === 1 ? "" : "s"))
+        : "—",
+      pct: Number.isFinite(signal)
+        /* -30 dBm is excellent, -90 unusable. */
+        ? Math.max(0, Math.min(100, (signal + 90) / 60 * 100))
+        : null,
+      note: network
+        ? network.message
+        : "waiting for system_diagnostics",
+      grade: network ? gradeFromLevel(network.level) : "unknown"
+    });
+  }
+
+  return tiles;
+}
+
+function renderMetrics() {
+
+  $("metricTiles").innerHTML =
+    metricTiles().map(tile => {
+
+      const value = String(tile.value);
+
+      return `
+        <div class="metric g-${tile.grade}">
+
+          <div class="label">
+            <span>${escapeHtml(tile.label)}</span>
+            <span class="sub">${escapeHtml(tile.sub || "")}</span>
+          </div>
+
+          <div class="value${value.length > 7 ? " small" : ""}">
+            ${escapeHtml(value)}
+          </div>
+
+          <div class="bar">
+            <i style="width:${
+              tile.pct === null || !Number.isFinite(tile.pct)
+                ? 0
+                : Math.max(0, Math.min(100, tile.pct))
+            }%"></i>
+          </div>
+
+          <div class="note">${escapeHtml(tile.note || "")}</div>
+
+        </div>
+      `;
+    }).join("");
+}
+
+/* ==========================================================
+   HARDWARE STRIP
+
+   The same verdicts as the subsystem table below, at a glance.
+   One source of truth — subsystemData() — so the strip and the
+   table can never disagree.
+========================================================== */
+
+const STRIP_ORDER = ["controller", "camera", "lidar", "vesc", "control"];
+
+function renderHardwareStrip(data) {
+
+  const byId = {};
+
+  data.forEach(item => { byId[item.id] = item; });
+
+  $("hwStrip").innerHTML =
+    STRIP_ORDER.filter(id => byId[id]).map(id => {
+
+      const item = byId[id];
+
+      return `
+        <div class="hw ${item.health}">
+
+          <div class="hw-icon">${item.icon}</div>
+
+          <div>
+            <div class="hw-name">${escapeHtml(item.name)}</div>
+
+            <div class="hw-state health ${item.health}">
+              <span class="health-dot"></span>
+              ${healthLabel(item.health)}
+            </div>
+
+            <div class="hw-detail">${escapeHtml(item.details)}</div>
+          </div>
+
+        </div>
+      `;
+    }).join("");
+}
+
+/* ==========================================================
+   LIVE LIDAR READOUT
+========================================================== */
+
+function renderLidar() {
+
+  const topic = topics.get("/scan");
+
+  const age =
+    scanStats
+      ? (performance.now() - scanStats.at) / 1000
+      : null;
+
+  /* A scan older than the liveness window is a stopped lidar,
+     not a slow one, and the numbers on screen are history. */
+  const live = age !== null && age < 2;
+
+  $("lidarTag").textContent =
+    !scanStats
+      ? "waiting"
+      : live
+      ? "live"
+      : "stale";
+
+  $("lidarTag").style.color =
+    !scanStats
+      ? "#777"
+      : live
+      ? "var(--healthy)"
+      : "var(--failed)";
+
+  if (!scanStats) {
+
+    ["lidarPoints", "lidarMin", "lidarMax", "lidarFov"]
+      .forEach(id => { $(id).textContent = "—"; });
+
+    $("lidarHint").innerHTML =
+      topic && topic.present
+        ? 'Subscribed to <span class="mono">/scan</span>, no message yet.'
+        : '<span class="mono">/scan</span> is not in the graph — ' +
+          'is <span class="mono">urg_node</span> running?';
+
+    return;
+  }
+
+  $("lidarPoints").textContent = scanStats.points;
+
+  $("lidarMin").textContent =
+    scanStats.min === null ? "—" : scanStats.min.toFixed(2) + " m";
+
+  $("lidarMax").textContent =
+    scanStats.max === null ? "—" : scanStats.max.toFixed(2) + " m";
+
+  $("lidarFov").textContent =
+    scanStats.fov === null ? "—" : Math.round(scanStats.fov) + "°";
+
+  $("lidarHint").innerHTML =
+    `${scanStats.finite} of ${scanStats.points} returns valid · ` +
+    `last scan ${age.toFixed(1)}s ago`;
+}
+
+/* ==========================================================
+   CAMERA STREAM
+
+   web_video_server serves MJPEG over its own HTTP port, so the
+   frames never touch rosbridge and never spend a slot in its
+   10-client budget. The page just points an <img> at it.
+
+   The topic name is NOT fixed: the robot's `cam` alias passes
+   camera_name:=rs, giving /camera/rs/color/image_raw, while the
+   wrapper's default gives /camera/camera/... — so this has to be
+   configurable rather than hardcoded.
+========================================================== */
+
+const DEFAULT_VIDEO_TOPIC = "/camera/rs/color/image_raw";
+const VIDEO_PORT = 8080;
+
+function defaultVideoUrl() {
+
+  const host = location.hostname || "localhost";
+
+  return (
+    `http://${host}:${VIDEO_PORT}/stream` +
+    `?topic=${DEFAULT_VIDEO_TOPIC}&quality=60`
+  );
+}
+
+function startVideo(url) {
+
+  const image = $("camStream");
+
+  $("camTag").textContent = "connecting";
+  $("camTag").style.color = "#777";
+
+  image.hidden = true;
+  $("camFallback").hidden = false;
+
+  image.onload = () => {
+    image.hidden = false;
+    $("camFallback").hidden = true;
+    $("camTag").textContent = "live";
+    $("camTag").style.color = "var(--healthy)";
+  };
+
+  image.onerror = () => {
+    image.hidden = true;
+    $("camFallback").hidden = false;
+    $("camTag").textContent = "no stream";
+    $("camTag").style.color = "var(--failed)";
+  };
+
+  /* A cache-buster, so Retry actually re-requests rather than
+     re-showing the browser's failed response. */
+  image.src =
+    url + (url.indexOf("?") < 0 ? "?" : "&") + "t=" + Date.now();
+}
+
+/* ==========================================================
+   CONNECTION HEALTH
+
+   Three states the page must tell apart, because the fixes
+   differ:
+     nothing at all from rosbridge  -> the robot went away
+     services answer, no topic data -> WE are a starved client
+                                       past the limit
+     more clients than rosbridge serves -> somebody is starved,
+                                       maybe not us
+   The middle one is the dangerous one: every topic reads SILENT
+   and the page looks exactly like a dead robot, which is what
+   sent a session chasing the wrong thing.
+========================================================== */
+
+/* /client_count is published on CHANGE only, so a tab that
+   connects after the last change never hears one and keeps
+   whatever it had — observed on the car as one tab reading 2
+   and another reading 0 with both connected. A page is itself a
+   client, so any count below 1 is provably stale. Say unknown
+   rather than something false; the starved-client detection
+   below does not depend on this number at all. */
+function clientsLabel(count, limit) {
+
+  const known = count !== null && count >= 1;
+
+  if (!known) {
+    return { text: "—", cls: "" };
+  }
+
+  return {
+    text: `${count} / ${limit}`,
+    cls:
+      count > limit
+        ? "over"
+        : count >= limit - 2
+        ? "near"
+        : ""
+  };
+}
+
+function bannerState(now, state) {
+
+  if (!state.wsOpen) return null;
+
+  const quiet =
+    state.lastAnything
+      ? now - state.lastAnything
+      : Infinity;
+
+  if (quiet > state.connStaleMs) {
+    return { kind: "stale" };
+  }
+
+  /* A starved client never receives a single publish, so "no
+     publish yet" has to count once we have been connected long
+     enough to expect one. */
+  const since =
+    state.lastPublish
+      ? now - state.lastPublish
+      : state.connectedAt
+      ? now - state.connectedAt
+      : 0;
+
+  if (since > state.publishStaleMs) {
+
+    return {
+      kind: "starved",
+      text:
+        "rosbridge is answering but sending no topic data — " +
+        "this page is probably past its client limit (" +
+        state.limit +
+        "). Close another dashboard tab."
+    };
+  }
+
+  if (
+    state.clients !== null &&
+    state.clients > state.limit
+  ) {
+
+    return {
+      kind: "crowded",
+      text:
+        state.clients +
+        " clients connected, rosbridge serves " +
+        state.limit +
+        " — some dashboards are receiving nothing."
+    };
+  }
+
+  return null;
+}
+
+function renderConnectionHealth(now) {
+
+  const banner = bannerState(now, {
+    wsOpen:
+      Boolean(ws && ws.readyState === WebSocket.OPEN),
+    lastAnything,
+    lastPublish,
+    connectedAt,
+    clients,
+    limit: CLIENT_LIMIT,
+    connStaleMs: CONNECTION_STALE_MS,
+    publishStaleMs: PUBLISH_STALE_MS
+  });
+
+  $("staleBar").classList.toggle(
+    "show",
+    Boolean(banner && banner.kind === "stale")
+  );
+
+  const limitBar = $("limitBar");
+
+  limitBar.classList.toggle(
+    "show",
+    Boolean(banner && banner.kind !== "stale")
+  );
+
+  if (banner && banner.text) {
+    limitBar.textContent = banner.text;
+  }
+
+  const label =
+    clientsLabel(clients, CLIENT_LIMIT);
+
+  $("clientsValue").textContent = label.text;
+  $("clientsFooter").className = label.cls;
+}
+
+/* ==========================================================
+   ON-DEMAND CHECKS
+
+   The rest of this page only watches. This is the one control
+   that makes the robot run something, over the same websocket,
+   as a std_srvs/Trigger on system_diagnostics.py — no second
+   port, no HTTP endpoint, no custom .srv. The result is
+   deliberately verbose: it is read once, when something is
+   wrong.
+========================================================== */
+
+async function runJoyCheck() {
+
+  const button = $("joyBtn");
+  const out = $("joyResult");
+
+  out.classList.add("show");
+
+  out.style.color = "#555";
+
+  out.textContent =
+    "running " + JOY_SERVICE + " on the robot… " +
+    "(a few seconds)";
+
+  button.disabled = true;
+
+  try {
+
+    const result = await call(JOY_SERVICE);
+
+    out.textContent =
+      result.message ||
+      "(the service returned no message)";
+
+    out.style.color =
+      result.success
+        ? "var(--healthy)"
+        : "#a97400";
+
+  } catch (error) {
+
+    /* Distinguish the two ways this fails, because the fixes
+       are different. */
+    const missing =
+      /does not exist|unavailable|not available/i
+        .test(error.message);
+
+    out.style.color = "var(--failed)";
+
+    out.textContent =
+      missing
+        ? error.message +
+          "\n\nsystem_diagnostics.py is not running, or is an " +
+          "older copy without the service.\n" +
+          "On the robot:  ./start_diagnostics.sh"
+        : "check failed: " + error.message;
+
+  } finally {
+
+    button.disabled = false;
+  }
+}
+
+/* ==========================================================
    MAIN RENDER LOOP
 ========================================================== */
 
@@ -2842,27 +5047,20 @@ function render() {
       "last updated: never";
   }
 
-  /* stale state */
+  /* stale robot, starved client, crowded rosbridge */
 
-  const quiet =
-    lastAnything
-      ? now - lastAnything
-      : Infinity;
-
-  const stale =
-    ws &&
-    ws.readyState === WebSocket.OPEN &&
-    quiet > CONNECTION_STALE_MS;
-
-  $("staleBar").classList.toggle(
-    "show",
-    Boolean(stale)
-  );
+  renderConnectionHealth(now);
 
   /* main dashboard */
 
   const subsystems =
     subsystemData();
+
+  /* priority band first — it is what the page is for */
+
+  renderMetrics();
+  renderHardwareStrip(subsystems);
+  renderLidar();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
@@ -2874,6 +5072,7 @@ function render() {
   renderBattery();
   renderUptime();
   renderNetwork();
+  renderSystemTiles();
 
   renderCounts();
 
@@ -2905,6 +5104,32 @@ $("refreshBtn").onclick = async () => {
 };
 
 /* ==========================================================
+   PANEL CONTROLS
+========================================================== */
+
+$("joyBtn").onclick = runJoyCheck;
+
+$("sysToggle").onclick = () => {
+
+  sysOpen = !sysOpen;
+
+  renderSystemTiles();
+};
+
+$("camRetry").onclick =
+  () => startVideo($("videoUrl").value.trim());
+
+$("videoBtn").onclick =
+  () => startVideo($("videoUrl").value.trim());
+
+$("videoUrl").addEventListener("keydown", event => {
+
+  if (event.key === "Enter") {
+    startVideo($("videoUrl").value.trim());
+  }
+});
+
+/* ==========================================================
    CONNECTION FORM
 ========================================================== */
 
@@ -2923,6 +5148,17 @@ $("wsUrl").value =
 
 $("robotIp").textContent =
   location.hostname || "unknown";
+
+/* ?video=<url> overrides the stream, the same way ?url= overrides
+   rosbridge — useful when the page is opened from a laptop rather
+   than served off the robot. */
+const queryVideo =
+  new URLSearchParams(location.search).get("video");
+
+$("videoUrl").value =
+  queryVideo || defaultVideoUrl();
+
+startVideo($("videoUrl").value);
 
 $("connectBtn").onclick = () => {
 
