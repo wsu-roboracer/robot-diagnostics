@@ -121,20 +121,15 @@ command -v ros2 >/dev/null || { bad "ros2 not on PATH - is ROS installed?"; exit
 
 # --- child management ------------------------------------------------------
 PIDS=() NAMES=()
+# Ctrl+C used to kill only the PIDs THIS run recorded, while --stop also swept by
+# pattern. So anything a previous run orphaned - or anything this run skipped
+# because it was "already listening" and therefore never recorded - survived
+# Ctrl+C while the banner promised it had stopped everything. Leftover bringups
+# then fought over the joystick, and the symptom was "the controller will not
+# connect". Use the one thorough path for both. Costs Ctrl+C a few extra seconds.
 cleanup(){
-  trap - INT TERM EXIT
-  echo
-  echo "stopping…"
-  for i in "${!PIDS[@]}"; do
-    p="${PIDS[$i]}"
-    kill -0 "$p" 2>/dev/null || continue
-    kill -TERM -- "-$p" 2>/dev/null || kill -TERM "$p" 2>/dev/null
-  done
-  sleep 2
-  for p in "${PIDS[@]}"; do
-    kill -0 "$p" 2>/dev/null && { kill -KILL -- "-$p" 2>/dev/null || kill -KILL "$p" 2>/dev/null; }
-  done
-  rm -f "$PIDFILE"
+  trap - INT TERM HUP EXIT
+  stop_all
   info "logs kept in $LOGDIR"
   exit 0
 }
@@ -165,10 +160,32 @@ echo "F1TENTH diagnostics  (ROS_DOMAIN_ID=$ROS_DOMAIN_ID)"
 echo
 
 # --- 1. bringup ------------------------------------------------------------
+# Two bringups fight over /dev/input/event* and the VESC serial port. The visible
+# symptom is "the controller will not connect", which nobody traces back to here,
+# so refuse rather than warn.
+if [ "$WANT_BRINGUP" = 1 ] && pgrep -f bringup_launch.py >/dev/null 2>&1; then
+  bad "a bringup is already running:"
+  pgrep -af bringup_launch.py | cut -c1-100 | sed 's/^/      /'
+  echo
+  bad "stop it first:  $0 --stop"
+  bad "or attach to it: $0 --no-bringup"
+  echo
+  exit 1
+fi
+
 if [ "$WANT_BRINGUP" = 1 ]; then
   start bringup "$LOGDIR/bringup.log" ros2 launch f1tenth_stack bringup_launch.py
   if wait_for 30 bash -c 'ros2 node list 2>/dev/null | grep -q urg_node'; then
-    ok "bringup up ($(ros2 node list 2>/dev/null | wc -l) nodes)"
+    NODES=$(ros2 node list 2>/dev/null | wc -l)
+    # urg_node alone is not proof bringup worked. A part-dead graph left by an
+    # earlier run passes that test and then behaves strangely for the rest of
+    # the session.
+    if [ "$NODES" -ge 8 ]; then
+      ok "bringup up ($NODES nodes)"
+    else
+      bad "bringup reports only $NODES nodes, expected at least 8"
+      bad "a previous run is probably half-alive - $0 --stop, then start again"
+    fi
   else
     bad "bringup did not produce urg_node in 30s - see $LOGDIR/bringup.log"
     tail -5 "$LOGDIR/bringup.log" | sed 's/^/      /'
