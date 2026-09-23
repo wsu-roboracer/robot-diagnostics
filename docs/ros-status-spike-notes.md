@@ -1065,7 +1065,11 @@ PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a chang
 - ~~**Snapshots need CORS headers.** The page can show the video, but reading a frame back is
   blocked unless the camera server sends `Access-Control-Allow-Origin`. The page says so when
   that happens.~~ **Fixed 2026-09-23** - same section below.
-- **The default URL is robot #2's address.** Other cars need it changed in the box.
+- ~~**The default URL is robot #2's address.** Other cars need it changed in the box.~~ **Fixed
+  2026-09-23** - this was not hypothetical, it broke the camera on robot #6
+  (192.168.1.206) the first time it was deployed there. See
+  [Camera stream now starts itself](#camera-stream-now-starts-itself-and-take-picture-downloads-2026-09-23)
+  below.
 - ~~**Not built yet:** the lidar radar view. The page computes summary statistics from `/scan`
   (minimum, maximum, count of finite returns), and a comment notes a plot could draw from the
   same message.~~ **Built 2026-09-23** - see
@@ -1099,8 +1103,15 @@ PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a chang
      assigning `image.src`, which is what makes the browser actually check that header. Set
      the header without this and nothing changes; set this without the header and the image
      fails to load at all.
-- **Still true, unchanged:** ports 8081 and 8082 have no authentication, and the default URL
-  in the box is robot #2's address.
+- **The hardcoded robot #2 IP is gone.** `cameraUrl`'s default was
+  `http://192.168.1.202:8082/camera.mjpg`, baked into the HTML input's `value` attribute since
+  PR #35 - so the camera card was broken on every robot except #2 by construction, and it
+  proved it: **robot #6 (192.168.1.206) showed "No stream", 2026-09-23,** the first time this
+  was deployed there. Fixed the same way `$("wsUrl")` already handled this for rosbridge - the
+  browser already knows which robot it's talking to (`location.hostname`, the host that
+  served the page), so there is nothing to hardcode. `?video=<url>` still overrides it for a
+  different robot or port, same pattern as `?url=` for rosbridge.
+- **Still true, unchanged:** ports 8081 and 8082 have no authentication.
 
 ### Lidar radar view, and the /scan no-return sentinel (2026-09-23)
 

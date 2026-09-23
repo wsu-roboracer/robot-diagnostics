@@ -114,8 +114,16 @@ stop_all(){
   }
   sweep TERM; sleep 2; sweep KILL; sleep 1
   rm -f "$PIDFILE"
+  # Same self-match problem as sweep() above, but this one shipped with only
+  # half a fix: `grep -v -- --stop` hid the --stop invocation's own match
+  # (its command line contains "--stop"), but Ctrl+C runs this same function
+  # from a script instance with no "--stop" in its args, so THAT one always
+  # matched itself and printed "still running" on a completely clean stop.
+  # Reported on robot #6, 2026-09-23. Exclude by PID like sweep() does,
+  # which covers both callers instead of just one.
   local left
-  left=$(pgrep -af "$PATTERNS" 2>/dev/null | grep -v "\-\-stop" || true)
+  left=$(pgrep -af "$PATTERNS" 2>/dev/null |
+    awk -v me="$$" -v pp="${PPID:-0}" '$1 != me && $1 != pp' || true)
   if [ -n "$left" ]; then bad "still running:"; sed 's/^/      /' <<<"$left"
   else ok "all stopped"; fi
 }

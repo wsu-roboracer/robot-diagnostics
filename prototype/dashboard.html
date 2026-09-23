@@ -1589,8 +1589,7 @@ tr.topic-detail pre {
 
       <div class="camera-controls">
         <input id="cameraUrl" spellcheck="false"
-               aria-label="camera stream URL"
-               value="http://192.168.1.202:8082/camera.mjpg">
+               aria-label="camera stream URL">
 
         <button class="check-btn" id="cameraConnectBtn">Connect Camera</button>
         <button class="check-btn" id="cameraSnapBtn">Take Picture</button>
@@ -5481,9 +5480,19 @@ $("wsUrl").value =
 $("robotIp").textContent =
   location.hostname || "unknown";
 
-/* The input carries the working URL as its value in the HTML.
-   ?video=<url> overrides it, the same way ?url= overrides
-   rosbridge, for a different robot or a different port. */
+/* Same reasoning as $("wsUrl") above, and the same bug fixed the
+   same way: this used to be a hardcoded robot #2 IP
+   (192.168.1.202) baked into the HTML, so the camera card was
+   broken on every other robot by construction - confirmed on
+   robot #6 (192.168.1.206), 2026-09-23. The browser already
+   knows which robot it's talking to; it's whatever host served
+   this page. ?video=<url> still overrides it, the same way
+   ?url= overrides rosbridge, for a different robot or port. */
+$("cameraUrl").value =
+  location.protocol.startsWith("http") && location.hostname
+    ? `http://${location.hostname}:8082/camera.mjpg`
+    : "http://localhost:8082/camera.mjpg";
+
 const queryVideo =
   new URLSearchParams(location.search).get("video");
 
