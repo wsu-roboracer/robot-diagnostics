@@ -1,0 +1,358 @@
+"use strict";
+
+/* Reading the ROS graph, diagnostics, VESC data and the log; topic classification. */
+
+/* ==========================================================
+   GRAPH SCAN
+========================================================== */
+
+async function scan() {
+
+  try {
+
+    const [topicList, nodeList] =
+      await Promise.all([
+        call("/rosapi/topics"),
+        call("/rosapi/nodes")
+      ]);
+
+    runningNodes =
+      new Set(nodeList.nodes || []);
+
+    totalGraphTopics =
+      (topicList.topics || []).length;
+
+    const present =
+      new Set(topicList.topics || []);
+
+    for (const name of Object.keys(TOPICS)) {
+
+      if (!topics.has(name)) {
+
+        topics.set(name, {
+          name,
+          type: "",
+          pubs: 0,
+          count: 0,
+          last: null,
+          first: null,
+          present: false
+        });
+      }
+
+      topics.get(name).present =
+        present.has(name);
+    }
+
+    (topicList.topics || [])
+      .forEach((name, index) => {
+
+        if (!TOPICS[name]) return;
+
+        const topic = topics.get(name);
+
+        topic.type =
+          (topicList.types || [])[index] || "";
+
+        topic.present = true;
+
+        if (!subscribed.has(name)) {
+
+          subscribed.add(name);
+
+          send({
+            op: "subscribe",
+            topic: name,
+            throttle_rate: LIVENESS_THROTTLE,
+            queue_length: 1
+          });
+        }
+      });
+
+    await Promise.all(
+      [...topics.keys()]
+        .filter(name => topics.get(name).present)
+        .map(async name => {
+
+          try {
+
+            const result =
+              await call("/rosapi/publishers", {
+                topic: name
+              });
+
+            topics.get(name).pubs =
+              result.publishers.length;
+
+          } catch (error) {}
+        })
+    );
+
+  } catch (error) {}
+}
+
+/* ==========================================================
+   DIAGNOSTICS
+========================================================== */
+
+function onDiagnostics(message) {
+
+  const now = Date.now();
+
+  (message.status || []).forEach(status => {
+
+    diag[status.name] = {
+      level: levelNumber(status.level),
+      message: status.message || "",
+      values: Object.fromEntries(
+        (status.values || []).map(value => [
+          value.key,
+          value.value
+        ])
+      ),
+      receivedAt: now
+    };
+
+    /* ackermann_mux reports which input is unmasked, which is
+       the only place the car says what is actually driving it. */
+    if (status.name.indexOf("ackermann_mux") === 0) {
+
+      const values = diag[status.name].values;
+
+      const joystick =
+        values["velocity topics.joystick"] || "";
+
+      const navigation =
+        values["velocity topics.navigation"] || "";
+
+      mux =
+        joystick.indexOf("unmasked") >= 0
+          ? "teleop"
+          : navigation.indexOf("unmasked") >= 0
+          ? "autonomous"
+          : "idle";
+    }
+  });
+}
+
+/* ==========================================================
+   VESC
+========================================================== */
+
+function onVesc(message) {
+
+  const state = message.state;
+
+  if (!state) return;
+
+  const fault =
+    Number(state.fault_code) || 0;
+
+  const voltage =
+    Number(state.voltage_input);
+
+  vesc = {
+    voltage,
+    fault,
+    tempFet: Number(state.temp_fet),
+    tempMotor: Number(state.temp_motor)
+  };
+}
+
+/* ==========================================================
+   LOG
+========================================================== */
+
+function onLog(message) {
+
+  const level =
+    Number(message.level) || 0;
+
+  if (level < 30) return;
+
+  const log = $("log");
+
+  if (!logStarted) {
+
+    log.innerHTML = "";
+    logStarted = true;
+  }
+
+  const div =
+    document.createElement("div");
+
+  div.className =
+    "log-entry " +
+    (level >= 40 ? "error" : "warn");
+
+  const severity =
+    level >= 50
+      ? "FATAL"
+      : level >= 40
+      ? "ERROR"
+      : "WARN";
+
+  div.textContent =
+    `${formatTime()} ${severity} ` +
+    `(${message.name || "?"}) ` +
+    `${message.msg || ""}`;
+
+  /* Only follow the tail if the reader is already at it —
+     otherwise a burst of warnings yanks the line they were
+     reading out from under them. */
+  const atBottom =
+    log.scrollHeight -
+      log.scrollTop -
+      log.clientHeight < 40;
+
+  log.appendChild(div);
+
+  while (log.children.length > 300) {
+    log.removeChild(log.firstChild);
+  }
+
+  if (atBottom) {
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+/* ==========================================================
+   TOPIC CLASSIFICATION
+========================================================== */
+
+function classifyTopic(topic) {
+
+  const spec =
+    TOPICS[topic.name] || {};
+
+  const fresh =
+    topic.last !== null &&
+    performance.now() - topic.last <= STALE_MS;
+
+  if (spec.cls && !topic.present) {
+
+    if (spec.cls === INPUT) {
+      return "ABSENT";
+    }
+
+    if (
+      spec.owner &&
+      runningNodes.has(spec.owner)
+    ) {
+      return "NOT_ADVERTISED";
+    }
+
+    return "MISSING";
+  }
+
+  if (spec.cls === INPUT) {
+
+    return topic.pubs > 0
+      ? fresh
+        ? "DRIVEN"
+        : "INPUT"
+      : "INPUT";
+  }
+
+  if (spec.cls === LATCHED) {
+
+    return topic.pubs === 0
+      ? "NODE_DOWN"
+      : topic.count > 0
+      ? "OK"
+      : "WAITING";
+  }
+
+  if (spec.cls === EVENT) {
+
+    return topic.pubs === 0
+      ? "NODE_DOWN"
+      : fresh
+      ? "OK"
+      : "IDLE";
+  }
+
+  if (topic.pubs === 0) {
+
+    return topic.present
+      ? "NODE_DOWN"
+      : "MISSING";
+  }
+
+  if (topic.last === null) {
+    return "SILENT";
+  }
+
+  if (!fresh) {
+    return "STALE";
+  }
+
+  return "OK";
+}
+
+function ownerLabel(spec) {
+
+  return (
+    spec.node ||
+    (spec.owner || "publisher").replace(/^\//, "")
+  );
+}
+
+/* Every state gets a sentence saying what it means, because
+   "IDLE" on its own reads like a fault when it is normal. */
+function topicReason(topic, state) {
+
+  const spec = TOPICS[topic.name] || {};
+
+  switch (state) {
+
+    case "OK":
+      return spec.cls === EVENT
+        ? "input arriving"
+        : "publishing";
+
+    case "IDLE":
+      return "no input right now, normal at rest";
+
+    case "INPUT":
+      return "subscribed by the stack, nothing publishes it";
+
+    case "DRIVEN":
+      return "something is publishing commands";
+
+    case "WAITING":
+      return "latched, no message yet";
+
+    case "SILENT":
+      return "publisher exists, zero messages ever";
+
+    case "STALE":
+      return (
+        "last message " +
+        (
+          (performance.now() - topic.last) / 1000
+        ).toFixed(1) +
+        "s ago"
+      );
+
+    case "NODE_DOWN":
+      return "topic exists but has no publisher";
+
+    case "MISSING":
+      return (
+        "not in the graph — " +
+        ownerLabel(spec) +
+        " not running"
+      );
+
+    case "NOT_ADVERTISED":
+      return (
+        ownerLabel(spec) +
+        " running but not publishing this"
+      );
+
+    default:
+      return "";
+  }
+}
+

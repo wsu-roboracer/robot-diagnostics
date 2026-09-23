@@ -8,12 +8,31 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 
 | File | What it is |
 |---|---|
-| `dashboard.html` | The whole page in one file. Inline CSS and JavaScript, no CDN, works with no internet |
+| `dashboard.html` | The page's markup. It loads `css/dashboard.css` and the scripts in `js/`, in that order. No CDN, works with no internet |
+| `css/dashboard.css` | All of the page's styling |
+| `js/*.js` | The page's logic, split by job. They are plain scripts that share one scope, so **the load order in `dashboard.html` matters**: `config.js` first, `main.js` last. See the table below |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
 | `verify_system.mjs` | Runs the page's real system panel and joystick-check code against sample messages. No robot needed: `node verify_system.mjs` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
+
+### The scripts, in load order
+
+| Script | What is in it |
+|---|---|
+| `js/config.js` | Thresholds, timings, expected nodes and shared state. Change limits and node lists here |
+| `js/helpers.js` | Small shared helper functions |
+| `js/connection.js` | The rosbridge connection, service calls and subscriptions |
+| `js/graph-data.js` | Reading the ROS graph, diagnostics, VESC data and the log; topic classification |
+| `js/health.js` | Subsystem health, overall health and alerts |
+| `js/status-panels.js` | Diagnostics list, battery, uptime and footer |
+| `js/advanced-panels.js` | The advanced topic and node tables |
+| `js/system-tiles.js` | The robot system (OS-level) tiles |
+| `js/metrics.js` | Advanced diagnostics, priority metrics, hardware strip and lidar readout |
+| `js/camera.js` | Camera stream and take-picture |
+| `js/checks.js` | Connection health and on-demand checks |
+| `js/main.js` | Render loop, buttons, connection form and startup. Must load last |
 
 ## Looking at it
 
@@ -27,12 +46,14 @@ http://192.168.1.202:8000/dashboard.html
 
 ## Running it on the car
 
-Robot #2 already has these files in `~/diag/`. For another car, copy the three runtime files and `tools/` into a folder of their own. Don't put them straight in the home directory: the web server shares everything in the folder it serves.
+Robot #2 already has these files in `~/diag/`. For another car, copy the runtime files and the `css/`, `js/` and `tools/` folders into a folder of their own. Don't put them straight in the home directory: the web server shares everything in the folder it serves.
 
 ```bash
 ssh f1-wsu-2@192.168.1.202 mkdir -p diag
-scp -r dashboard.html start_diagnostics.sh system_diagnostics.py tools f1-wsu-2@192.168.1.202:~/diag/
+scp -r dashboard.html css js start_diagnostics.sh system_diagnostics.py tools f1-wsu-2@192.168.1.202:~/diag/
 ```
+
+The page is no longer a single file, so copying `dashboard.html` alone leaves it unstyled and dead. If a page still looks old after an update, hard-refresh with Ctrl+Shift+R: browsers cache the `.css` and `.js` files separately.
 
 Then on the robot:
 
