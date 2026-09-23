@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Start everything the diagnostics dashboard needs, on the robot.
 #   bringup + system_diagnostics + rosbridge_websocket + a static server
+#   + the GStreamer/MJPEG camera stream
 #
-#   ./start_diagnostics.sh                 # all four
+#   ./start_diagnostics.sh                 # all five
 #   ./start_diagnostics.sh --no-bringup    # bringup already running elsewhere
 #   ./start_diagnostics.sh --no-sysdiag    # skip the OS-level diagnostics node
+#   ./start_diagnostics.sh --no-camera     # skip the GStreamer/MJPEG camera stream
+#   ./start_diagnostics.sh --camera-device /dev/video2
 #   ./start_diagnostics.sh --port 8080
 #   ./start_diagnostics.sh --stop     # stop a run started earlier (e.g. over SSH)
 #   ./start_diagnostics.sh --status   # what is currently up
@@ -17,7 +20,8 @@
 set -uo pipefail
 
 PORT=8000
-WANT_BRINGUP=1 WANT_BRIDGE=1 WANT_SERVER=1 WANT_SYSDIAG=1
+WANT_BRINGUP=1 WANT_BRIDGE=1 WANT_SERVER=1 WANT_SYSDIAG=1 WANT_CAMERA=1
+CAMERA_DEVICE=/dev/video4
 DO_STOP=0 DO_STATUS=0
 SERVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOGDIR="${TMPDIR:-/tmp}/f1tenth-diag"
@@ -30,9 +34,11 @@ while [ $# -gt 0 ]; do
     --no-sysdiag)  WANT_SYSDIAG=0; shift ;;
     --no-bridge)   WANT_BRIDGE=0; shift ;;
     --no-server)   WANT_SERVER=0; shift ;;
+    --no-camera)   WANT_CAMERA=0; shift ;;
+    --camera-device) CAMERA_DEVICE="$2"; shift 2 ;;
     --stop)        DO_STOP=1; shift ;;
     --status)      DO_STATUS=1; shift ;;
-    -h|--help)     sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help)     sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "unknown option: $1"; exit 1 ;;
   esac
 done
@@ -65,7 +71,7 @@ PIDFILE="$LOGDIR/pids"
 
 
 # --- stop / status ---------------------------------------------------------
-PATTERNS='start_diagnostics.sh|rosbridge_websocket|rosapi_node|bringup_launch.py|http\.server|system_diagnostics\.py'
+PATTERNS='start_diagnostics.sh|rosbridge_websocket|rosapi_node|bringup_launch.py|http\.server|system_diagnostics\.py|gst-launch-1\.0|camera_http\.py'
 
 # kill -0 succeeds on a zombie, so ask for the process state as well
 alive(){ local st; st=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' '); \
@@ -108,8 +114,16 @@ stop_all(){
   }
   sweep TERM; sleep 2; sweep KILL; sleep 1
   rm -f "$PIDFILE"
+  # Same self-match problem as sweep() above, but this one shipped with only
+  # half a fix: `grep -v -- --stop` hid the --stop invocation's own match
+  # (its command line contains "--stop"), but Ctrl+C runs this same function
+  # from a script instance with no "--stop" in its args, so THAT one always
+  # matched itself and printed "still running" on a completely clean stop.
+  # Reported on robot #6, 2026-09-23. Exclude by PID like sweep() does,
+  # which covers both callers instead of just one.
   local left
-  left=$(pgrep -af "$PATTERNS" 2>/dev/null | grep -v "\-\-stop" || true)
+  left=$(pgrep -af "$PATTERNS" 2>/dev/null |
+    awk -v me="$$" -v pp="${PPID:-0}" '$1 != me && $1 != pp' || true)
   if [ -n "$left" ]; then bad "still running:"; sed 's/^/      /' <<<"$left"
   else ok "all stopped"; fi
 }
@@ -244,6 +258,45 @@ if [ "$WANT_SERVER" = 1 ]; then
   fi
 else
   info "skipping web server"
+fi
+
+# --- 4. camera stream --------------------------------------------------
+# Not ROS, not a diagnostic — this is the actual video feed for the
+# dashboard's camera card. GStreamer owns the V4L2 device and pushes
+# MJPEG over a raw TCP sink; camera_http.py just wraps that TCP stream
+# in real HTTP headers so a browser <img> tag can read it.
+if [ "$WANT_CAMERA" = 1 ]; then
+  if ! command -v gst-launch-1.0 >/dev/null 2>&1; then
+    bad "gst-launch-1.0 not on PATH - skipping camera stream"
+  elif port_open 8081; then
+    ok "camera GStreamer pipeline already listening on 8081"
+  else
+    start camera-gst "$LOGDIR/camera-gst.log" \
+      gst-launch-1.0 \
+      v4l2src device="$CAMERA_DEVICE" \
+      ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 \
+      ! videoconvert \
+      ! jpegenc \
+      ! multipartmux boundary=robotcamera \
+      ! tcpserversink host=0.0.0.0 port=8081
+    if wait_for 10 port_open 8081; then
+      ok "camera GStreamer pipeline on :8081 ($CAMERA_DEVICE)"
+
+      if port_open 8082; then
+        ok "camera HTTP proxy already listening on 8082"
+      else
+        start camera-http "$LOGDIR/camera-http.log" \
+          python3 "$SERVE_DIR/camera_http.py"
+        if wait_for 10 port_open 8082; then ok "camera HTTP proxy on :8082"
+        else bad "camera HTTP proxy never opened 8082 - see $LOGDIR/camera-http.log"; fi
+      fi
+    else
+      bad "camera pipeline never opened 8081 - is $CAMERA_DEVICE correct? see $LOGDIR/camera-gst.log"
+      tail -5 "$LOGDIR/camera-gst.log" | sed 's/^/      /'
+    fi
+  fi
+else
+  info "skipping camera stream"
 fi
 
 # --- where to point a browser ---------------------------------------------

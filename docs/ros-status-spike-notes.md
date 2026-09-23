@@ -1049,26 +1049,96 @@ PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a chang
   Python HTTP server, `/tmp/camera_http.py`, reads that port and serves it as
   `http://192.168.1.202:8082/camera.mjpg`. GStreamer was already installed, `ffmpeg` was not, and
   `image_transport` offers only the raw transport.
-- **It is a temporary setup, not part of the repo.** Nothing on `main` starts either piece, and
+- ~~**It is a temporary setup, not part of the repo.** Nothing on `main` starts either piece, and
   `start_diagnostics.sh` does not. The script lives in `/tmp` on the robot, which is cleared on
   reboot, so the camera stream disappears whenever the robot restarts, as it does when the pack
   dies. The build is described in the PDF, but the script itself is not saved anywhere shared.
-  That is the same problem as the VESC patch.
+  That is the same problem as the VESC patch.~~ **Fixed 2026-09-23** - see
+  [Camera stream now starts itself](#camera-stream-now-starts-itself-and-take-picture-downloads-2026-09-23)
+  below.
 - **It bypasses the ROS camera node.** It reads the V4L2 device directly, so it does not need
   the `cam` alias. Whether it can run at the same time as `cam` is untested: the research
   launched the ROS node only to confirm the camera worked, then switched to GStreamer.
 - **Ports 8081 and 8082 are both open** with no authentication, reachable by anyone on the
   WiFi. Port 8081 is the raw stream and 8082 is the HTTP one. That is video of the room, and the
   access-control question in Section 6 applies to both.
-- **Snapshots need CORS headers.** The page can show the video, but reading a frame back is
+- ~~**Snapshots need CORS headers.** The page can show the video, but reading a frame back is
   blocked unless the camera server sends `Access-Control-Allow-Origin`. The page says so when
-  that happens.
-- **The default URL is robot #2's address.** Other cars need it changed in the box.
-- **Not built yet:** the lidar radar view. The page computes summary statistics from `/scan`
+  that happens.~~ **Fixed 2026-09-23** - same section below.
+- ~~**The default URL is robot #2's address.** Other cars need it changed in the box.~~ **Fixed
+  2026-09-23** - this was not hypothetical, it broke the camera on robot #6
+  (192.168.1.206) the first time it was deployed there. See
+  [Camera stream now starts itself](#camera-stream-now-starts-itself-and-take-picture-downloads-2026-09-23)
+  below.
+- ~~**Not built yet:** the lidar radar view. The page computes summary statistics from `/scan`
   (minimum, maximum, count of finite returns), and a comment notes a plot could draw from the
-  same message. The Network tile also reads a `wifi signal` value that `system_diagnostics.py`
-  does not publish, so it falls back to counting links that are up.
+  same message.~~ **Built 2026-09-23** - see
+  [Lidar radar view](#lidar-radar-view-and-the-scan-no-return-sentinel-2026-09-23) below. The
+  Network tile still reads a `wifi signal` value that `system_diagnostics.py` does not publish,
+  so it falls back to counting links that are up - that part is unchanged.
 - A `.DS_Store` file was committed in the same merge. It should be removed and ignored.
+
+### Camera stream now starts itself, and Take Picture downloads (2026-09-23)
+
+- **The manual two-terminal setup is gone.** `gst-launch-1.0 ... tcpserversink port=8081`
+  and the Python proxy behind it are now a step in `start_diagnostics.sh` (step 4, after the
+  static web server), and the proxy script is `prototype/camera_http.py` - a repo file, not a
+  hand-pasted `/tmp` one. `--no-camera` skips the step, `--camera-device` overrides
+  `/dev/video4` if the device number shifts. Both processes are in the script's `PATTERNS`
+  kill-list now, so `--stop` / `--status` / Ctrl+C manage them the same as bringup and
+  rosbridge, instead of surviving a stop and fighting the next run over the device.
+- **The gap this closes is exactly the one flagged above:** a reboot (or a dead pack, which
+  causes one) used to silently remove the camera stream with nothing to say so. Now it comes
+  back with everything else `start_diagnostics.sh` starts, and reports pass/fail the same way
+  bringup and rosbridge do.
+- **Snapshots ("Take Picture") were blocked by CORS, and now aren't.** The dashboard is served
+  from port 8000 and the camera stream from 8082 - different ports means different origins to
+  the browser, even on the same host. An `<img>` loaded cross-origin with no `crossorigin`
+  attribute loads in "no-cors" mode: the browser shows it fine but treats any canvas draw from
+  it as tainted, and `toDataURL()` throws, regardless of what headers the server sends. Fixing
+  it needs both sides, or the video breaks instead of the snapshot:
+  1. `camera_http.py` now sends `Access-Control-Allow-Origin: *` on the `/camera.mjpg`
+     response.
+  2. `dashboard.html`'s `connectCamera()` now sets `image.crossOrigin = "anonymous"` before
+     assigning `image.src`, which is what makes the browser actually check that header. Set
+     the header without this and nothing changes; set this without the header and the image
+     fails to load at all.
+- **The hardcoded robot #2 IP is gone.** `cameraUrl`'s default was
+  `http://192.168.1.202:8082/camera.mjpg`, baked into the HTML input's `value` attribute since
+  PR #35 - so the camera card was broken on every robot except #2 by construction, and it
+  proved it: **robot #6 (192.168.1.206) showed "No stream", 2026-09-23,** the first time this
+  was deployed there. Fixed the same way `$("wsUrl")` already handled this for rosbridge - the
+  browser already knows which robot it's talking to (`location.hostname`, the host that
+  served the page), so there is nothing to hardcode. `?video=<url>` still overrides it for a
+  different robot or port, same pattern as `?url=` for rosbridge.
+- **Still true, unchanged:** ports 8081 and 8082 have no authentication.
+
+### Lidar radar view, and the /scan no-return sentinel (2026-09-23)
+
+- **The LiDAR card draws the scan now**, not just the four summary numbers (points, nearest,
+  farthest, field of view) it had before. A canvas in the card plots each valid return as a
+  point, connects consecutive valid points into a line so a wall reads as a wall and a gap
+  (doorway, or simply out of range) breaks the line instead of bridging it, draws range rings
+  and the FOV boundary, and eases its own scale toward whatever the sensor is actually seeing
+  (clamped 2-12 m) so a doorway does not zoom to a dot and an open hallway does not shrink a
+  near wall to nothing. The geometry - `isValidRange()` and `polarToCanvas()` in
+  `dashboard.html` - is checked with no browser or robot needed by
+  `prototype/verify_radar.mjs` (`node verify_radar.mjs`).
+- **Building it found a real bug in the summary stats that were already shipping.** A
+  "no-return" beam on this Hokuyo does not come back as `inf` or `NaN`, and is not clipped to
+  `range_max` - measured on the robot 2026-09-23, it reads back as **~65.5 m**, the raw SCIP
+  sentinel `65535` (mm) passed straight through, which is *above* `range_max` (30 m). The
+  existing `onScan()` filter (`value > 0`) let that sentinel through as a real distance, so the
+  "Farthest" readout could report a phantom 65 m wall. Fixed by filtering against the
+  message's own `range_min` / `range_max` instead of a hardcoded `> 0`, which is also what the
+  radar plot filters on - one function, not two copies that could disagree.
+- **The 270° FOV leaves a real 90° blind spot directly behind the sensor** (`angle_min` to
+  `angle_max` is 270°, not 360°). The plot draws range rings and the FOV boundary only across
+  the real arc, so the blind spot renders as a blank wedge - a *measured absence*, not
+  "unmeasured yet."
+- **Not verified in a browser against a live robot** - the math is checked by
+  `verify_radar.mjs` and by hand, but nobody has watched it track a real wall yet. Do that
+  before calling this done.
 
 ### What to do with the results
 
