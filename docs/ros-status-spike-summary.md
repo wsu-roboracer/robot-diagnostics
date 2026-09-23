@@ -13,8 +13,9 @@ Full notes on everything, with every command, measurement and dead end, are in [
 - **Checking a car.** With bringup running, `bash tools/baseline_capture.sh | tee baseline.txt` saves a full health snapshot, and `python3 tools/rosbridge_check.py` confirms rosbridge is passing data. Both are in `prototype/tools/`; copy that folder to `~/diag/` if the robot doesn't have it.
 - **Only robot #2 has been measured**, and only robot #2 has the VESC temperature patch below. Expect other cars to differ until someone checks.
 - **Measured on robot #2 on 2026-09-21:** WiFi (signal, link rate, loss, error counters), the board's thermal trip points, the CPU power mode (15 W, 1.51 GHz maximum), and a battery run-down (the robot lost power at 8.8 V or below). Every WiFi source works without sudo. Numbers are in the [notes](ros-status-spike-notes.md#robot-2-wifi-thermal-trip-points-and-cpu-power-mode-2026-09-21), and the ranges they support are proposed in [instructor-interview.md](instructor-interview.md).
-- **The camera is built** (PR #35, merged 2026-09-21): a live MJPEG view and a **Take Picture** button in the dashboard, served from port 8082 on the robot, at roughly 10 to 20 fps by eye. The video server is a GStreamer pipeline plus a small Python script in `/tmp` on the robot (built in [Camera Streaming Research](Camera%20Streaming%20Research.pdf)), so a reboot removes it, nothing in this repo starts it, its ports have no authentication, and the lidar radar view and a published WiFi signal are still to come. Details in the [notes](ros-status-spike-notes.md#camera-feature-as-merged-pr-35-2026-09-21).
-- **What to do next.** Nothing left needs measuring. The 20-minute loaded run (block F) was dropped on 2026-09-21 because the professor said it is not needed to measure temperatures. What to build, and in what order, comes from the professor interview in [instructor-interview.md](instructor-interview.md).
+- **The camera is built** (PR #35, merged 2026-09-21) **and now starts itself, with working downloads** (2026-09-23): the GStreamer pipeline and its Python HTTP proxy, previously hand-run from `/tmp` across two SSH terminals, are `prototype/camera_http.py` plus a step in `start_diagnostics.sh`, so a reboot no longer removes them, and `--stop`/`--status` manage them like everything else. **Take Picture** downloads work now too - the stream was missing `Access-Control-Allow-Origin`, which let the browser show the video but not read its pixels into a PNG. Its ports still have no authentication. Details in the [notes](ros-status-spike-notes.md#camera-stream-now-starts-itself-and-take-picture-downloads-2026-09-23).
+- **The lidar radar view is built** (2026-09-23): the LiDAR card draws the actual `/scan` returns as a top-down sweep instead of just summary numbers. Building it found a real bug in those summary numbers: a "no return" beam on this Hokuyo reads back as ~65.5 m - the raw SCIP sentinel, well *above* `range_max` (30 m), not `inf` - and the old filter let it through as a "farthest reading." Fixed. A published WiFi signal is still to come. Details in the [notes](ros-status-spike-notes.md#lidar-radar-view-and-the-scan-no-return-sentinel-2026-09-23).
+- **What to do next.** Nothing left needs measuring. The 20-minute loaded run (block F) was dropped on 2026-09-21 because the professor said it is not needed to measure temperatures. What to build, and in what order, comes from the professor interview in [instructor-interview.md](instructor-interview.md). The radar view has not yet been watched against a live robot in a browser - worth doing before calling it done.
 
 ## Short version
 
@@ -28,13 +29,14 @@ Getting the data turned out to be easy. The hard part is avoiding false alarms: 
 
 ## How the prototype works
 
-The prototype is a proof of concept and is scrappy on purpose. The spike's job was to prove that a web page can show live robot health, not to ship the final tool. Three files in [`prototype/`](../prototype/) run on the robot:
+The prototype is a proof of concept and is scrappy on purpose. The spike's job was to prove that a web page can show live robot health, not to ship the final tool. Four files in [`prototype/`](../prototype/) run on the robot:
 
 | File | What it does |
 |---|---|
-| `start_diagnostics.sh` | Starts four things: bringup, `system_diagnostics.py`, rosbridge, and a small web server for the page. Ctrl+C stops all of them, and `--status` / `--stop` work over SSH |
+| `start_diagnostics.sh` | Starts five things: bringup, `system_diagnostics.py`, rosbridge, the camera stream, and a small web server for the page. Ctrl+C stops all of them, and `--status` / `--stop` work over SSH |
 | `system_diagnostics.py` | A ROS node that checks the operating system once a second and publishes ten statuses to `/diagnostics`: Thermal, Power, CPU, Memory, Storage, Network (including a ping to the lidar), VESC device, Camera, Gamepad and Clock |
-| `dashboard.html` | The whole page in one file, with no dependencies. Shows running nodes, topic health, battery, lidar health and the system panel |
+| `camera_http.py` | Wraps the GStreamer MJPEG pipeline's raw TCP output in real HTTP headers so a browser `<img>` can read it, and sends the CORS header the dashboard's snapshot button needs |
+| `dashboard.html` | The whole page in one file, with no dependencies. Shows running nodes, topic health, battery, a live lidar radar plot, the camera feed and the system panel |
 
 ```
 laptop browser ──http :8000──────> web server on the robot ──> dashboard.html
@@ -154,7 +156,7 @@ Open questions from #1 that are now answered: the lidar is at 192.168.0.10 on it
 
 **#8, health schema.** Adopt `diagnostic_msgs` instead of a custom format. Add a topic class, a `depends_on` field (when the VESC link fails, battery, motor and odometry fail with it), and keep "could not check" separate from "passed". The professor asked for green, yellow and red on everything in his top list, so [instructor-interview.md](instructor-interview.md) records a signed-off range for each, with where its data comes from and where the range is defined in the code. Give the lidar three states and add a WiFi entry to replace S-16.
 
-**#4, mockup.** Leave room for a last-updated time, which car is being shown (the lidar serial `B2232377` works as an ID), the output of a button-triggered check, and the worst problem visible without scrolling. The professor wants battery, joysticks, camera, lidar, WiFi, CPU, RAM, GPU and temperatures all at the top, plus the node count and topic state, with a camera picture and a lidar radar view as new features. See [instructor-interview.md](instructor-interview.md).
+**#4, mockup.** Leave room for a last-updated time, which car is being shown (the lidar serial `B2232377` works as an ID), the output of a button-triggered check, and the worst problem visible without scrolling. The professor wants battery, joysticks, camera, lidar, WiFi, CPU, RAM, GPU and temperatures all at the top, plus the node count and topic state, with a camera picture and a lidar radar view - both now built (2026-09-23). See [instructor-interview.md](instructor-interview.md).
 
 ## Closed on 2026-09-16
 

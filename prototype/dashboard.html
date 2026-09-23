@@ -358,6 +358,20 @@ input {
   display: block;
 }
 
+/* Square, not 16/10 — the scan is a 270° fan (not a rectangle),
+   and a square gives the rear 90° blind spot room to show as a
+   blank wedge instead of getting cropped off. */
+.radar-box {
+  aspect-ratio: 1 / 1;
+  margin-bottom: 12px;
+}
+
+.radar-box canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .stream-message {
   color: #cfcfcf;
   font-size: 13px;
@@ -1601,6 +1615,10 @@ tr.topic-detail pre {
         <span class="live-tag" id="lidarTag">waiting</span>
       </h2>
 
+      <div class="stream-box radar-box">
+        <canvas id="radarCanvas" width="480" height="480"></canvas>
+      </div>
+
       <div class="readout-grid">
         <div>
           <span class="k">Points</span>
@@ -2173,6 +2191,12 @@ let vesc = null;
 let mux = null;
 let scanStats = null;
 
+/* The raw message behind scanStats, kept for the radar plot. Safe
+   to hold a reference — it's replaced wholesale every callback,
+   never mutated, and arrives at the 200ms liveness throttle, not
+   the sensor's real 40 Hz. */
+let lastScan = null;
+
 let lastAnything = 0;
 
 /* Tracked apart from lastAnything, which service responses also
@@ -2356,6 +2380,7 @@ function connect(url) {
   vesc = null;
   mux = null;
   scanStats = null;
+  lastScan = null;
 
   expanded.clear();
   latestMsg.clear();
@@ -2526,6 +2551,8 @@ function handleMessage(message) {
 function onScan(message) {
 
   const ranges = message.ranges || [];
+  const rangeMin = Number(message.range_min);
+  const rangeMax = Number(message.range_max);
 
   let min = Infinity;
   let max = -Infinity;
@@ -2533,9 +2560,7 @@ function onScan(message) {
 
   for (const value of ranges) {
 
-    /* Out-of-range readings come back as inf (and sometimes 0),
-       and averaging those in would report a wall at 0 m. */
-    if (typeof value === "number" && isFinite(value) && value > 0) {
+    if (isValidRange(value, rangeMin, rangeMax)) {
 
       finite++;
 
@@ -2554,6 +2579,33 @@ function onScan(message) {
     max: finite ? max : null,
     fov: Number.isFinite(span) ? span * 180 / Math.PI : null,
     at: performance.now()
+  };
+
+  lastScan = message;
+}
+
+/* ---- radar geometry ----
+   Pure, so verify_radar.mjs can check it with no DOM/websocket.
+
+   A "no return" beam does NOT come back as inf/NaN on this
+   Hokuyo — measured on the robot, it reports ~65.5 m (the raw
+   SCIP sentinel 65535 mm passed straight through), well above
+   range_max (30 m). Anything at or past range_max is that
+   sentinel, not a real wall. */
+function isValidRange(value, rangeMin, rangeMax) {
+  return typeof value === "number" &&
+    isFinite(value) &&
+    value > rangeMin &&
+    value < rangeMax;
+}
+
+/* angle 0 = straight ahead (REP-103: x forward, y left, angle
+   grows counter-clockwise). Mapped so the canvas reads like a
+   chase-cam behind the robot: forward is up, left is left. */
+function polarToCanvas(angle, range, pxPerMeter, originX, originY) {
+  return {
+    x: originX - range * pxPerMeter * Math.sin(angle),
+    y: originY - range * pxPerMeter * Math.cos(angle)
   };
 }
 
@@ -4857,6 +4909,120 @@ function renderLidar() {
 }
 
 /* ==========================================================
+   RADAR PLOT — same /scan message renderLidar() already has,
+   just drawn instead of summarised.
+========================================================== */
+
+let radarScale = 6; // meters shown edge-to-edge; eased toward the
+                     // live max so it doesn't jump every frame
+
+function renderRadar() {
+
+  const canvas = $("radarCanvas");
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, w, h);
+
+  const age =
+    lastScan ? (performance.now() - scanStats.at) / 1000 : null;
+  const live = age !== null && age < 2;
+
+  if (!lastScan || !live) {
+    ctx.fillStyle = "#555";
+    ctx.font = "13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      lastScan ? "SCAN STALE" : "NO SCAN", w / 2, h / 2);
+    return;
+  }
+
+  const angleMin = Number(lastScan.angle_min);
+  const angleMax = Number(lastScan.angle_max);
+  const angleInc = Number(lastScan.angle_increment);
+  const rangeMin = Number(lastScan.range_min);
+  const rangeMax = Number(lastScan.range_max);
+  const ranges = lastScan.ranges || [];
+
+  /* auto-fit: scale to what the sensor is actually seeing this
+     frame, clamped so a doorway doesn't zoom to a dot and an
+     open hallway doesn't shrink a near wall to nothing */
+  let seenMax = 0;
+  for (const v of ranges) {
+    if (isValidRange(v, rangeMin, rangeMax) && v > seenMax) seenMax = v;
+  }
+  const target = Math.min(12, Math.max(2, seenMax || 2));
+  radarScale += (target - radarScale) * 0.2;
+
+  const originX = w / 2;
+  const originY = h / 2;
+  const margin = 28;
+  const pxPerMeter = (Math.min(w, h) / 2 - margin) / radarScale;
+
+  /* range rings, drawn only across the real FOV — the 90° behind
+     the sensor is a genuine blind spot, not "unmeasured yet" */
+  ctx.strokeStyle = "rgba(57,255,136,0.25)";
+  ctx.lineWidth = 1;
+  ctx.font = "10px monospace";
+  ctx.fillStyle = "rgba(57,255,136,0.55)";
+  ctx.textAlign = "left";
+
+  const ringCount = 3;
+  for (let ring = 1; ring <= ringCount; ring++) {
+    const ringRange = radarScale * ring / ringCount;
+    ctx.beginPath();
+    const steps = 48;
+    for (let s = 0; s <= steps; s++) {
+      const a = angleMin + (angleMax - angleMin) * s / steps;
+      const p = polarToCanvas(a, ringRange, pxPerMeter, originX, originY);
+      s === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    const top = polarToCanvas(0, ringRange, pxPerMeter, originX, originY);
+    ctx.fillText(ringRange.toFixed(0) + "m", top.x + 3, top.y - 2);
+  }
+
+  /* FOV boundary — where the blind spot starts on each side */
+  ctx.strokeStyle = "rgba(57,255,136,0.25)";
+  ctx.beginPath();
+  const edgeMinPt = polarToCanvas(angleMin, radarScale, pxPerMeter, originX, originY);
+  const edgeMaxPt = polarToCanvas(angleMax, radarScale, pxPerMeter, originX, originY);
+  ctx.moveTo(originX, originY); ctx.lineTo(edgeMinPt.x, edgeMinPt.y);
+  ctx.moveTo(originX, originY); ctx.lineTo(edgeMaxPt.x, edgeMaxPt.y);
+  ctx.stroke();
+
+  /* the returns — a wall draws as a line, a stray point as a dot,
+     a gap (doorway, out of range) just breaks the line */
+  ctx.strokeStyle = "#39ff88";
+  ctx.fillStyle = "#39ff88";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let drawing = false;
+
+  for (let i = 0; i < ranges.length; i++) {
+    const v = ranges[i];
+    if (!isValidRange(v, rangeMin, rangeMax)) { drawing = false; continue; }
+
+    const angle = angleMin + i * angleInc;
+    const p = polarToCanvas(angle, v, pxPerMeter, originX, originY);
+
+    if (drawing) ctx.lineTo(p.x, p.y);
+    else { ctx.moveTo(p.x, p.y); drawing = true; }
+  }
+  ctx.stroke();
+
+  /* robot marker, facing up */
+  ctx.fillStyle = "#8ab4ff";
+  ctx.beginPath();
+  ctx.moveTo(originX, originY - 8);
+  ctx.lineTo(originX - 6, originY + 5);
+  ctx.lineTo(originX + 6, originY + 5);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/* ==========================================================
    CAMERA STREAM
 
    A plain MJPEG stream over HTTP. The browser renders it in an
@@ -4884,6 +5050,14 @@ function connectCamera(url) {
   }
 
   setCameraStatus("CONNECTING", "#777");
+
+  /* Without this, the browser loads the stream in "no-cors" mode
+     and treats it as opaque no matter what headers the server
+     sends — canvas draws from it are tainted regardless. With it,
+     the browser actually checks Access-Control-Allow-Origin, so
+     the server-side header above only takes effect once this is
+     set too. */
+  image.crossOrigin = "anonymous";
 
   image.hidden = true;
 
@@ -5216,6 +5390,7 @@ function render() {
   renderMetrics();
   renderHardwareStrip(subsystems);
   renderLidar();
+  renderRadar();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
