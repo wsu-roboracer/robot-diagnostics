@@ -1,0 +1,634 @@
+"use strict";
+
+/* Subsystem health, overall health and alerts. */
+
+/* ==========================================================
+   SUBSYSTEM HEALTH
+========================================================== */
+
+function subsystemData() {
+
+  const systemGamepad =
+    diag["system: Gamepad"];
+
+  const systemCamera =
+    diag["system: Camera"];
+
+  const scanTopic =
+    topics.get("/scan");
+
+  const odomTopic =
+    topics.get("/odom");
+
+  const coreTopic =
+    topics.get("/sensors/core");
+
+  /* CONTROLLER */
+
+  let controllerHealth = "unknown";
+  let controllerDetail =
+    "Waiting for controller diagnostics";
+
+  if (systemGamepad) {
+
+    controllerHealth =
+      healthFromDiagnostic(
+        systemGamepad.level
+      );
+
+    controllerDetail =
+      systemGamepad.message ||
+      "Controller diagnostic received";
+  }
+
+  else if (runningNodes.has("/joy")) {
+
+    controllerHealth = "healthy";
+    controllerDetail =
+      "Joystick node running";
+  }
+
+  /* VESC */
+
+  let vescHealth = "unknown";
+  let vescDetail =
+    "Waiting for VESC data";
+
+  if (!runningNodes.has("/vesc_driver_node")) {
+
+    vescHealth = "failed";
+    vescDetail =
+      "/vesc_driver_node is not running";
+  }
+
+  else if (vesc) {
+
+    if (vesc.fault !== 0) {
+
+      vescHealth = "failed";
+
+      vescDetail =
+        "Fault: " +
+        (FAULTS[vesc.fault] ||
+         vesc.fault);
+    }
+
+    else {
+
+      vescHealth = "healthy";
+
+      /* A driver fix made temp_fet real; before it, this field
+         was an unassigned 0.0 that would have rendered as a
+         perfectly healthy 0 °C forever. */
+      if (
+        Number.isFinite(vesc.tempFet) &&
+        vesc.tempFet > MOTOR_ABSENT
+      ) {
+
+        vescDetail =
+          "FET temperature: " +
+          vesc.tempFet.toFixed(1) +
+          " °C";
+
+        if (vesc.tempFet >= FET_ERR) {
+
+          vescHealth = "failed";
+
+          vescDetail += " — over temperature";
+        }
+
+        else if (vesc.tempFet >= FET_WARN) {
+
+          vescHealth = "degraded";
+
+          vescDetail += " — running hot";
+        }
+      }
+
+      else {
+
+        vescDetail =
+          "VESC responding normally";
+      }
+    }
+  }
+
+  /* CONTROL MODE */
+
+  let controlHealth = "unknown";
+  let controlDetail =
+    "Waiting for ackermann_mux diagnostics";
+
+  if (mux === "teleop") {
+
+    controlHealth = "healthy";
+    controlDetail =
+      "Teleop input unmasked — joystick has the car";
+  }
+
+  else if (mux === "autonomous") {
+
+    controlHealth = "healthy";
+    controlDetail =
+      "Navigation input unmasked — autonomous control";
+  }
+
+  /* Idle is not a fault: at rest, with no deadman held, this is
+     exactly what a healthy car reports. Same reasoning as the
+     EVENT topic class. */
+  else if (mux === "idle") {
+
+    controlHealth = "healthy";
+    controlDetail =
+      "Idle — no deadman held, normal at rest";
+  }
+
+  else if (
+    !runningNodes.has("/ackermann_mux")
+  ) {
+
+    controlHealth = "failed";
+    controlDetail =
+      "/ackermann_mux is not running";
+  }
+
+  /* LIDAR */
+
+  let lidarHealth = "unknown";
+  let lidarDetail =
+    "Waiting for LiDAR";
+
+  if (!runningNodes.has("/urg_node")) {
+
+    lidarHealth = "failed";
+    lidarDetail =
+      "/urg_node is not running";
+  }
+
+  else if (scanTopic) {
+
+    const state =
+      classifyTopic(scanTopic);
+
+    if (state === "OK") {
+
+      lidarHealth = "healthy";
+      lidarDetail =
+        "Laser scan data publishing";
+    }
+
+    else if (
+      state === "STALE" ||
+      state === "SILENT"
+    ) {
+
+      lidarHealth = "degraded";
+      lidarDetail =
+        "LiDAR data is stale";
+    }
+
+    else if (
+      state === "MISSING" ||
+      state === "NODE_DOWN" ||
+      state === "NOT_ADVERTISED"
+    ) {
+
+      lidarHealth = "failed";
+      lidarDetail =
+        "LiDAR topic unavailable";
+    }
+  }
+
+  /* ODOMETRY */
+
+  let odomHealth = "unknown";
+  let odomDetail =
+    "Waiting for odometry";
+
+  if (
+    !runningNodes.has(
+      "/vesc_to_odom_node"
+    )
+  ) {
+
+    odomHealth = "failed";
+
+    odomDetail =
+      "/vesc_to_odom_node not running";
+  }
+
+  else if (odomTopic) {
+
+    const state =
+      classifyTopic(odomTopic);
+
+    if (state === "OK") {
+
+      odomHealth = "healthy";
+      odomDetail =
+        "Odometry data publishing";
+    }
+
+    else if (
+      state === "STALE" ||
+      state === "SILENT"
+    ) {
+
+      odomHealth = "degraded";
+      odomDetail =
+        "Odometry data is stale";
+    }
+
+    else if (
+      state === "MISSING" ||
+      state === "NODE_DOWN"
+    ) {
+
+      odomHealth = "failed";
+      odomDetail =
+        "Odometry topic unavailable";
+    }
+  }
+
+  /* CAMERA */
+
+  let cameraHealth = "unknown";
+  let cameraDetail =
+    "Waiting for camera diagnostics";
+
+  if (systemCamera) {
+
+    cameraHealth =
+      healthFromDiagnostic(
+        systemCamera.level
+      );
+
+    cameraDetail =
+      systemCamera.message ||
+      "Camera diagnostic received";
+  }
+
+  /* BATTERY */
+
+  let batteryHealth = "unknown";
+  let batteryDetail =
+    "Waiting for battery voltage";
+
+  if (vesc) {
+
+    if (vesc.voltage < BATT_ERR) {
+
+      batteryHealth = "failed";
+
+      batteryDetail =
+        `${vesc.voltage.toFixed(1)} V — stop driving`;
+    }
+
+    else if (
+      vesc.voltage < BATT_WARN
+    ) {
+
+      batteryHealth = "degraded";
+
+      batteryDetail =
+        `${vesc.voltage.toFixed(1)} V — battery low`;
+    }
+
+    else {
+
+      batteryHealth = "healthy";
+
+      batteryDetail =
+        `${vesc.voltage.toFixed(1)} V`;
+    }
+  }
+
+  else if (
+    coreTopic &&
+    classifyTopic(coreTopic) === "MISSING"
+  ) {
+
+    batteryHealth = "failed";
+
+    batteryDetail =
+      "/sensors/core unavailable";
+  }
+
+  return [
+    {
+      id: "controller",
+      icon: "🎮",
+      name: "Controller",
+      subtitle: "Input",
+      source: "/joy",
+      health: controllerHealth,
+      details: controllerDetail
+    },
+
+    {
+      id: "vesc",
+      icon: "◉",
+      name: "VESC",
+      subtitle: "Motor Controller",
+      source: "/vesc_driver_node",
+      health: vescHealth,
+      details: vescDetail
+    },
+
+    {
+      id: "lidar",
+      icon: "◌",
+      name: "LiDAR",
+      subtitle: "Hokuyo URG",
+      source: "/urg_node + /scan",
+      health: lidarHealth,
+      details: lidarDetail
+    },
+
+    {
+      id: "odometry",
+      icon: "◍",
+      name: "Odometry",
+      subtitle: "Wheel Encoder",
+      source: "/vesc_to_odom_node",
+      health: odomHealth,
+      details: odomDetail
+    },
+
+    {
+      id: "camera",
+      icon: "▣",
+      name: "Camera",
+      subtitle: "Intel RealSense",
+      source: "system: Camera",
+      health: cameraHealth,
+      details: cameraDetail
+    },
+
+    {
+      id: "battery",
+      icon: "ϟ",
+      name: "Battery",
+      subtitle: "Vehicle Power",
+      source: "/sensors/core",
+      health: batteryHealth,
+      details: batteryDetail
+    },
+
+    {
+      id: "control",
+      icon: "⇄",
+      name: "Control Mode",
+      subtitle: mux ? mux : "Command Mux",
+      source: "/ackermann_mux",
+      health: controlHealth,
+      details: controlDetail
+    }
+  ];
+}
+
+/* ==========================================================
+   RENDER SUBSYSTEMS
+========================================================== */
+
+function renderSubsystems(data) {
+
+  $("subsystemRows").innerHTML =
+    data.map(item => {
+
+      return `
+        <tr>
+
+          <td>
+            <div class="subsystem-name">
+
+              <div class="subsystem-icon">
+                ${item.icon}
+              </div>
+
+              <div>
+                <div class="subsystem-title">
+                  ${escapeHtml(item.name)}
+                </div>
+
+                <span class="subsystem-subtitle">
+                  ${escapeHtml(item.subtitle)}
+                </span>
+              </div>
+
+            </div>
+          </td>
+
+          <td class="source">
+            ${escapeHtml(item.source)}
+          </td>
+
+          <td>
+            <span class="health ${item.health}">
+              <span class="health-dot"></span>
+              ${healthLabel(item.health)}
+            </span>
+          </td>
+
+          <td class="details">
+            ${escapeHtml(item.details)}
+          </td>
+
+          <td>
+            <button
+              class="inspect-btn"
+              data-inspect="${item.id}">
+              View Details
+            </button>
+          </td>
+
+        </tr>
+      `;
+    }).join("");
+
+  document
+    .querySelectorAll("[data-inspect]")
+    .forEach(button => {
+
+      button.onclick = () => {
+
+        $("advancedDetails").open = true;
+
+        $("advancedSection")
+          .scrollIntoView({
+            behavior: "smooth"
+          });
+      };
+    });
+}
+
+/* ==========================================================
+   OVERALL HEALTH
+========================================================== */
+
+function renderOverall(data) {
+
+  let worst = "healthy";
+
+  for (const item of data) {
+
+    if (
+      healthRank(item.health) >
+      healthRank(worst)
+    ) {
+
+      worst = item.health;
+    }
+  }
+
+  const status =
+    $("overallStatus");
+
+  const icon =
+    $("overallIcon");
+
+  const note =
+    $("overallNote");
+
+  status.textContent =
+    healthLabel(worst);
+
+  status.style.color =
+    worst === "healthy"
+      ? "var(--healthy)"
+      : worst === "degraded"
+      ? "#d9a800"
+      : worst === "failed"
+      ? "var(--failed)"
+      : "var(--unknown)";
+
+  icon.style.background =
+    worst === "healthy"
+      ? "var(--healthy)"
+      : worst === "degraded"
+      ? "var(--degraded)"
+      : worst === "failed"
+      ? "var(--failed)"
+      : "var(--unknown)";
+
+  icon.textContent =
+    worst === "healthy"
+      ? "✓"
+      : worst === "failed"
+      ? "!"
+      : worst === "degraded"
+      ? "!"
+      : "?";
+
+  const failed =
+    data.filter(
+      item =>
+        item.health === "failed"
+    ).length;
+
+  const degraded =
+    data.filter(
+      item =>
+        item.health === "degraded"
+    ).length;
+
+  const unknown =
+    data.filter(
+      item =>
+        item.health === "unknown"
+    ).length;
+
+  if (failed) {
+
+    note.textContent =
+      `${failed} critical subsystem` +
+      (failed === 1 ? "" : "s") +
+      " require attention";
+  }
+
+  else if (degraded) {
+
+    note.textContent =
+      `${degraded} subsystem` +
+      (degraded === 1 ? "" : "s") +
+      " degraded";
+  }
+
+  else if (unknown) {
+
+    note.textContent =
+      `${unknown} subsystem` +
+      (unknown === 1 ? "" : "s") +
+      " not yet confirmed";
+  }
+
+  else {
+
+    note.textContent =
+      "All monitored systems operational";
+  }
+}
+
+/* ==========================================================
+   ALERTS
+========================================================== */
+
+function renderAlerts(data) {
+
+  const alerts =
+    data
+      .filter(
+        item =>
+          item.health !== "healthy"
+      )
+      .sort(
+        (a, b) =>
+          healthRank(b.health) -
+          healthRank(a.health)
+      );
+
+  const list =
+    $("alertList");
+
+  if (!alerts.length) {
+
+    list.innerHTML = `
+      <div class="no-alerts">
+        ✓ No critical alerts. All monitored subsystems are healthy.
+      </div>
+    `;
+
+    return;
+  }
+
+  list.innerHTML =
+    alerts.map(item => {
+
+      return `
+        <div class="alert ${item.health}">
+
+          <div class="alert-icon">
+            ${item.health === "unknown" ? "?" : "!"}
+          </div>
+
+          <div>
+
+            <div class="alert-name">
+              ${escapeHtml(item.name)}
+            </div>
+
+            <div class="alert-message">
+              ${escapeHtml(item.details)}
+            </div>
+
+          </div>
+
+          <div class="alert-time">
+            ${formatTime()}
+          </div>
+
+        </div>
+      `;
+    }).join("");
+}
+
