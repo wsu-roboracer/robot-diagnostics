@@ -48,4 +48,4 @@ All of it fits on **one PCB** with a single 40-pin connector (or a ribbon cable)
 * **Mounting:** Keep the hat clear of the fan. Use standoffs attached to the board's mounting holes, and take caliper measurements before finalizing the PCB outline.
 
 ### Sketch
-[View the Document (PDF)](images/PCB_Hat_designs_enhanced.pdf)
+[View the Document (PDF)](../images/PCB_Hat_designs_enhanced.pdf)
