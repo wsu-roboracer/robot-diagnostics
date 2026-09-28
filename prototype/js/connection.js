@@ -223,27 +223,85 @@ function handleMessage(message) {
   }
 
   if (topicName === "/diagnostics") {
+
     onDiagnostics(message.msg);
+
   }
 
   else if (topicName === "/rosout") {
+
     onLog(message.msg);
+
   }
 
   else if (topicName === "/sensors/core") {
+
     onVesc(message.msg);
+
   }
 
   else if (topicName === "/scan") {
+
     onScan(message.msg);
+
+  }
+
+  else if (topicName === "/odom") {
+
+    onOdom(message.msg);
   }
 }
+
+/* ==========================================================
+   ODOMETRY / SPEED
+========================================================== */
+
+/*
+   /odom is the preferred source for dashboard speed.
+
+   nav_msgs/msg/Odometry:
+       msg.twist.twist.linear.x
+
+   The F1TENTH vesc_to_odom node converts VESC ERPM into
+   physical linear velocity in meters/second.
+
+   Therefore:
+       positive = forward
+       negative = reverse
+       zero     = stopped
+*/
+
+function onOdom(message) {
+
+  if (
+    !message ||
+    !message.twist ||
+    !message.twist.twist ||
+    !message.twist.twist.linear
+  ) {
+    return;
+  }
+
+  const speedMps =
+    Number(message.twist.twist.linear.x);
+
+  if (!Number.isFinite(speedMps)) {
+    return;
+  }
+
+  updateSpeed(speedMps);
+}
+
+/* ==========================================================
+   LIDAR
+========================================================== */
 
 /* "Is the LiDAR connected" is a much weaker question than "what
    is it seeing". These are the cheap summary statistics of the
    scan we already receive — a full radar plot draws from the
    same message. ~1081 ranges at the 5 Hz liveness throttle is
    nothing, but never do this work unthrottled. */
+
 function onScan(message) {
 
   const ranges = message.ranges || [];
@@ -273,7 +331,9 @@ function onScan(message) {
     finite,
     min: finite ? min : null,
     max: finite ? max : null,
-    fov: Number.isFinite(span) ? span * 180 / Math.PI : null,
+    fov: Number.isFinite(span)
+      ? span * 180 / Math.PI
+      : null,
     at: performance.now()
   };
 
@@ -288,7 +348,9 @@ function onScan(message) {
    SCIP sentinel 65535 mm passed straight through), well above
    range_max (30 m). Anything at or past range_max is that
    sentinel, not a real wall. */
+
 function isValidRange(value, rangeMin, rangeMax) {
+
   return typeof value === "number" &&
     isFinite(value) &&
     value > rangeMin &&
@@ -298,10 +360,21 @@ function isValidRange(value, rangeMin, rangeMax) {
 /* angle 0 = straight ahead (REP-103: x forward, y left, angle
    grows counter-clockwise). Mapped so the canvas reads like a
    chase-cam behind the robot: forward is up, left is left. */
-function polarToCanvas(angle, range, pxPerMeter, originX, originY) {
+
+function polarToCanvas(
+  angle,
+  range,
+  pxPerMeter,
+  originX,
+  originY
+) {
+
   return {
-    x: originX - range * pxPerMeter * Math.sin(angle),
-    y: originY - range * pxPerMeter * Math.cos(angle)
+    x: originX -
+      range * pxPerMeter * Math.sin(angle),
+
+    y: originY -
+      range * pxPerMeter * Math.cos(angle)
   };
 }
 
@@ -322,16 +395,32 @@ function subscribeFixed() {
      change only, so this reads "—" until someone connects or
      disconnects — including, usually, our own arrival, which
      lands before this subscription is registered. */
+
   send({
     op: "subscribe",
     topic: "/client_count",
     throttle_rate: 0,
     queue_length: 1
   });
+
+  /*
+     Robot physical speed.
+
+     We use /odom instead of /sensors/core because /odom gives
+     linear velocity in meters/second while VESC speed is ERPM.
+  */
+
+  send({
+    op: "subscribe",
+    topic: "/odom",
+    throttle_rate: 100,
+    queue_length: 1
+  });
 }
 
 /* Expanding a row makes it resubscribe faster, so the values
    actually move while you are watching them. */
+
 function toggleTopic(name) {
 
   if (expanded.has(name)) {
@@ -339,7 +428,10 @@ function toggleTopic(name) {
     expanded.delete(name);
     latestMsg.delete(name);
 
-    send({ op: "unsubscribe", topic: name });
+    send({
+      op: "unsubscribe",
+      topic: name
+    });
 
     send({
       op: "subscribe",
@@ -352,7 +444,10 @@ function toggleTopic(name) {
 
     expanded.add(name);
 
-    send({ op: "unsubscribe", topic: name });
+    send({
+      op: "unsubscribe",
+      topic: name
+    });
 
     send({
       op: "subscribe",
@@ -370,15 +465,18 @@ function toggleTopic(name) {
 
   row.tr.classList.toggle("open", open);
 
-  row.detail.style.display = open ? "" : "none";
+  row.detail.style.display =
+    open ? "" : "none";
 
   if (open) {
-    row.pre.textContent = "waiting for a message…";
+    row.pre.textContent =
+      "waiting for a message…";
   }
 }
 
 /* Big arrays (LaserScan has 1081 ranges) are summarised, not
    dumped. */
+
 function summarize(value) {
 
   if (Array.isArray(value)) {
@@ -432,4 +530,3 @@ function summarize(value) {
 
   return value;
 }
-

@@ -634,11 +634,11 @@ a.check-btn {
   background:
     conic-gradient(
       from 270deg,
-      #12b82d 0deg 42deg,
-      #82cb00 42deg 70deg,
-      #ffe000 70deg 98deg,
-      #ffa20b 98deg 126deg,
-      #ff382f 126deg 180deg,
+      #ff382f 0deg 54deg,
+      #ffa20b 54deg 82deg,
+      #ffe000 82deg 110deg,
+      #82cb00 110deg 138deg,
+      #12b82d 138deg 180deg,
       #eeeeee 180deg 360deg
     );
 }
