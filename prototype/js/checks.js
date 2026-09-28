@@ -151,7 +151,7 @@ async function runJoyCheck() {
 
   out.classList.add("show");
 
-  out.style.color = "#555";
+  out.style.color = "var(--ink-2)";
 
   out.textContent =
     "running " + JOY_SERVICE + " on the robot… " +
@@ -169,8 +169,8 @@ async function runJoyCheck() {
 
     out.style.color =
       result.success
-        ? "var(--healthy)"
-        : "#a97400";
+        ? "var(--ok-ink)"
+        : "var(--warn-ink)";
 
   } catch (error) {
 
@@ -180,7 +180,7 @@ async function runJoyCheck() {
       /does not exist|unavailable|not available/i
         .test(error.message);
 
-    out.style.color = "var(--failed)";
+    out.style.color = "var(--bad-ink)";
 
     out.textContent =
       missing

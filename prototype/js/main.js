@@ -37,30 +37,35 @@ function render() {
   /* priority band first — it is what the page is for */
 
   renderMetrics();
-  renderHardwareStrip(subsystems);
   renderLidar();
   renderRadar();
   renderSelectionReadout();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
-  renderAlerts(subsystems);
+  renderStatusFacts(subsystems);
+  renderAdvancedBadge();
 
-  renderRecentDiagnostics();
   renderDiagnosticCounts();
 
   renderBattery();
   renderUptime();
   renderNetwork();
-  renderSystemTiles();
+  renderSystemList();
 
   renderCounts();
+  renderGraph();
 
   /* advanced */
 
   renderTopicTable();
   renderNodeTable();
   renderAdvancedDiagnostics();
+  renderAttention();
+
+  /* drive */
+
+  renderDrive();
 }
 
 /* ==========================================================
@@ -72,7 +77,7 @@ $("refreshBtn").onclick = async () => {
   const button = $("refreshBtn");
 
   button.disabled = true;
-  button.textContent = "Refreshing...";
+  $("refreshLabel").textContent = "Refreshing...";
 
   try {
 
@@ -98,22 +103,125 @@ $("refreshBtn").onclick = async () => {
   } finally {
 
     button.disabled = false;
-    button.textContent = "Refresh";
+    $("refreshLabel").textContent = "Refresh";
   }
 };
+
+/* ==========================================================
+   TABS
+
+   The choice lives in the URL hash so a link to #advanced opens
+   straight onto it, and a reload keeps you where you were.
+========================================================== */
+
+const TABS = ["overview", "drive", "advanced"];
+
+function showTab(name) {
+
+  if (!TABS.includes(name)) name = "overview";
+
+  /* the controller must never keep driving from a tab you
+     cannot see */
+  if (name !== "drive" && typeof driveArmed !== "undefined" && driveArmed) {
+    disarmDrive("left the Drive tab");
+  }
+
+  /* the single camera stream follows you: Drive gets the big
+     view, everywhere else it lives on the Overview card */
+  $(name === "drive" ? "driveCamSlot" : "cameraHome")
+    .appendChild($("cameraBox"));
+
+  TABS.forEach(tab => {
+
+    const id = tab[0].toUpperCase() + tab.slice(1);
+
+    $("panel" + id).hidden = tab !== name;
+    $("tab" + id).setAttribute("aria-selected", String(tab === name));
+  });
+
+  history.replaceState(
+    null,
+    "",
+    name === "overview"
+      ? location.pathname + location.search
+      : "#" + name
+  );
+}
+
+document.querySelectorAll("[data-tab]").forEach(button => {
+  button.onclick = () => showTab(button.dataset.tab);
+});
+
+showTab(location.hash.slice(1) || "overview");
+
+/* Count of things the Overview is not showing in detail, so a
+   problem that only the Advanced tab explains is not missed. */
+function renderAdvancedBadge() {
+
+  const problems =
+    Object.values(diag)
+      .filter(item => item.level === 1 || item.level === 2)
+      .length;
+
+  const badge = $("advancedBadge");
+
+  badge.hidden = !problems;
+  badge.textContent = problems;
+  badge.title = problems + " diagnostic warning(s) or error(s)";
+}
+
+/* ==========================================================
+   THEME
+
+   Light / Dark in the top bar. The choice is kept per browser;
+   with none stored the page follows the OS, and the <head>
+   script applies a stored one before first paint.
+========================================================== */
+
+function currentTheme() {
+
+  return document.documentElement.dataset.theme ||
+    (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+
+function renderThemeSwitch() {
+
+  document.querySelectorAll("[data-theme-choice]").forEach(button => {
+    button.setAttribute(
+      "aria-pressed",
+      String(button.dataset.themeChoice === currentTheme())
+    );
+  });
+}
+
+document.querySelectorAll("[data-theme-choice]").forEach(button => {
+
+  button.onclick = () => {
+
+    document.documentElement.dataset.theme = button.dataset.themeChoice;
+
+    try {
+      localStorage.setItem("theme", button.dataset.themeChoice);
+    } catch (error) {}
+
+    renderThemeSwitch();
+  };
+});
+
+renderThemeSwitch();
+
+/* ==========================================================
+   TOPIC FILTER
+========================================================== */
+
+$("topicFilter").addEventListener("input", renderTopicTable);
+$("topicProblems").addEventListener("change", renderTopicTable);
 
 /* ==========================================================
    PANEL CONTROLS
 ========================================================== */
 
 $("joyBtn").onclick = runJoyCheck;
-
-$("sysToggle").onclick = () => {
-
-  sysOpen = !sysOpen;
-
-  renderSystemTiles();
-};
 
 $("lidarAdvancedToggle").onclick = () => {
 
@@ -223,25 +331,17 @@ if (queryVideo) {
 
 connectCamera($("cameraUrl").value.trim());
 
-$("connectBtn").onclick = () => {
+/* A form, so Enter in the address box and the button do the
+   same thing. Lives in the top bar: switching robots is one
+   edit away from any tab. */
+$("connForm").addEventListener("submit", event => {
+
+  event.preventDefault();
 
   connect(
     $("wsUrl").value.trim()
   );
-};
-
-$("wsUrl").addEventListener(
-  "keydown",
-  event => {
-
-    if (event.key === "Enter") {
-
-      connect(
-        $("wsUrl").value.trim()
-      );
-    }
-  }
-);
+});
 
 /* ==========================================================
    START

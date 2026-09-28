@@ -25,14 +25,15 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 | `js/helpers.js` | Small shared helper functions |
 | `js/connection.js` | The rosbridge connection, service calls and subscriptions, plus the scan handler and the radar geometry helpers (`isValidRange`, `polarToCanvas`) |
 | `js/graph-data.js` | Reading the ROS graph, diagnostics, VESC data and the log; topic classification |
-| `js/health.js` | Subsystem health, overall health and alerts |
-| `js/status-panels.js` | Diagnostics list, battery, uptime and footer |
-| `js/advanced-panels.js` | The advanced topic and node tables |
-| `js/system-tiles.js` | The robot system (OS-level) tiles |
-| `js/metrics.js` | Advanced diagnostics, priority metrics, hardware strip, lidar readout and the radar plot |
+| `js/health.js` | Subsystem health, overall health and the status banner |
+| `js/status-panels.js` | Diagnostic counts, battery, uptime, footer and the ROS Graph card |
+| `js/advanced-panels.js` | The Advanced tab: topic and node tables and the "Needs attention" list |
+| `js/system-tiles.js` | The Robot System list (every OS-level probe and its readings) |
+| `js/metrics.js` | Advanced diagnostics, priority metrics with 60 s trend lines, lidar readout and the radar plot |
 | `js/camera.js` | Camera stream and take-picture |
 | `js/checks.js` | Connection health and on-demand checks |
-| `js/main.js` | Render loop, buttons, connection form and startup. Must load last |
+| `js/drive.js` | The Drive tab's virtual controller |
+| `js/main.js` | Render loop, tabs, theme switch, buttons, connection form and startup. Must load last |
 
 ## Looking at it
 
@@ -150,6 +151,21 @@ Press it when `/joy` reads `IDLE` and you expected it not to. It answers with on
 - **CONTRADICTION: the pad is paired and connected, but SDL cannot open it.** This is the permission trap. `joy` reads `/dev/input/event*`, which is `0660 root:input`, and over NoMachine the login ACL goes to `gdm` rather than to you. Fix is `sudo usermod -aG input $USER`, then log out and back in - already-open shells keep their old groups, including one running bringup.
 
 If the button reports that the service does not exist, `system_diagnostics.py` is not running or is an older copy without it.
+
+### The Drive tab (virtual controller)
+
+Drives the car from the browser, no gamepad needed. It publishes `ackermann_msgs/AckermannDriveStamped` on `/drive` - the `ackermann_mux` **navigation** input - at 20 Hz over the same websocket.
+
+- **Nothing is sent until you arm it**: tick "area is clear", press Arm.
+- **Dead-man**: commands go out only while the pad or a drive key (`W A S D` / arrows) is held. Letting go sends five zero-speed commands and then goes silent. Those zeros are what stop the car - `ackermann_mux` passes messages through one at a time and sends no zero of its own when an input goes quiet.
+- **Link loss is the weak spot.** If Wi-Fi drops mid-drive, no zero reaches the car and the motor holds the last command until the VESC's own command timeout (roughly 1 s, not yet measured on our VESCs). Keep the speed limit low and the area clear.
+- **Disarms itself** on STOP / `Space` / `Esc`, leaving the tab, the window losing focus, the page going to the background, or the socket closing or reconnecting.
+- **Limits**: max speed (default 1.0 m/s) and max steering (default 19°) sliders. Speed ramps at 2 m/s² so a key press is not a step change; stopping is never ramped.
+- **The physical joystick wins.** It is the mux's higher-priority input, so holding its deadman overrides the page. The "Driving input" vital shows which input is driving.
+
+The tab is laid out so nothing you need while driving is off-screen: controls on the left, the camera in the middle with commanded / measured speed and steering drawn over it, and **Vitals** on the right - battery, link freshness, nearest LiDAR obstacle (amber under 0.6 m, red under 0.3 m), driving input, speed, temperature and CPU - with the LiDAR plot underneath. The camera is the same single MJPEG stream as the Overview card, moved into the Drive tab while it is open, so opening Drive does not double the Wi-Fi load.
+
+If the car does not move while "DRIVING" shows, check the Mux input readout: `Idle` means the mux is not taking `/drive` - look at `mux.yaml` on the robot for a lock or a different navigation topic.
 
 There are two banners and they mean different things. A **red** one means the page has heard nothing from the robot for four seconds. A frozen page otherwise looks exactly like a healthy one, so check the "last update" age in the top right before trusting what you see.
 
