@@ -40,6 +40,7 @@ function render() {
   renderHardwareStrip(subsystems);
   renderLidar();
   renderRadar();
+  renderSelectionReadout();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
@@ -112,6 +113,57 @@ $("sysToggle").onclick = () => {
   sysOpen = !sysOpen;
 
   renderSystemTiles();
+};
+
+$("lidarAdvancedToggle").onclick = () => {
+
+  lidarAdvanced = !lidarAdvanced;
+
+  renderLidarAdvancedToggle();
+};
+
+// Selecting is only meaningful with the test controls open — gating
+// on lidarAdvanced keeps a stray drag on the basic view from
+// silently painting a highlight nobody asked for.
+$("radarCanvas").addEventListener("mousedown", event => {
+
+  if (!lidarAdvanced) return;
+
+  const idx = indexFromCanvasEvent(event);
+  if (idx === null) return;
+
+  selDragging = true;
+  selDragAnchor = idx;
+  setSelection(idx, idx);
+});
+
+window.addEventListener("mousemove", event => {
+
+  if (!selDragging) return;
+
+  const idx = indexFromCanvasEvent(event);
+  if (idx === null) return;
+
+  setSelection(selDragAnchor, idx);
+});
+
+window.addEventListener("mouseup", () => {
+  selDragging = false;
+});
+
+$("presetAbsBtn").onclick = () => presetCentered(0);
+$("presetLeftBtn").onclick = () => presetCentered(90);   // REP-103: +90 = left
+$("presetRightBtn").onclick = () => presetCentered(-90); // -90 = right
+$("presetClearBtn").onclick = clearSelection;
+
+$("rangeApplyBtn").onclick = () => {
+
+  const start = parseInt($("rangeStart").value, 10);
+  const end = parseInt($("rangeEnd").value, 10);
+
+  if (Number.isFinite(start) && Number.isFinite(end)) {
+    setSelection(start, end);
+  }
 };
 
 $("cameraConnectBtn").onclick =
