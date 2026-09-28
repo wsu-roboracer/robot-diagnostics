@@ -391,13 +391,7 @@ function subsystemData() {
    RENDER SUBSYSTEMS
 ========================================================== */
 
-function renderSubsystems(all) {
-
-  /* Battery has its own card right above; it still feeds the
-     overall verdict (renderOverall gets the full list), but a
-     table row would only repeat it. */
-  const data =
-    all.filter(item => item.id !== "battery");
+function renderSubsystems(data) {
 
   $("subsystemRows").innerHTML =
     data.map(item => {
@@ -440,9 +434,32 @@ function renderSubsystems(all) {
             ${escapeHtml(item.details)}
           </td>
 
+          <td>
+            <button
+              class="inspect-btn"
+              data-inspect="${item.id}">
+              View Details
+            </button>
+          </td>
+
         </tr>
       `;
     }).join("");
+
+  document
+    .querySelectorAll("[data-inspect]")
+    .forEach(button => {
+
+      button.onclick = () => {
+
+        $("advancedDetails").open = true;
+
+        $("advancedSection")
+          .scrollIntoView({
+            behavior: "smooth"
+          });
+      };
+    });
 }
 
 /* ==========================================================
@@ -464,8 +481,6 @@ function renderOverall(data) {
     }
   }
 
-  $("statusBanner").dataset.health = worst;
-
   const status =
     $("overallStatus");
 
@@ -482,7 +497,7 @@ function renderOverall(data) {
     worst === "healthy"
       ? "var(--healthy)"
       : worst === "degraded"
-      ? "var(--warn-ink)"
+      ? "#d9a800"
       : worst === "failed"
       ? "var(--failed)"
       : "var(--unknown)";
@@ -523,19 +538,12 @@ function renderOverall(data) {
         item.health === "unknown"
     ).length;
 
-  /* name what is wrong, not just how many */
-  const names = health =>
-    data
-      .filter(item => item.health === health)
-      .map(item => item.name)
-      .join(", ");
-
   if (failed) {
 
     note.textContent =
       `${failed} critical subsystem` +
       (failed === 1 ? "" : "s") +
-      " — " + names("failed");
+      " require attention";
   }
 
   else if (degraded) {
@@ -543,7 +551,7 @@ function renderOverall(data) {
     note.textContent =
       `${degraded} subsystem` +
       (degraded === 1 ? "" : "s") +
-      " degraded — " + names("degraded");
+      " degraded";
   }
 
   else if (unknown) {
@@ -562,31 +570,65 @@ function renderOverall(data) {
 }
 
 /* ==========================================================
-   STATUS BANNER FACTS
+   ALERTS
 ========================================================== */
 
-function renderStatusFacts(data) {
+function renderAlerts(data) {
 
-  const healthy =
-    data.filter(item => item.health === "healthy").length;
+  const alerts =
+    data
+      .filter(
+        item =>
+          item.health !== "healthy"
+      )
+      .sort(
+        (a, b) =>
+          healthRank(b.health) -
+          healthRank(a.health)
+      );
 
-  $("factSubsystems").textContent =
-    `${healthy} / ${data.length} healthy`;
+  const list =
+    $("alertList");
 
-  $("factControl").textContent =
-    mux === "teleop"
-      ? "Joystick"
-      : mux === "autonomous"
-      ? "Navigation / web"
-      : mux === "idle"
-      ? "Idle"
-      : "—";
+  if (!alerts.length) {
 
-  const up =
-    EXPECTED_NODES.filter(name => runningNodes.has(name)).length;
+    list.innerHTML = `
+      <div class="no-alerts">
+        ✓ No critical alerts. All monitored subsystems are healthy.
+      </div>
+    `;
 
-  $("factNodes").textContent =
-    ws && ws.readyState === WebSocket.OPEN
-      ? `${up} / ${EXPECTED_NODES.length} up`
-      : "—";
+    return;
+  }
+
+  list.innerHTML =
+    alerts.map(item => {
+
+      return `
+        <div class="alert ${item.health}">
+
+          <div class="alert-icon">
+            ${item.health === "unknown" ? "?" : "!"}
+          </div>
+
+          <div>
+
+            <div class="alert-name">
+              ${escapeHtml(item.name)}
+            </div>
+
+            <div class="alert-message">
+              ${escapeHtml(item.details)}
+            </div>
+
+          </div>
+
+          <div class="alert-time">
+            ${formatTime()}
+          </div>
+
+        </div>
+      `;
+    }).join("");
 }
+

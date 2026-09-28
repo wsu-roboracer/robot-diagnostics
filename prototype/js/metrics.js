@@ -1,12 +1,19 @@
 "use strict";
 
-/* Advanced diagnostics, priority metrics and lidar readout. */
+/* Advanced diagnostics, priority metrics, hardware strip and lidar readout. */
 
 /* ==========================================================
    ADVANCED DIAGNOSTICS
 ========================================================== */
 
 function renderAdvancedDiagnostics() {
+
+  const system =
+    Object.entries(diag)
+      .filter(
+        ([name]) =>
+          name.startsWith("system: ")
+      );
 
   const ros =
     Object.entries(diag)
@@ -18,14 +25,14 @@ function renderAdvancedDiagnostics() {
   const rows = entries =>
     entries.map(([name, item]) => {
 
-      const cls =
+      const color =
         item.level === 0
-          ? "lvl-ok"
+          ? "var(--healthy)"
           : item.level === 1
-          ? "lvl-warn"
+          ? "#c59600"
           : item.level === 2
-          ? "lvl-bad"
-          : "lvl-unk";
+          ? "var(--failed)"
+          : "var(--unknown)";
 
       return `
         <tr>
@@ -33,7 +40,7 @@ function renderAdvancedDiagnostics() {
             ${escapeHtml(name)}
           </td>
 
-          <td class="${cls}">
+          <td style="font-weight:700;color:${color}">
             ${diagnosticLabel(item.level)}
           </td>
 
@@ -43,6 +50,9 @@ function renderAdvancedDiagnostics() {
         </tr>
       `;
     }).join("");
+
+  $("systemRows").innerHTML =
+    rows(system);
 
   $("rosDiagRows").innerHTML =
     rows(ros);
@@ -578,7 +588,9 @@ function metricTiles() {
 
       label: "GPU",
 
-      sub: "",
+      sub:
+        values["freq"] ||
+        "",
 
       value:
         Number.isFinite(
@@ -597,13 +609,9 @@ function metricTiles() {
           : null,
 
       note:
-        !gpu
-          ? "no data — restart system_diagnostics.py on the robot"
-          : Number.isFinite(usage)
-          ? [values["freq"], values["source"] === "tegrastats"
-              ? "via tegrastats" : "via sysfs"]
-              .filter(Boolean).join(" · ")
-          : gpu.message,
+        gpu
+          ? gpu.message
+          : "not reported — needs GR3D_FREQ from tegrastats",
 
       grade:
         gpu
@@ -791,94 +799,14 @@ function metricTiles() {
 }
 
 /* ==========================================================
-   RENDER METRICS — each tile also carries a 60 s trend line
+   RENDER METRICS
 ========================================================== */
 
-const SPARK_POINTS = 60;
-const SPARK_EVERY_MS = 1000;
-
-const metricHistory = {};
-const metricSampledAt = {};
-
-function sampleMetric(id, pct, now) {
-
-  if (now - (metricSampledAt[id] || 0) < SPARK_EVERY_MS) return;
-
-  metricSampledAt[id] = now;
-
-  const series =
-    metricHistory[id] || (metricHistory[id] = []);
-
-  series.push(Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : null);
-
-  if (series.length > SPARK_POINTS) series.shift();
-}
-
-/* Fixed 0–100 domain on every tile, so a flat line near the top
-   means the same thing on CPU as on RAM. Gaps (no data) break
-   the line instead of being drawn as zero. */
-function sparkline(id) {
-
-  const series = metricHistory[id] || [];
-
-  if (series.filter(v => v !== null).length < 2) {
-    return '<svg class="spark empty" viewBox="0 0 100 30"></svg>';
-  }
-
-  const x = i => (i / (SPARK_POINTS - 1)) * 100;
-  const offset = SPARK_POINTS - series.length;
-  const y = v => 28 - (v / 100) * 26;
-
-  let line = "";
-  let area = "";
-  let runStart = null;
-  let prevX = 0;
-
-  series.forEach((v, i) => {
-
-    const px = x(i + offset).toFixed(2);
-
-    if (v === null) {
-
-      if (runStart !== null) area += `L${prevX},30 L${runStart},30 Z `;
-      runStart = null;
-      return;
-    }
-
-    const py = y(v).toFixed(2);
-
-    if (runStart === null) {
-      line += `M${px},${py} `;
-      area += `M${px},30 L${px},${py} `;
-      runStart = px;
-    } else {
-      line += `L${px},${py} `;
-      area += `L${px},${py} `;
-    }
-
-    prevX = px;
-  });
-
-  if (runStart !== null) area += `L${prevX},30 L${runStart},30 Z`;
-
-  return `
-    <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none">
-      <title>last ${SPARK_POINTS} s</title>
-      <path class="area" d="${area}"/>
-      <path class="line" d="${line}"/>
-    </svg>
-  `;
-}
-
 function renderMetrics() {
-
-  const now = performance.now();
 
   $("metricTiles").innerHTML =
     metricTiles()
       .map(tile => {
-
-        sampleMetric(tile.id, tile.pct, now);
 
         const value =
           String(
@@ -916,8 +844,6 @@ function renderMetrics() {
 
             </div>
 
-            ${sparkline(tile.id)}
-
             <div class="bar">
 
               <i style="width:${
@@ -941,6 +867,81 @@ function renderMetrics() {
               ${escapeHtml(
                 tile.note || ""
               )}
+            </div>
+
+          </div>
+        `;
+      })
+      .join("");
+}
+
+/* ==========================================================
+   HARDWARE STRIP
+========================================================== */
+
+const STRIP_ORDER = [
+  "controller",
+  "camera",
+  "lidar",
+  "vesc",
+  "control"
+];
+
+function renderHardwareStrip(
+  data
+) {
+
+  const byId = {};
+
+  data.forEach(item => {
+    byId[item.id] = item;
+  });
+
+  $("hwStrip").innerHTML =
+    STRIP_ORDER
+      .filter(
+        id => byId[id]
+      )
+      .map(id => {
+
+        const item =
+          byId[id];
+
+        return `
+          <div class="hw ${
+            item.health
+          }">
+
+            <div class="hw-icon">
+              ${item.icon}
+            </div>
+
+            <div>
+
+              <div class="hw-name">
+                ${escapeHtml(
+                  item.name
+                )}
+              </div>
+
+              <div class="hw-state health ${
+                item.health
+              }">
+
+                <span class="health-dot"></span>
+
+                ${healthLabel(
+                  item.health
+                )}
+
+              </div>
+
+              <div class="hw-detail">
+                ${escapeHtml(
+                  item.details
+                )}
+              </div>
+
             </div>
 
           </div>
@@ -981,10 +982,10 @@ function renderLidar() {
 
   $("lidarTag").style.color =
     !scanStats
-      ? "var(--muted)"
+      ? "#777"
       : live
-      ? "var(--ok-ink)"
-      : "var(--bad-ink)";
+      ? "var(--healthy)"
+      : "var(--failed)";
 
   if (!scanStats) {
 
@@ -1069,7 +1070,7 @@ function drawScanCanvas(canvas, scaleState, selLo, selHi) {
     canvas.height;
 
   ctx.fillStyle =
-    "#0b0d10";
+    "#111";
 
   ctx.fillRect(
     0,

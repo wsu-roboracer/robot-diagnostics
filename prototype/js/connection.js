@@ -46,18 +46,15 @@ function call(service, args = {}) {
 
 function setConnectionState(text, connected) {
 
-  $("connLabel").textContent =
+  $("connectionFooter").textContent =
     text.toUpperCase();
 
-  $("connDot").className =
+  $("footerConnected").textContent =
+    text.toUpperCase();
+
+  $("footerDot").className =
     "connection-dot " +
     (connected ? "connected" : "disconnected");
-}
-
-function setConnectionHint(text) {
-
-  $("connHint").textContent = text;
-  $("connHint").hidden = !text;
 }
 
 function connect(url) {
@@ -109,7 +106,7 @@ function connect(url) {
 
     setConnectionState("connected", true);
 
-    setConnectionHint("");
+    $("connHint").textContent = "";
 
     subscribeFixed();
 
@@ -125,9 +122,9 @@ function connect(url) {
 
     setConnectionState("connection failed", false);
 
-    setConnectionHint(
-      "Cannot reach rosbridge at " + url + ". On the robot: " +
-      "ros2 launch rosbridge_server rosbridge_websocket_launch.xml");
+    $("connHint").textContent =
+      "Cannot reach rosbridge. On the robot: " +
+      "ros2 launch rosbridge_server rosbridge_websocket_launch.xml";
   };
 
   ws.onmessage = event => {

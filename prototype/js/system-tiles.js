@@ -1,33 +1,135 @@
 "use strict";
 
-/* Robot system (OS-level) list. */
+/* Robot system (OS-level) tiles. */
 
 /* ==========================================================
-   ROBOT SYSTEM LIST
+   ROBOT SYSTEM TILES
 
    These values come from system_diagnostics.py, which reads the
    OS-level things ROS does not publish (temperatures, disk,
    network, USB devices) and republishes them as a standard
    DiagnosticArray. No extra transport, no second port, and
    rqt_robot_monitor sees exactly the same data.
-
-   Overview already shows the headline numbers (CPU, RAM, GPU,
-   temperature), so this is the detail behind them: one row per
-   probe, its verdict, and every key/value it reported.
 ========================================================== */
 
-const SYS_LEVEL_DOT = {
-  0: "ok",
-  1: "warn",
-  2: "bad"
+const SYS_LEVEL_COLOR = {
+  0: "var(--healthy)",
+  1: "#c59600",
+  2: "var(--failed)",
+  3: "var(--unknown)"
 };
 
-const SYS_LEVEL_CLASS = {
-  0: "lvl-ok",
-  1: "lvl-warn",
-  2: "lvl-bad",
-  3: "lvl-unk"
-};
+/* The headline sits in a fixed slot, so it has to be a VALUE,
+   never a sentence. Everything explanatory belongs in
+   systemNote() underneath. Level 3 reads `unknown` — the probe
+   has not run yet, which is not the same as OK. */
+function systemHeadline(short, item) {
+
+  const values = item.values || {};
+
+  if (item.level === 3) return "unknown";
+
+  /* the tick() error handler's shape */
+  if (values["probe"]) return "probe failed";
+
+  switch (short) {
+
+    case "Thermal":
+      return values["tj-thermal"] || "?";
+
+    case "CPU":
+      return values["load 1m"] !== undefined
+        ? values["load 1m"]
+        : "?";
+
+    case "Memory":
+      return values["available %"] !== undefined
+        ? values["available %"] + "%"
+        : "?";
+
+    case "Storage":
+      return values["used %"] !== undefined
+        ? values["used %"] + "%"
+        : "?";
+
+    case "Power":
+      return values["uptime"] || "?";
+
+    case "Camera":
+      return values["link speed"] || "absent";
+
+    case "Network":
+      return (
+        Object.keys(values).filter(
+          key => /carrier=1/.test(values[key])
+        ).length + " up"
+      );
+
+    case "Gamepad":
+      return values["bluetooth"] === "connected"
+        ? "connected"
+        : "none";
+
+    case "VESC device":
+      return item.level === 0 ? "present" : "MISSING";
+
+    case "Clock":
+      return values["NTPSynchronized"] === "yes"
+        ? "synced"
+        : "NOT SYNCED";
+
+    default:
+      return item.level === 0 ? "ok" : "check";
+  }
+}
+
+function systemNote(short, item) {
+
+  const values = item.values || {};
+
+  /* problems explain themselves */
+  if (item.level !== 0 || values["probe"]) {
+    return item.message || "";
+  }
+
+  switch (short) {
+
+    case "Thermal":
+      return (
+        "junction, " +
+        Object.keys(values).filter(
+          key => key.endsWith("thermal")
+        ).length +
+        " zones"
+      );
+
+    case "CPU":
+      return values["cores"]
+        ? values["cores"] + " cores"
+        : item.message;
+
+    case "Memory":
+      return values["available"]
+        ? values["available"] + " free"
+        : item.message;
+
+    case "Storage":
+      return values["free"]
+        ? values["free"] + " free"
+        : item.message;
+
+    case "Camera":
+      return values["product"] || item.message;
+
+    case "Gamepad":
+      return values["battery %"]
+        ? "battery " + values["battery %"]
+        : item.message;
+
+    default:
+      return item.message || "";
+  }
+}
 
 function systemShortNames() {
 
@@ -41,11 +143,6 @@ function systemShortNames() {
       byShort[name.slice(SYS_PREFIX.length)] = diag[name];
     });
 
-  /* problems first (error, warn), then the usual order; STALE
-     (3) is "not probed yet" and sorts with the healthy ones */
-  const severity = short =>
-    byShort[short].level === 2 ? 2 : byShort[short].level === 1 ? 1 : 0;
-
   const shorts =
     SYS_ORDER.filter(short => byShort[short])
       .concat(
@@ -54,25 +151,29 @@ function systemShortNames() {
             short => SYS_ORDER.indexOf(short) < 0
           )
           .sort()
-      )
-      .sort((a, b) => severity(b) - severity(a));
+      );
 
   return { byShort, shorts };
 }
 
-function renderSystemList() {
+function renderSystemTiles() {
 
   const { byShort, shorts } = systemShortNames();
 
   $("sysHint").style.display =
     shorts.length ? "none" : "block";
 
+  $("sysToggle").style.display =
+    shorts.length ? "" : "none";
+
   if (!shorts.length) {
 
-    $("sysList").innerHTML = "";
+    $("sysTiles").innerHTML = "";
 
     $("sysSummary").textContent = "not reporting";
     $("sysSummary").style.color = "#777";
+
+    $("sysReadings").style.display = "none";
 
     return;
   }
@@ -82,39 +183,34 @@ function renderSystemList() {
      worst level. */
   let worst = 0;
 
-  $("sysList").innerHTML =
+  $("sysTiles").innerHTML =
     shorts.map(short => {
 
       const item = byShort[short];
-      const values = item.values || {};
 
       if (item.level > worst && item.level !== 3) {
         worst = item.level;
       }
 
+      const head =
+        String(systemHeadline(short, item));
+
       return `
-        <li class="sys-row">
+        <div class="sys-tile">
 
-          <span class="dot ${SYS_LEVEL_DOT[item.level] || ""}"></span>
+          <span class="k">${escapeHtml(short)}</span>
 
-          <span class="sys-name">${escapeHtml(short)}</span>
+          <span class="v${
+            head.length > HEAD_MAX_CHARS ? " small" : ""
+          }" style="color:${
+            SYS_LEVEL_COLOR[item.level] || "var(--unknown)"
+          }">${escapeHtml(head)}</span>
 
-          <span class="sys-msg">
-            <span class="${SYS_LEVEL_CLASS[item.level] || "lvl-unk"}">${
-              diagnosticLabel(item.level)
-            }</span>
-            · ${escapeHtml(item.message || "")}
-          </span>
+          <span class="n">${escapeHtml(
+            String(systemNote(short, item))
+          )}</span>
 
-          <div class="sys-values">${
-            Object.keys(values).map(key =>
-              `<span><b>${escapeHtml(key)}</b> ${
-                escapeHtml(String(values[key]))
-              }</span>`
-            ).join("")
-          }</div>
-
-        </li>
+        </div>
       `;
     }).join("");
 
@@ -127,8 +223,42 @@ function renderSystemList() {
 
   $("sysSummary").style.color =
     worst === 2
-      ? "var(--bad-ink)"
+      ? "var(--failed)"
       : worst === 1
-      ? "var(--warn-ink)"
+      ? "#c59600"
       : "#777";
+
+  /* Every raw key/value the probes reported. Folded away by
+     default — it is long, and it is only read when a tile has
+     already said something is wrong. */
+  $("sysReadings").style.display =
+    sysOpen ? "" : "none";
+
+  $("sysToggle").textContent =
+    sysOpen ? "hide all readings" : "show all readings";
+
+  if (!sysOpen) return;
+
+  $("sysReadings").innerHTML = `
+    <table class="raw-table">
+      <tbody>
+        ${shorts.map(short => {
+
+          const values = byShort[short].values || {};
+
+          return (
+            `<tr><td colspan="2" style="color:#777;` +
+            `font-weight:700">${escapeHtml(short)}</td></tr>` +
+            Object.keys(values).map(key =>
+              `<tr><td class="mono">${escapeHtml(key)}</td>` +
+              `<td class="mono" style="text-align:right">${
+                escapeHtml(String(values[key]))
+              }</td></tr>`
+            ).join("")
+          );
+        }).join("")}
+      </tbody>
+    </table>
+  `;
 }
+

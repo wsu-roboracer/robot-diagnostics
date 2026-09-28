@@ -1,6 +1,81 @@
 "use strict";
 
-/* Diagnostic counts, battery, uptime, footer and the ROS graph panel. */
+/* Diagnostics list, battery, uptime and footer panels. */
+
+/* ==========================================================
+   RECENT DIAGNOSTICS
+========================================================== */
+
+function renderRecentDiagnostics() {
+
+  const entries =
+    Object.entries(diag)
+      .sort(
+        (a, b) =>
+          (b[1].receivedAt || 0) -
+          (a[1].receivedAt || 0)
+      )
+      .slice(0, 5);
+
+  if (!entries.length) {
+
+    $("recentDiagnostics").innerHTML = `
+      <div style="color:#666;padding:10px">
+        No diagnostics received yet.
+      </div>
+    `;
+
+    return;
+  }
+
+  $("recentDiagnostics").innerHTML =
+    entries.map(([name, item]) => {
+
+      const color =
+        item.level === 0
+          ? "var(--healthy)"
+          : item.level === 1
+          ? "var(--degraded)"
+          : item.level === 2
+          ? "var(--failed)"
+          : "var(--unknown)";
+
+      return `
+        <div class="recent-item">
+
+          <span
+            class="recent-dot"
+            style="background:${color}">
+          </span>
+
+          <div>
+
+            <div class="recent-name">
+              ${escapeHtml(name)}
+            </div>
+
+            <div class="recent-message">
+              ${escapeHtml(
+                item.message || diagnosticLabel(item.level)
+              )}
+            </div>
+
+          </div>
+
+          <div class="recent-time">
+            ${
+              item.receivedAt
+                ? new Date(
+                    item.receivedAt
+                  ).toLocaleTimeString()
+                : ""
+            }
+          </div>
+
+        </div>
+      `;
+    }).join("");
+}
 
 /* ==========================================================
    DIAGNOSTIC COUNTS
@@ -79,7 +154,7 @@ function renderBattery() {
   ) {
 
     $("batteryVoltage").style.color =
-      "var(--warn-ink)";
+      "#e59600";
 
     $("batteryNote").textContent =
       "Low battery — swap soon";
@@ -179,93 +254,3 @@ function renderNetwork() {
     network.message || "connected";
 }
 
-/* ==========================================================
-   ROS GRAPH PANEL
-
-   The useful version of "how many nodes": WHICH expected nodes
-   are missing, and whether the handful of topics the car cannot
-   drive without are actually flowing.
-========================================================== */
-
-const KEY_TOPICS = [
-  "/scan",
-  "/odom",
-  "/sensors/core",
-  "/diagnostics",
-  "/tf",
-  "/joy",
-  "/ackermann_cmd"
-];
-
-function topicTone(state) {
-
-  if (state === "OK" || state === "DRIVEN") return "ok";
-
-  if (
-    state === "MISSING" ||
-    state === "NODE_DOWN" ||
-    state === "SILENT"
-  ) return "bad";
-
-  if (BAD_TOPIC_STATES.has(state)) return "warn";
-
-  return "";
-}
-
-function renderGraph() {
-
-  const connected =
-    Boolean(ws && ws.readyState === WebSocket.OPEN);
-
-  const up =
-    EXPECTED_NODES.filter(name => runningNodes.has(name)).length;
-
-  $("graphSummary").textContent =
-    !connected
-      ? "not connected"
-      : `${up} / ${EXPECTED_NODES.length} expected nodes up`;
-
-  $("graphNodes").innerHTML =
-    EXPECTED_NODES.map(name => {
-
-      const running = runningNodes.has(name);
-
-      return `
-        <li class="${running ? "" : "down"}"
-            title="${escapeHtml(name)} — ${running ? "running" : "not running"}">
-          <span class="dot ${running ? "ok" : "bad"}"></span>
-          <span class="name">${escapeHtml(name.replace(/^\//, ""))}</span>
-        </li>
-      `;
-    }).join("");
-
-  const now = performance.now();
-
-  $("graphTopics").innerHTML =
-    KEY_TOPICS.map(name => {
-
-      const topic = topics.get(name);
-
-      const state =
-        topic ? classifyTopic(topic) : "UNKNOWN";
-
-      const age =
-        topic && topic.last !== null
-          ? ((now - topic.last) / 1000).toFixed(1) + "s ago"
-          : "";
-
-      const reason =
-        topic ? topicReason(topic, state) : "waiting for rosapi";
-
-      return `
-        <li title="${escapeHtml(reason)}">
-          <span class="dot ${topicTone(state)}"></span>
-          <span class="name">${escapeHtml(name)}</span>
-          <span class="why">
-            <span class="state-pill s-${state}">${state}</span>
-            ${age ? " · " + age : ""}
-          </span>
-        </li>
-      `;
-    }).join("");
-}

@@ -22,14 +22,14 @@ function connectCamera(url) {
 
   if (!url) {
 
-    setCameraStatus("NO STREAM", "var(--bad-ink)");
+    setCameraStatus("NO STREAM", "var(--failed)");
     $("camMessage").textContent = "Enter a camera URL first.";
     $("camMessage").hidden = false;
     image.hidden = true;
     return;
   }
 
-  setCameraStatus("CONNECTING", "var(--muted)");
+  setCameraStatus("CONNECTING", "#777");
 
   /* Without this, the browser loads the stream in "no-cors" mode
      and treats it as opaque no matter what headers the server
@@ -54,7 +54,7 @@ function connectCamera(url) {
     image.hidden = true;
     $("camMessage").textContent = "No stream at " + url;
     $("camMessage").hidden = false;
-    setCameraStatus("NO STREAM", "var(--bad-ink)");
+    setCameraStatus("NO STREAM", "var(--failed)");
   };
 
   /* On a reconnect the browser may hand back its cached copy of

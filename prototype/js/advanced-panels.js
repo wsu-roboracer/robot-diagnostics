@@ -110,12 +110,6 @@ function renderTopicTable() {
 
   let bad = 0;
 
-  const query =
-    $("topicFilter").value.trim().toLowerCase();
-
-  const problemsOnly =
-    $("topicProblems").checked;
-
   for (const name of names) {
 
     const topic = topics.get(name);
@@ -125,15 +119,6 @@ function renderTopicTable() {
     if (BAD_TOPIC_STATES.has(state)) bad++;
 
     if (!row) continue;
-
-    const shown =
-      (!query || name.toLowerCase().includes(query)) &&
-      (!problemsOnly || BAD_TOPIC_STATES.has(state));
-
-    row.tr.hidden = !shown;
-    row.detail.hidden = !shown;
-
-    if (!shown) continue;
 
     setText(row.state, state);
 
@@ -205,7 +190,11 @@ function renderNodeTable() {
             ${escapeHtml(name)}
           </td>
 
-          <td class="${running ? "lvl-ok" : "lvl-bad"}">
+          <td style="color:${
+            running
+              ? "var(--healthy)"
+              : "var(--failed)"
+          };font-weight:700">
 
             ${
               running
@@ -251,83 +240,3 @@ function renderNodeTable() {
       : "";
 }
 
-/* ==========================================================
-   NEEDS ATTENTION
-
-   The first thing on the Advanced tab: every warning or error
-   the tables below contain, in one list, worst first, each with
-   a link to the section that explains it.
-========================================================== */
-
-function renderAttention() {
-
-  const items = [];
-
-  const connected =
-    Boolean(ws && ws.readyState === WebSocket.OPEN);
-
-  if (!connected) {
-
-    items.push({
-      rank: 3,
-      what: "Not connected",
-      why: "No rosbridge connection — check the address in the top bar.",
-      link: null
-    });
-  }
-
-  Object.entries(diag).forEach(([name, item]) => {
-
-    if (item.level !== 1 && item.level !== 2) return;
-
-    const system = name.startsWith(SYS_PREFIX);
-
-    items.push({
-      rank: item.level,
-      what: system ? name.slice(SYS_PREFIX.length) : name,
-      why: item.message || diagnosticLabel(item.level),
-      link: system ? "#secSystem" : "#secRosDiag"
-    });
-  });
-
-  /* only once the graph has been read, or everything is "missing" */
-  if (connected && runningNodes.size) {
-
-    EXPECTED_NODES
-      .filter(name => !runningNodes.has(name))
-      .forEach(name => items.push({
-        rank: 2,
-        what: name,
-        why: "Expected node is not running.",
-        link: "#secNodes"
-      }));
-
-    for (const topic of topics.values()) {
-
-      const state = classifyTopic(topic);
-
-      if (!BAD_TOPIC_STATES.has(state)) continue;
-
-      items.push({
-        rank: state === "STALE" || state === "SLOW" ? 1 : 2,
-        what: topic.name,
-        why: state + " — " + topicReason(topic, state),
-        link: "#secTopics"
-      });
-    }
-  }
-
-  items.sort((a, b) => b.rank - a.rank);
-
-  $("attentionList").innerHTML =
-    items.length
-      ? items.map(item => `
-          <li>
-            <span class="dot ${item.rank >= 2 ? "bad" : "warn"}"></span>
-            <span class="what">${escapeHtml(item.what)}</span>
-            <span class="why">${escapeHtml(item.why)}</span>
-            ${item.link ? `<a href="${item.link}">details ↓</a>` : ""}
-          </li>
-        `).join("")
-      : '<li class="all-clear">✓ Nothing needs attention.</li>';
-}

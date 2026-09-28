@@ -50,7 +50,6 @@ const SYS_ORDER = [
   "Thermal",
   "Power",
   "CPU",
-  "GPU",
   "Memory",
   "Storage",
   "Network",
@@ -59,6 +58,10 @@ const SYS_ORDER = [
   "Gamepad",
   "Clock"
 ];
+
+/* Longest headline the tile's large slot fits before it has to
+   step down a size — see .sys-tile .v.small. */
+const HEAD_MAX_CHARS = 8;
 
 const JOY_SERVICE = "/system_diagnostics/joystick_check";
 
@@ -263,6 +266,7 @@ let clients = null;
 let totalGraphTopics = 0;
 
 let logStarted = false;
+let sysOpen = false;
 
 const expanded = new Set();     // topics whose row is open
 const latestMsg = new Map();    // topic -> newest msg, only while open
