@@ -68,18 +68,37 @@ function render() {
 
 $("refreshBtn").onclick = async () => {
 
-  $("refreshBtn").disabled = true;
+  const button = $("refreshBtn");
+
+  button.disabled = true;
+  button.textContent = "Refreshing...";
 
   try {
-    await scan();
+
+    /* Reconnect to rosbridge */
+    connect($("wsUrl").value.trim());
+
+    /* Give the WebSocket a moment to reconnect */
+    await new Promise(resolve => {
+      setTimeout(resolve, 1000);
+    });
+
+    /* Rediscover topics and nodes */
+    if (
+      ws &&
+      ws.readyState === WebSocket.OPEN
+    ) {
+      await scan();
+    }
+
+    /* Immediately update the dashboard */
+    render();
+
   } finally {
 
-    setTimeout(() => {
-      $("refreshBtn").disabled = false;
-    }, 300);
+    button.disabled = false;
+    button.textContent = "Refresh";
   }
-
-  render();
 };
 
 /* ==========================================================
