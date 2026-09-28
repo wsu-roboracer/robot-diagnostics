@@ -174,6 +174,70 @@
       <div class="card-hint" id="lidarHint">
         Live from <span class="mono">/scan</span>.
       </div>
+
+      <div class="card-hint">
+        <button class="link-btn" id="lidarAdvancedToggle">show test controls</button>
+      </div>
+
+      <div id="lidarAdvanced" hidden>
+
+        <div class="preset-row">
+          <button class="check-btn" id="presetAbsBtn">ABS (front)</button>
+          <button class="check-btn" id="presetLeftBtn">Left wall</button>
+          <button class="check-btn" id="presetRightBtn">Right wall</button>
+          <button class="check-btn" id="presetClearBtn">Clear</button>
+        </div>
+
+        <div class="preset-row">
+          <label>start idx
+            <input id="rangeStart" type="number" min="0" step="1">
+          </label>
+          <label>end idx
+            <input id="rangeEnd" type="number" min="0" step="1">
+          </label>
+          <button class="check-btn" id="rangeApplyBtn">Apply</button>
+        </div>
+
+        <div class="card-hint">
+          Drag across the plot above to select a wedge of beams, or
+          type the start/end index directly and hit Apply — so you
+          know which <span class="mono">ranges[]</span> indices your
+          own test code should read.
+        </div>
+
+        <div class="readout-grid">
+          <div>
+            <span class="k">Index range</span>
+            <span class="v" id="selIdxRange">—</span>
+          </div>
+
+          <div>
+            <span class="k">Angle range</span>
+            <span class="v" id="selAngleRange">—</span>
+          </div>
+
+          <div>
+            <span class="k">Selected points</span>
+            <span class="v" id="selCount">—</span>
+          </div>
+
+          <div>
+            <span class="k">Selected nearest</span>
+            <span class="v" id="selMin">—</span>
+          </div>
+
+          <div>
+            <span class="k">Selected farthest</span>
+            <span class="v" id="selMax">—</span>
+          </div>
+
+          <div>
+            <span class="k">Selected average</span>
+            <span class="v" id="selAvg">—</span>
+          </div>
+        </div>
+
+      </div>
     </div>
 
     <div class="live-card">
@@ -480,6 +544,7 @@ last change shows — until the next one.">
 <script src="js/metrics.js"></script>
 <script src="js/camera.js"></script>
 <script src="js/checks.js"></script>
+<script src="js/lidar-select.js"></script>
 <script src="js/main.js"></script>
 
 </body>

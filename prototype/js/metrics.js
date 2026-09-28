@@ -1042,16 +1042,21 @@ function renderLidar() {
     `last scan ${age.toFixed(1)}s ago`;
 }
 
+
 /* ==========================================================
-   RADAR PLOT
+   RADAR PLOT — drawScanCanvas() also draws the selected-wedge
+   highlight from the index selector (lidar-select.js) when
+   selLo/selHi are set, so the "show test controls" toggle on
+   the LiDAR card doesn't need a second canvas.
 ========================================================== */
 
-let radarScale = 6;
+const radarScaleState = { value: 6 };
 
 function renderRadar() {
+  drawScanCanvas($("radarCanvas"), radarScaleState, selLo, selHi);
+}
 
-  const canvas =
-    $("radarCanvas");
+function drawScanCanvas(canvas, scaleState, selLo, selHi) {
 
   const ctx =
     canvas.getContext(
@@ -1168,11 +1173,14 @@ function renderRadar() {
       )
     );
 
-  radarScale +=
+  scaleState.value +=
     (
       target -
-      radarScale
+      scaleState.value
     ) * 0.2;
+
+  const scale =
+    scaleState.value;
 
   const originX =
     w / 2;
@@ -1191,7 +1199,7 @@ function renderRadar() {
       ) / 2 -
       margin
     ) /
-    radarScale;
+    scale;
 
   /* RANGE RINGS */
 
@@ -1218,7 +1226,7 @@ function renderRadar() {
   ) {
 
     const ringRange =
-      radarScale *
+      scale *
       ring /
       ringCount;
 
@@ -1295,7 +1303,7 @@ function renderRadar() {
   const edgeMinPt =
     polarToCanvas(
       angleMin,
-      radarScale,
+      scale,
       pxPerMeter,
       originX,
       originY
@@ -1304,7 +1312,7 @@ function renderRadar() {
   const edgeMaxPt =
     polarToCanvas(
       angleMax,
-      radarScale,
+      scale,
       pxPerMeter,
       originX,
       originY
@@ -1331,6 +1339,59 @@ function renderRadar() {
   );
 
   ctx.stroke();
+
+  /* SELECTED WEDGE — filled behind the return line, from the
+     index selector on the LiDAR card, so the beams drawn over
+     it are still legible */
+
+  const hasSelection =
+    selLo !== null &&
+    selHi !== null &&
+    selLo <= selHi &&
+    selLo < ranges.length;
+
+  if (hasSelection) {
+
+    ctx.fillStyle =
+      "rgba(255,196,0,0.18)";
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+      originX,
+      originY
+    );
+
+    for (
+      let i = selLo;
+      i <= selHi && i < ranges.length;
+      i++
+    ) {
+
+      const a =
+        angleMin +
+        i *
+        angleInc;
+
+      const p =
+        polarToCanvas(
+          a,
+          scale,
+          pxPerMeter,
+          originX,
+          originY
+        );
+
+      ctx.lineTo(
+        p.x,
+        p.y
+      );
+    }
+
+    ctx.closePath();
+
+    ctx.fill();
+  }
 
   /* LIDAR RETURNS */
 
@@ -1402,6 +1463,78 @@ function renderRadar() {
   }
 
   ctx.stroke();
+
+  /* SELECTED BEAMS — the same wedge again, on top, so the
+     highlight color doesn't have to guess where the wall is */
+
+  if (hasSelection) {
+
+    ctx.strokeStyle =
+      "#ffc400";
+
+    ctx.lineWidth =
+      2.5;
+
+    ctx.beginPath();
+
+    drawing = false;
+
+    for (
+      let i = selLo;
+      i <= selHi && i < ranges.length;
+      i++
+    ) {
+
+      const v =
+        ranges[i];
+
+      if (
+        !isValidRange(
+          v,
+          rangeMin,
+          rangeMax
+        )
+      ) {
+
+        drawing = false;
+
+        continue;
+      }
+
+      const angle =
+        angleMin +
+        i *
+        angleInc;
+
+      const p =
+        polarToCanvas(
+          angle,
+          v,
+          pxPerMeter,
+          originX,
+          originY
+        );
+
+      if (drawing) {
+
+        ctx.lineTo(
+          p.x,
+          p.y
+        );
+
+      } else {
+
+        ctx.moveTo(
+          p.x,
+          p.y
+        );
+
+        drawing = true;
+      }
+    }
+
+    ctx.stroke();
+  }
 
   /* ROBOT MARKER */
 
