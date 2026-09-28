@@ -18,6 +18,7 @@ polling endpoint.
 Read-only. No sudo. Safe to run alongside bringup.
 """
 
+import glob
 import grp
 import os
 import re
@@ -50,6 +51,7 @@ FET_WARN, FET_ERR = 65.0, 80.0      # PROVISIONAL. Measured idle: temp_fet 31.4 
                                     # VESC's own OVER_TEMP_FET fault trips near 85 C
 MEM_WARN, MEM_ERR = 20.0, 10.0      # percent available. Measured idle: 63 %
 DISK_WARN, DISK_ERR = 85.0, 95.0    # percent used. Measured: 4 % on a 915 GB NVMe
+GPU_WARN, GPU_ERR = 85.0, 97.0      # percent busy. PROVISIONAL, no loaded run yet
 LIDAR_IP = "192.168.0.10"
 
 SLOW_PERIOD = 10.0                  # seconds between expensive probes
@@ -94,6 +96,57 @@ def probe(cmd, timeout=8):
         return None, f"timed out after {timeout}s"
     except (FileNotFoundError, OSError) as e:
         return None, str(e)
+
+
+# Where the Jetson GPU driver exposes its busy fraction, newest board first.
+# The file reads 0-1000 (per mille). Orin moved it under bus@0; Nano/TX2/Xavier
+# keep the older gpu.0 path. Globbed rather than hardcoded so one script covers
+# every car in the fleet.
+GPU_LOAD_GLOBS = (
+    "/sys/devices/platform/bus@0/*.gpu/load",
+    "/sys/devices/platform/*.gpu/load",
+    "/sys/devices/platform/gpu.0/load",
+    "/sys/devices/gpu.0/load",
+    "/sys/devices/*.gpu/load",
+)
+
+# devfreq names the GPU after its chip on some boards (gv11b = Xavier,
+# ga10b = Orin, gp10b = TX2, gm20b = Nano) and "<addr>.gpu" on others.
+GPU_DEVFREQ = re.compile(r"gpu|gv11b|ga10b|gp10b|gm20b")
+
+
+def find_gpu_files():
+    """Return (load_path, cur_freq_path); either may be None off-Jetson."""
+    load = next((p for g in GPU_LOAD_GLOBS for p in sorted(glob.glob(g))), None)
+    freq = next((f"{d}/cur_freq" for d in sorted(glob.glob("/sys/class/devfreq/*"))
+                 if GPU_DEVFREQ.search(os.path.basename(d))
+                 and os.path.exists(f"{d}/cur_freq")), None)
+    return load, freq
+
+
+def parse_gr3d(line):
+    """tegrastats' GPU field -> (busy %, MHz or None), or None if absent.
+
+    Seen as `GR3D_FREQ 0%@305` (Nano), `GR3D_FREQ 0%@[305]` (Xavier) and
+    `GR3D_FREQ 0%@[305,0]` or bare `GR3D_FREQ 0%` (Orin)."""
+    m = re.search(r"GR3D_FREQ (\d+)%(?:@\[?(\d+))?", line or "")
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)) if m.group(2) else None
+
+
+def cpu_busy_pct(prev, cur):
+    """Busy % between two /proc/stat `cpu` lines' counters, or None.
+
+    iowait counts as idle: a core waiting on the NVMe is not doing work, and
+    counting it as busy makes a log flush look like a CPU spike."""
+    if not prev or not cur or len(prev) < 5 or len(cur) < 5:
+        return None
+    idle = (cur[3] + cur[4]) - (prev[3] + prev[4])
+    total = sum(cur) - sum(prev)
+    if total <= 0:
+        return None
+    return max(0.0, min(100.0, 100.0 * (total - idle) / total))
 
 
 def parse_joy_devices(out):
@@ -195,6 +248,8 @@ class SystemDiagnostics(Node):
         super().__init__("system_diagnostics")
         self.pub = self.create_publisher(DiagnosticArray, "/diagnostics", 10)
         self.ncores = os.cpu_count() or 1
+        self.gpu_load_path, self.gpu_freq_path = find_gpu_files()
+        self._cpu_prev = None
 
         # Filled by the background thread. Until it has run once these report
         # STALE rather than a fabricated OK - an unmeasured subsystem is
@@ -276,10 +331,43 @@ class SystemDiagnostics(Node):
         load = (read("/proc/loadavg") or "0 0 0").split()
         l1 = float(load[0]) if load else 0.0
         lvl = ERROR if l1 > self.ncores * 2 else WARN if l1 > self.ncores else OK
-        return status("system: CPU", lvl, f"load {l1:.2f} over {self.ncores} cores",
-                      [("cores", self.ncores), ("load 1m", load[0]),
-                       ("load 5m", load[1] if len(load) > 1 else "?"),
-                       ("load 15m", load[2] if len(load) > 2 else "?")])
+        vals = [("cores", self.ncores), ("load 1m", load[0]),
+                ("load 5m", load[1] if len(load) > 1 else "?"),
+                ("load 15m", load[2] if len(load) > 2 else "?")]
+        # Utilisation over the last tick, from /proc/stat deltas. Load average
+        # lags by a minute and counts blocked tasks; this is what "the CPU is
+        # pegged" actually means right now.
+        first = (read("/proc/stat") or "").split("\n", 1)[0].split()
+        cur = [int(x) for x in first[1:] if x.isdigit()] if first[:1] == ["cpu"] else None
+        busy = cpu_busy_pct(self._cpu_prev, cur)
+        self._cpu_prev = cur
+        if busy is not None:
+            vals.append(("usage %", f"{busy:.1f}"))
+        return status("system: CPU", lvl, f"load {l1:.2f} over {self.ncores} cores", vals)
+
+    def gpu(self):
+        """Jetson GPU busy %. sysfs first (1 Hz, no subprocess); tegrastats'
+        GR3D_FREQ from the slow loop only if the driver file is not there."""
+        vals, pct, source = [], None, None
+        raw = read(self.gpu_load_path) if self.gpu_load_path else None
+        if raw is not None and raw.isdigit():
+            pct, source = int(raw) / 10.0, self.gpu_load_path
+        else:
+            gr3d = self._slow_get("gr3d")
+            if gr3d:
+                pct, source = float(gr3d[0]), "tegrastats"
+                if gr3d[1]:
+                    vals.append(("freq", f"{gr3d[1]} MHz"))
+        if pct is None:
+            return status("system: GPU", STALE,
+                          "no GPU load source (not a Jetson, or tegrastats missing)",
+                          [("searched", ", ".join(GPU_LOAD_GLOBS))])
+        hz = read(self.gpu_freq_path) if self.gpu_freq_path else None
+        if hz and hz.isdigit() and not any(k == "freq" for k, _ in vals):
+            vals.append(("freq", f"{int(hz) / 1e6:.0f} MHz"))
+        vals += [("usage %", f"{pct:.1f}"), ("source", source)]
+        lvl = ERROR if pct >= GPU_ERR else WARN if pct >= GPU_WARN else OK
+        return status("system: GPU", lvl, f"{pct:.0f}% busy", vals)
 
     def memory(self):
         info = {}
@@ -365,6 +453,10 @@ class SystemDiagnostics(Node):
         rails = dict(re.findall(r"(VDD_\w+)\s+(\d+)mW", first))
         if rails:
             out["rails"] = {k: f"{v} mW" for k, v in rails.items()}
+        # GPU fallback for boards where the sysfs load file is missing.
+        gr3d = parse_gr3d(first)
+        if gr3d:
+            out["gr3d"] = gr3d
 
         # Lidar link, S-17.
         ping = run(["ping", "-c", "2", "-W", "2", LIDAR_IP], timeout=8)
@@ -538,7 +630,7 @@ class SystemDiagnostics(Node):
     def tick(self):
         msg = DiagnosticArray()
         msg.header.stamp = self.get_clock().now().to_msg()
-        for build in (self.thermal, self.cpu, self.memory, self.storage,
+        for build in (self.thermal, self.cpu, self.gpu, self.memory, self.storage,
                       self.power, self.vesc_device, self.network,
                       self.gamepad, self.camera, self.clock):
             try:
@@ -596,6 +688,20 @@ def self_test():
         "the raw table must survive even when the parser found nothing in it"
 
     print("joy_verdict self-test passed")
+
+    # tegrastats GPU field, one sample per board generation's format.
+    assert parse_gr3d("RAM 1/3 GR3D_FREQ 0%@305 EMC") == (0, 305)
+    assert parse_gr3d("GR3D_FREQ 42%@[1377] VIC") == (42, 1377)
+    assert parse_gr3d("GR3D_FREQ 7%@[305,0] APE") == (7, 305)
+    assert parse_gr3d("GR3D_FREQ 13% cpu@50C") == (13, None)
+    assert parse_gr3d("RAM 1/3 no gpu field") is None
+
+    # /proc/stat: user nice system idle iowait irq softirq steal
+    a = [100, 0, 100, 700, 100, 0, 0, 0]
+    b = [150, 0, 150, 750, 150, 0, 0, 0]      # 100 busy of 200 -> 50 %
+    assert cpu_busy_pct(a, b) == 50.0, cpu_busy_pct(a, b)
+    assert cpu_busy_pct(None, b) is None and cpu_busy_pct(a, a) is None
+    print("gpu/cpu parser self-test passed")
 
 
 def main():

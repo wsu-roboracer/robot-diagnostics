@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -7,10 +6,55 @@
 
 <title>F1TENTH System Status</title>
 
+<!-- Theme applied before first paint so a dark reload never
+     flashes white. A stored choice wins; otherwise the OS decides. -->
+<script>
+  try {
+    const theme = localStorage.getItem("theme");
+    if (theme) document.documentElement.dataset.theme = theme;
+  } catch (error) {}
+</script>
+
 <link rel="stylesheet" href="css/dashboard.css">
 </head>
 
 <body>
+
+<!-- ============================================================
+     TOP BAR — connection, refresh and theme, on every tab, so
+     switching robots never means hunting for a settings panel.
+============================================================= -->
+<header class="topbar">
+
+  <form class="topbar-conn" id="connForm" autocomplete="off">
+    <span class="conn-status">
+      <span class="connection-dot" id="connDot"></span>
+      <strong id="connLabel">CONNECTING...</strong>
+    </span>
+
+    <input id="wsUrl" spellcheck="false"
+           aria-label="rosbridge address"
+           title="rosbridge WebSocket address — press Enter or Connect">
+
+    <button class="top-btn" id="connectBtn" type="submit">Connect</button>
+  </form>
+
+  <div class="topbar-actions">
+    <button class="top-btn" id="refreshBtn" type="button"
+            title="Reconnect and rescan the ROS graph">
+      <span class="refresh-symbol">⟳</span>
+      <span id="refreshLabel">Refresh</span>
+    </button>
+
+    <div class="theme-switch" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-choice="light" title="Light mode">☀ Light</button>
+      <button type="button" data-theme-choice="dark" title="Dark mode">☾ Dark</button>
+    </div>
+  </div>
+
+</header>
+
+<div class="conn-hint" id="connHint" hidden></div>
 
 <div class="page">
 
@@ -21,28 +65,8 @@
       <p>Real-time overview of robot health</p>
     </div>
 
-    <div class="header-right">
-      <div class="overall-pill">
-        <div class="overall-icon" id="overallIcon">?</div>
-
-        <div>
-          <div class="overall-text" id="overallStatus">UNKNOWN</div>
-          <div class="overall-note" id="overallNote">
-            Waiting for robot data
-          </div>
-        </div>
-      </div>
-
-      <div class="header-actions">
-        <div class="last-updated" id="lastUpdated">
-          last updated: never
-        </div>
-
-        <button class="refresh-btn" id="refreshBtn">
-          <span class="refresh-symbol">⟳</span>
-          Refresh
-        </button>
-      </div>
+    <div class="last-updated" id="lastUpdated">
+      last updated: never
     </div>
   </div>
 
@@ -52,15 +76,60 @@
 
   <div id="limitBar"></div>
 
-  <!-- ==========================================================
-       PRIORITY BAND
+  <!-- OVERALL STATUS — the answer to "can I drive?", on every tab -->
+  <section class="status-banner" id="statusBanner">
 
-       Battery first — it is the single biggest cause of trouble
+    <div class="overall-icon" id="overallIcon">?</div>
+
+    <div class="status-main">
+      <div class="overall-text" id="overallStatus">UNKNOWN</div>
+      <div class="overall-note" id="overallNote">Waiting for robot data</div>
+    </div>
+
+    <div class="status-facts">
+      <div>
+        <span class="k">Subsystems</span>
+        <span class="v" id="factSubsystems">—</span>
+      </div>
+
+      <div>
+        <span class="k">Control</span>
+        <span class="v" id="factControl">—</span>
+      </div>
+
+      <div>
+        <span class="k">Nodes</span>
+        <span class="v" id="factNodes">—</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- TABS -->
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabOverview"
+            data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" id="tabDrive"
+            data-tab="drive" aria-selected="false">
+      Drive
+      <span class="tab-badge armed" id="driveBadge" hidden>ARMED</span>
+    </button>
+    <button class="tab" role="tab" id="tabAdvanced"
+            data-tab="advanced" aria-selected="false">
+      Advanced
+      <span class="tab-badge" id="advancedBadge" hidden></span>
+    </button>
+  </nav>
+
+  <!-- ==========================================================
+       OVERVIEW
+  =========================================================== -->
+  <div class="tab-panel" id="panelOverview" role="tabpanel">
+
+  <!-- Battery first — it is the single biggest cause of trouble
        on this car, and a flat pack looks like a dozen unrelated
        faults. Then the compute metrics that explain "the board
-       started dropping data": CPU, RAM, GPU, temperature, link.
-       Everything else lives below this fold.
-  =========================================================== -->
+       started dropping data". -->
   <section class="critical-grid">
 
     <div class="summary-card battery-card">
@@ -96,14 +165,85 @@
 
   </section>
 
-  <!-- ==========================================================
-       HARDWARE STRIP — the things students actually ask about
-  =========================================================== -->
-  <section class="hw-strip" id="hwStrip"></section>
+  <!-- SUBSYSTEMS + ROS GRAPH -->
+  <section class="main-grid">
 
-  <!-- ==========================================================
-       LIVE DATA — not "is it connected", but what it is seeing
-  =========================================================== -->
+    <div>
+
+      <h2 class="section-title">Subsystems</h2>
+
+      <div class="subsystem-wrap">
+        <table class="subsystem-table">
+
+          <thead>
+            <tr>
+              <th>Subsystem</th>
+              <th>Node / Source</th>
+              <th>Status</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+
+          <tbody id="subsystemRows"></tbody>
+
+        </table>
+      </div>
+
+    </div>
+
+    <div class="right-column">
+
+      <div class="side-card square">
+        <h2 class="split-head">
+          <span>ROS Graph</span>
+          <span class="h3-note" id="graphSummary">not connected</span>
+        </h2>
+
+        <div class="readout-grid">
+          <div>
+            <span class="k">Online nodes</span>
+            <span class="v" id="onlineNodes">0</span>
+            <span class="n" id="nodeExpected">of 8 expected</span>
+          </div>
+
+          <div>
+            <span class="k">Active topics</span>
+            <span class="v" id="activeTopics">0</span>
+            <span class="n" id="topicExpected">waiting for ROS graph</span>
+          </div>
+
+          <div>
+            <span class="k">Uptime</span>
+            <span class="v" id="uptime">--:--:--</span>
+            <span class="n" id="uptimeNote">waiting for system diagnostics</span>
+          </div>
+
+          <div>
+            <span class="k">Diagnostics</span>
+
+            <span class="v diag-inline">
+              <span class="ok-color" id="diagOk">0</span>
+              <span class="warn-color" id="diagWarn">0</span>
+              <span class="err-color" id="diagError">0</span>
+              <span class="unknown-color" id="diagStale">0</span>
+            </span>
+
+            <span class="n">ok · warn · error · stale</span>
+          </div>
+        </div>
+
+        <div class="graph-sub">Expected nodes</div>
+        <ul class="node-list" id="graphNodes"></ul>
+
+        <div class="graph-sub">Key topics</div>
+        <ul class="topic-list" id="graphTopics"></ul>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- LIVE DATA — not "is it connected", but what it is seeing -->
   <section class="live-grid">
 
     <div class="live-card">
@@ -112,10 +252,14 @@
         <span class="live-tag" id="camTag">no stream</span>
       </h2>
 
-      <div class="stream-box">
-        <img id="cameraImage" alt="Live camera stream" hidden>
+      <!-- One live stream, moved between here and the Drive tab
+           (showTab), so the camera is never streamed twice. -->
+      <div id="cameraHome">
+        <div class="stream-box" id="cameraBox">
+          <img id="cameraImage" alt="Live camera stream" hidden>
 
-        <div class="stream-message" id="camMessage">Not connected</div>
+          <div class="stream-message" id="camMessage">Not connected</div>
+        </div>
       </div>
 
       <div class="camera-controls">
@@ -240,254 +384,322 @@
       </div>
     </div>
 
-    <div class="live-card">
-      <h2><span>ROS Graph</span></h2>
-
-      <div class="readout-grid">
-        <div>
-          <span class="k">Online nodes</span>
-          <span class="v" id="onlineNodes">0</span>
-          <span class="n" id="nodeExpected">of 8 expected</span>
-        </div>
-
-        <div>
-          <span class="k">Active topics</span>
-          <span class="v" id="activeTopics">0</span>
-          <span class="n" id="topicExpected">waiting for ROS graph</span>
-        </div>
-
-        <div>
-          <span class="k">Uptime</span>
-          <span class="v" id="uptime">--:--:--</span>
-          <span class="n" id="uptimeNote">waiting for system diagnostics</span>
-        </div>
-
-        <div>
-          <span class="k">Diagnostics</span>
-
-          <span class="v diag-inline">
-            <span class="ok-color" id="diagOk">0</span>
-            <span class="warn-color" id="diagWarn">0</span>
-            <span class="err-color" id="diagError">0</span>
-            <span class="unknown-color" id="diagStale">0</span>
-          </span>
-
-          <span class="n">ok · warn · error · stale</span>
-        </div>
-      </div>
-    </div>
-
   </section>
 
-  <!-- MAIN AREA -->
-  <section class="main-grid">
+  </div>
 
-    <!-- SUBSYSTEMS -->
-    <div>
+  <!-- ==========================================================
+       DRIVE — virtual controller. Publishes to /drive (the mux's
+       navigation input) only while armed AND held; the physical
+       joystick keeps priority and always wins.
+  =========================================================== -->
+  <div class="tab-panel" id="panelDrive" role="tabpanel" hidden>
 
-      <h2 class="section-title">Subsystems</h2>
-
-      <div class="subsystem-wrap">
-        <table class="subsystem-table">
-
-          <thead>
-            <tr>
-              <th>Subsystem</th>
-              <th>Node / Source</th>
-              <th>Status</th>
-              <th>Details</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-
-          <tbody id="subsystemRows"></tbody>
-
-        </table>
-      </div>
-
+    <div class="drive-warning" id="driveWarning">
+      <strong>This drives the real car.</strong>
+      Clear the area or put it on a stand. It moves only while you hold
+      the pad or a key, and stops when you let go or switch tabs. If
+      Wi-Fi drops mid-drive it can keep rolling for about a second. The
+      physical controller always overrides this page.
     </div>
 
-    <!-- RIGHT SIDE -->
-    <div class="right-column">
+    <section class="drive-grid" id="driveGrid" data-cam="small">
 
-      <div class="side-card">
-        <h2>Critical Alerts</h2>
-        <div class="alert-list" id="alertList"></div>
-      </div>
+      <div class="drive-col drive-left">
 
-      <div class="side-card square">
-        <h2 style="display:flex;justify-content:space-between;gap:10px;
-                   align-items:baseline">
-          <span>Robot System</span>
-          <span id="sysSummary"
-                style="font-size:13px;font-weight:400;color:#777">
-            not reporting
-          </span>
-        </h2>
+        <!-- CONTROLS -->
+        <div class="live-card drive-card">
+          <h2><span>Controls</span></h2>
 
-        <div class="sys-tiles" id="sysTiles"></div>
+          <div class="arm-row">
+            <label class="arm-check">
+              <input type="checkbox" id="driveConfirm">
+              Area is clear / wheels are off the ground
+            </label>
 
-        <div class="card-hint" id="sysHint">
-          Waiting for system_diagnostics — start it on the robot with
-          <span class="mono">./start_diagnostics.sh</span>
-        </div>
-
-        <div class="card-hint">
-          <button class="link-btn" id="sysToggle">show all readings</button>
-        </div>
-
-        <div class="scroll" id="sysReadings" style="display:none"></div>
-      </div>
-
-      <div class="side-card square">
-        <h2>On-Demand Checks</h2>
-
-        <div class="check-row">
-          <button class="check-btn" id="joyBtn">
-            Run joystick check
-          </button>
-
-          <span class="check-note">
-            joy_enumerate_devices on the robot — the only thing that
-            separates “no controller” from “ROS cannot open it”
-          </span>
-        </div>
-
-        <pre id="joyResult"></pre>
-      </div>
-
-      <div class="side-card square">
-        <h2>Recent Diagnostics</h2>
-        <div class="recent-list" id="recentDiagnostics"></div>
-      </div>
-
-    </div>
-
-  </section>
-
-  <!-- ADVANCED -->
-  <section class="advanced" id="advancedSection">
-
-    <details id="advancedDetails">
-
-      <summary>Advanced Diagnostics</summary>
-
-      <div class="advanced-inner">
-
-        <div class="advanced-grid">
-
-          <div class="advanced-card">
-            <h3>
-              <span>Topics</span>
-              <span style="font-weight:400;color:#777;font-size:12px"
-                    id="topicSummary">click a row for live data</span>
-            </h3>
-
-            <div class="scroll">
-              <table class="raw-table">
-                <thead>
-                  <tr>
-                    <th>Topic</th>
-                    <th>Status</th>
-                    <th>Pubs</th>
-                    <th>Msgs</th>
-                    <th>Age</th>
-                  </tr>
-                </thead>
-
-                <tbody id="topicRows"></tbody>
-              </table>
-            </div>
+            <button class="arm-btn" id="armBtn" disabled>Arm</button>
           </div>
 
-          <div class="advanced-card">
-            <h3>
-              <span>Nodes</span>
-              <span style="font-weight:400;color:#777;font-size:12px"
-                    id="nodeSummary"></span>
-            </h3>
+          <div class="card-hint" id="driveNote"></div>
 
-            <div class="scroll">
-              <table class="raw-table">
-                <thead>
-                  <tr>
-                    <th>Expected Node</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-
-                <tbody id="nodeRows"></tbody>
-              </table>
-
-              <div class="node-chips" id="extraNodes"></div>
+          <div class="pad-wrap">
+            <div class="drive-pad" id="drivePad" aria-label="Drive pad: drag to drive">
+              <div class="pad-axis pad-axis-x"></div>
+              <div class="pad-axis pad-axis-y"></div>
+              <span class="pad-label pad-up">FORWARD</span>
+              <span class="pad-label pad-down">REVERSE</span>
+              <span class="pad-label pad-left">LEFT</span>
+              <span class="pad-label pad-right">RIGHT</span>
+              <div class="pad-knob" id="padKnob"></div>
             </div>
-          </div>
 
-          <div class="advanced-card">
-            <h3>System Diagnostics</h3>
+            <div class="pad-side">
+              <button class="stop-btn" id="stopBtn" title="Stop and disarm (Space / Esc)">
+                STOP
+              </button>
 
-            <div class="scroll">
-              <table class="raw-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Level</th>
-                    <th>Message</th>
-                  </tr>
-                </thead>
-
-                <tbody id="systemRows"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="advanced-card">
-            <h3>ROS Diagnostics</h3>
-
-            <div class="scroll">
-              <table class="raw-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Level</th>
-                    <th>Message</th>
-                  </tr>
-                </thead>
-
-                <tbody id="rosDiagRows"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="advanced-card">
-            <h3>ROS Warnings / Errors</h3>
-
-            <div class="log" id="log">
-              <div class="log-entry">
-                No warnings or errors received yet.
+              <div class="card-hint">
+                Drag the knob, or hold
+                <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows.
+                <kbd>Space</kbd> or <kbd>Esc</kbd> stops.
               </div>
             </div>
           </div>
-
-          <div class="advanced-card">
-            <h3>Connection</h3>
-
-            <div class="connection-box">
-              <input id="wsUrl" spellcheck="false"
-                     aria-label="rosbridge address">
-              <button id="connectBtn">Connect</button>
-            </div>
-
-            <div class="card-hint" id="connHint"
-                 style="margin:0;padding:0 13px 13px"></div>
-          </div>
-
         </div>
 
-      </div>
-    </details>
 
-  </section>
+      </div>
+
+      <div class="drive-col drive-center">
+
+        <!-- CAMERA with a heads-up overlay -->
+        <div class="live-card drive-view">
+          <h2>
+            <span>Camera</span>
+            <span class="cam-tools">
+              <button class="link-btn" id="driveCamConnect" type="button">reconnect</button>
+              <span class="size-switch" role="group" aria-label="Camera size">
+                <button type="button" data-cam-size="small">Small</button>
+                <button type="button" data-cam-size="large">Large</button>
+              </span>
+            </span>
+          </h2>
+
+          <div class="drive-cam">
+            <div id="driveCamSlot"></div>
+
+            <div class="hud hud-top">
+              <span class="drive-state" id="driveState">DISARMED</span>
+              <span class="hud-chip" id="hudBattery">🔋 --.- V</span>
+            </div>
+
+            <div class="hud hud-bottom">
+              <div>
+                <span class="hud-k">Command</span>
+                <span class="hud-v" id="cmdSpeed">0.00 m/s</span>
+              </div>
+
+              <div class="hud-steer">
+                <span class="hud-k">Steering <span id="cmdSteer">0°</span></span>
+                <div class="steer-bar"><i id="steerMark"></i></div>
+              </div>
+
+              <div>
+                <span class="hud-k">Measured</span>
+                <span class="hud-v" id="measSpeed">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-card square">
+          <h2 class="split-head">
+            <span>Surroundings</span>
+            <span class="h3-note">LiDAR, car at centre</span>
+          </h2>
+          <div class="stream-box radar-box drive-radar">
+            <canvas id="driveRadar" width="360" height="360"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="drive-col drive-right">
+
+        <!-- VITALS — what you need to keep an eye on while driving -->
+        <div class="side-card square">
+          <h2 class="split-head">
+            <span>Vitals</span>
+            <span class="h3-note" id="vitalsSummary"></span>
+          </h2>
+
+          <ul class="vitals" id="vitals"></ul>
+        </div>
+
+        <div class="side-card square">
+          <h2>Limits</h2>
+
+          <label class="slider-row">
+            <span>Max speed</span>
+            <input type="range" id="maxSpeed" min="0.3" max="3" step="0.1" value="1">
+            <strong id="maxSpeedValue">1.0 m/s</strong>
+          </label>
+
+          <label class="slider-row">
+            <span>Max steering</span>
+            <input type="range" id="maxSteer" min="0.05" max="0.41" step="0.01" value="0.34">
+            <strong id="maxSteerValue">19°</strong>
+          </label>
+
+          <div class="card-hint">
+            Publishes <span class="mono">ackermann_msgs/AckermannDriveStamped</span>
+            on <span class="mono">/drive</span> at 20 Hz.
+          </div>
+        </div>
+
+
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- ==========================================================
+       ADVANCED — start with what needs attention, then the detail
+  =========================================================== -->
+  <div class="tab-panel" id="panelAdvanced" role="tabpanel" hidden>
+
+    <section class="attention" id="attention">
+      <h2>Needs attention</h2>
+      <ul class="attention-list" id="attentionList"></ul>
+    </section>
+
+    <nav class="jump-nav" aria-label="Advanced sections">
+      <a href="#secSystem">Robot System</a>
+      <a href="#secTopics">Topics</a>
+      <a href="#secNodes">Nodes</a>
+      <a href="#secRosDiag">ROS Diagnostics</a>
+      <a href="#secLog">Warnings log</a>
+      <a href="#secChecks">Checks</a>
+    </nav>
+
+    <div class="advanced-grid">
+
+      <!-- Every OS-level probe, with every reading it reported —
+           the detail behind the Overview's CPU/RAM/GPU/temp tiles. -->
+      <div class="advanced-card span-2" id="secSystem">
+        <h3>
+          <span>Robot System</span>
+          <span class="h3-note" id="sysSummary">not reporting</span>
+        </h3>
+
+        <div class="card-intro">
+          Operating-system checks from <span class="mono">system_diagnostics.py</span>.
+          Problems are listed first; every raw reading is shown under each check.
+        </div>
+
+        <ul class="sys-list" id="sysList"></ul>
+
+        <div class="card-hint card-body" id="sysHint" style="margin:0">
+          Waiting for system_diagnostics — start it on the robot with
+          <span class="mono">./start_diagnostics.sh</span>
+        </div>
+      </div>
+
+      <div class="advanced-card" id="secTopics">
+        <h3>
+          <span>Topics</span>
+          <span class="h3-note" id="topicSummary">click a row for live data</span>
+        </h3>
+
+        <div class="table-tools">
+          <input type="search" id="topicFilter" placeholder="Filter topics…"
+                 aria-label="Filter topics">
+          <label>
+            <input type="checkbox" id="topicProblems"> problems only
+          </label>
+        </div>
+
+        <div class="scroll">
+          <table class="raw-table">
+            <thead>
+              <tr>
+                <th>Topic</th>
+                <th>Status</th>
+                <th>Pubs</th>
+                <th>Msgs</th>
+                <th>Age</th>
+              </tr>
+            </thead>
+
+            <tbody id="topicRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="advanced-card" id="secNodes">
+        <h3>
+          <span>Nodes</span>
+          <span class="h3-note" id="nodeSummary"></span>
+        </h3>
+
+        <div class="card-intro">
+          The nodes bringup should start, and anything else running.
+        </div>
+
+        <div class="scroll">
+          <table class="raw-table">
+            <thead>
+              <tr>
+                <th>Expected Node</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+
+            <tbody id="nodeRows"></tbody>
+          </table>
+
+          <div class="node-chips" id="extraNodes"></div>
+        </div>
+      </div>
+
+      <div class="advanced-card" id="secRosDiag">
+        <h3>ROS Diagnostics</h3>
+
+        <div class="card-intro">
+          What ROS nodes themselves report on <span class="mono">/diagnostics</span>.
+        </div>
+
+        <div class="scroll">
+          <table class="raw-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Level</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+
+            <tbody id="rosDiagRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="advanced-card" id="secChecks">
+        <h3>On-Demand Checks</h3>
+
+        <div class="card-body">
+          <div class="check-row">
+            <button class="check-btn" id="joyBtn">
+              Run joystick check
+            </button>
+
+            <span class="check-note">
+              Controller not working? This runs joy_enumerate_devices on
+              the robot — it tells “no controller” apart from “ROS cannot
+              open it”.
+            </span>
+          </div>
+
+          <pre id="joyResult"></pre>
+        </div>
+      </div>
+
+      <div class="advanced-card span-2" id="secLog">
+        <h3>
+          <span>ROS Warnings / Errors</span>
+          <span class="h3-note">from /rosout, newest at the bottom</span>
+        </h3>
+
+        <div class="log" id="log">
+          <div class="log-entry">
+            No warnings or errors received yet.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
 
 </div>
 
@@ -498,11 +710,6 @@
     <span>
       Network:
       <strong id="networkFooter">unknown</strong>
-    </span>
-
-    <span>
-      Status:
-      <strong id="connectionFooter">CONNECTING</strong>
     </span>
 
     <span id="clientsFooter"
@@ -525,10 +732,6 @@ last change shows — until the next one.">
       <strong id="robotIp">unknown</strong>
     </span>
 
-    <span>
-      <span class="connection-dot" id="footerDot"></span>
-      <strong id="footerConnected">CONNECTING...</strong>
-    </span>
   </div>
 
 </footer>
@@ -545,6 +748,7 @@ last change shows — until the next one.">
 <script src="js/camera.js"></script>
 <script src="js/checks.js"></script>
 <script src="js/lidar-select.js"></script>
+<script src="js/drive.js"></script>
 <script src="js/main.js"></script>
 
 </body>
