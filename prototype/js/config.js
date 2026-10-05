@@ -47,6 +47,7 @@ const MOTOR_ABSENT = -20;
 const SYS_PREFIX = "system: ";
 
 const SYS_ORDER = [
+  "E-stop",
   "Thermal",
   "Power",
   "CPU",

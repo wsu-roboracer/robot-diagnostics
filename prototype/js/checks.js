@@ -129,7 +129,14 @@ function renderConnectionHealth(now) {
   const label =
     clientsLabel(clients, CLIENT_LIMIT);
 
-  $("clientsValue").textContent = label.text;
+  /* people, not "clients": "Just you", "3 people" */
+  $("clientsValue").textContent =
+    label.text === "—"
+      ? "—"
+      : clients === 1
+      ? "Just you"
+      : clients + " people";
+
   $("clientsFooter").className = label.cls;
 }
 

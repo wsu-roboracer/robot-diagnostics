@@ -84,6 +84,11 @@ async function scan() {
             topics.get(name).pubs =
               result.publishers.length;
 
+            /* names too: the Drive tab tells a web dashboard
+               (published via rosbridge) from autonomous code */
+            topics.get(name).publishers =
+              result.publishers;
+
           } catch (error) {}
         })
     );

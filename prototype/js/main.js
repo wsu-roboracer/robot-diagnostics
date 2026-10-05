@@ -28,6 +28,7 @@ function render() {
   /* stale robot, starved client, crowded rosbridge */
 
   renderConnectionHealth(now);
+  renderEstop();
 
   /* main dashboard */
 
@@ -124,6 +125,15 @@ function showTab(name) {
      cannot see */
   if (name !== "drive" && typeof driveArmed !== "undefined" && driveArmed) {
     disarmDrive("left the Drive tab");
+  }
+
+  /* high speed and full steering never survive leaving the tab */
+  if (name !== "drive" && typeof highSpeed !== "undefined" && highSpeed) {
+    setHighSpeed(false);
+  }
+
+  if (name !== "drive" && typeof fullSteer !== "undefined" && fullSteer) {
+    setFullSteer(false);
   }
 
   /* the single camera stream follows you: Drive gets the big
