@@ -59,7 +59,7 @@ constant that looked like a sensor reading but wasn't.
 | Alex | 21 |
 | Saman | 12 |
 | Luke | 16 |
-| Darrin | |
+| Darrin | 20 |
 
 Honest numbers. A low number with a reason is fine; a made-up number is not.
 
@@ -68,7 +68,7 @@ Honest numbers. A low number with a reason is fine; a made-up number is not.
 1. Finish #5 - write up the README/repo setup once the dashboard design is locked in
 2. Dedup pass on the dashboard - several values currently render in more than one place
 3. Look at folding `system_diagnostics.py`/`start_diagnostics.sh` into `f1tenth_system` itself, so every robot gets the diagnostics stack on a plain `git pull`
-4. Physical indicator design and plan
+4. More physical indicator design options, plan for building, and psuedo code for LED hookup
 
 ### Retro notes
 
