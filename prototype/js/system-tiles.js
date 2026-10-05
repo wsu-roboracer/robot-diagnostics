@@ -60,6 +60,21 @@ function systemShortNames() {
   return { byShort, shorts };
 }
 
+/* Friendly name for a network interface. "main" ones (Wi-Fi, wired)
+   are worth reporting when down; the rest (docker, CAN bus, USB
+   bridges) are normally idle and would only be noise. */
+function describeInterface(name) {
+
+  if (/^(wl|wlan)/.test(name)) return { label: "Wi-Fi", main: true };
+  if (/^(eth|en)/.test(name)) return { label: "Wired Ethernet", main: true };
+  if (/^can/.test(name)) return { label: "CAN bus", main: false };
+  if (/^docker|^br-|^veth/.test(name)) return { label: "Docker (internal)", main: false };
+  if (/^l4tbr/.test(name)) return { label: "Jetson USB bridge", main: false };
+  if (/^(usb|sub|rndis)/.test(name)) return { label: "USB network", main: false };
+
+  return { label: name, main: false };
+}
+
 /* Plain-English reading of the Network check. "2 links up" and
    "eth0 carrier=1 up" mean little to someone who is not a network
    person, so spell out what each interface is and whether it works. */
@@ -86,18 +101,16 @@ function networkDetail(values) {
 
     if (key === "wifi signal") return;
 
-    const kind =
-      /^(wl|wlan)/.test(key) ? "Wi-Fi"
-      : /^(eth|en)/.test(key) ? "Wired Ethernet"
-      : null;
+    if (!/carrier=/.test(value)) return;
 
-    if (!kind) return;
+    const { label, main } = describeInterface(key);
+    const up = /carrier=1/.test(value);
 
-    lines.push(
-      /carrier=1/.test(value)
-        ? `${kind} (${key}): connected.`
-        : `${kind} (${key}): not connected. Nothing is plugged in or the signal is lost.`
-    );
+    if (up) {
+      lines.push(`${label} (${key}): connected.`);
+    } else if (main) {
+      lines.push(`${label} (${key}): not connected. Nothing is plugged in or the signal is lost.`);
+    }
   });
 
   return lines.length

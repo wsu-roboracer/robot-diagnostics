@@ -416,8 +416,9 @@ function metricTiles() {
           Number.isFinite(
             load
           )
-            ? "load " +
-              load.toFixed(2)
+            ? "avg load " +
+              load.toFixed(2) +
+              " (1 min)"
             : "",
 
         grade:
@@ -642,7 +643,7 @@ function metricTiles() {
       label: "Temperature",
 
       sub:
-        "junction",
+        "chip core",
 
       value:
         Number.isFinite(
@@ -726,6 +727,96 @@ function metricTiles() {
         values["wifi signal"]
       );
 
+    /* every interface the probe reported, e.g. eth0, wlan0 */
+    const ifaces =
+      Object.keys(values)
+        .filter(
+          key =>
+            /carrier=/.test(
+              values[key]
+            )
+        );
+
+    const upNames =
+      ifaces
+        .filter(
+          key =>
+            /carrier=1/.test(
+              values[key]
+            )
+        )
+        .map(
+          key =>
+            describeInterface(key).label
+        );
+
+    /* only Wi-Fi / wired being down is worth a warning */
+    const downNames =
+      ifaces
+        .filter(
+          key =>
+            !/carrier=1/.test(
+              values[key]
+            ) &&
+            describeInterface(key).main
+        )
+        .map(
+          key =>
+            describeInterface(key).label
+        );
+
+    const lidarKey =
+      Object.keys(values)
+        .find(
+          key =>
+            key.indexOf("lidar ") === 0
+        );
+
+    /* Plain-English note: signal quality, what is disconnected,
+       and whether the lidar answers. */
+    const noteParts = [];
+
+    if (Number.isFinite(signal)) {
+
+      noteParts.push(
+        "Wi-Fi signal is " +
+        (
+          signal >= -60
+            ? "strong"
+            : signal >= -70
+            ? "fair"
+            : "weak"
+        )
+      );
+    }
+
+    if (upNames.length) {
+
+      noteParts.push(
+        "Connected: " +
+        upNames.join(", ")
+      );
+    }
+
+    if (downNames.length) {
+
+      noteParts.push(
+        "Not connected: " +
+        downNames.join(", ")
+      );
+    }
+
+    if (lidarKey) {
+
+      noteParts.push(
+        /NO REPLY/.test(
+          values[lidarKey]
+        )
+          ? "Lidar not answering"
+          : "Lidar answering"
+      );
+    }
+
     tiles.push({
 
       id: "wifi",
@@ -733,8 +824,10 @@ function metricTiles() {
       label: "Network",
 
       sub:
-        network
-          ? up + " up"
+        network && ifaces.length
+          ? up + " of " +
+            ifaces.length +
+            " connected"
           : "",
 
       value:
@@ -745,13 +838,11 @@ function metricTiles() {
               )
                 ? signal +
                   " dBm"
+                : up === ifaces.length &&
+                  ifaces.length
+                ? "All connected"
                 : up +
-                  " link" +
-                  (
-                    up === 1
-                      ? ""
-                      : "s"
-                  )
+                  " connected"
             )
           : "—",
 
@@ -775,7 +866,10 @@ function metricTiles() {
 
       note:
         network
-          ? network.message
+          ? (
+              noteParts.join(" · ") ||
+              network.message
+            )
           : "waiting for system_diagnostics",
 
       grade:
