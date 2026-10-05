@@ -227,7 +227,7 @@ The Drive tab only uses data the dashboard already receives. It adds no subscrip
 | **Driving input** vital | `ackermann_mux` status on `/diagnostics` (which input is "unmasked") | `This page (/drive)` means the mux is forwarding the page's commands. `Physical controller` means the joystick has taken over. `Idle` means nothing is being forwarded. |
 | **Measured** (camera overlay) and **Speed** vital | `/odom`, `twist.twist.linear.x` | What the car is actually doing, compared with **Command**. |
 | **Link** vital | Time since the last message from rosbridge | A frozen connection looks exactly like a healthy one, so check this. |
-| **Nearest obstacle** vital | The closest valid `/scan` return in any direction | Amber under 0.6 m, red under 0.3 m. **This is a display only; it does not stop the car.** |
+| **Nearest obstacle** vital | The closest valid `/scan` return in any direction | Amber under 1 m, red under 0.5 m, the same colours as the LiDAR plot. **This is a display only; it does not stop the car.** |
 | **Battery**, **Temperature**, **CPU** vitals | `/sensors/core` and `system_diagnostics.py` | The same numbers as the Overview tab. |
 
 If **Command** is non-zero but **Driving input** stays `Idle` and **Measured** stays at 0,
@@ -297,7 +297,7 @@ The main functions in `drive.js`:
 | The command rate | `DRIVE_HZ`. Keep the period well under the mux's 0.2 s timeout, or the mux masks `/drive` between messages and the car stutters |
 | How gently speed builds up | `DRIVE_ACCEL`, `STEER_RATE` |
 | The slider ranges and defaults | The `#maxSpeed` and `#maxSteer` inputs in `dashboard.html` |
-| The obstacle warning distances | `OBSTACLE_WARN`, `OBSTACLE_BAD` in `drive.js` |
+| The obstacle warning distances (plot and vital together) | `LIDAR_NEAR`, `LIDAR_CLOSE` in `metrics.js` |
 | The keys | `KEY_FWD`, `KEY_BACK`, `KEY_LEFT`, `KEY_RIGHT` in `drive.js` |
 
 If you add a new way for the page to lose control (a new tab, a modal, a new connection

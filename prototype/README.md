@@ -138,6 +138,25 @@ Two readings show words instead of numbers on purpose:
 - **Gamepad battery** says *not exposed by this driver*, and that is final. The DS4 (`054C:05C4`) binds to `hid-generic`; `hid_sony`, which is what creates `sony_controller_battery_*`, **is not built for this Tegra kernel** (`modprobe: FATAL: Module hid_sony not found in directory /lib/modules/5.15.148-tegra`) and `/sys/bus/hid/drivers/` has no `sony` entry to bind to. `upower -e` lists only `DisplayDevice`. Getting a charge level would mean building a kernel module. A blank field would look like a bug, so the page says why instead.
 - **VESC temp** shows the FET sensor only. The motor has no temperature sensor fitted and reads about -74 C, so the page says *no motor sensor fitted*. `temp_fet` itself needs a two-line fix to `vesc_driver.cpp` that currently only exists on robot #2. Without it the field reads 0.0.
 
+### Reading the LiDAR plot
+
+Chase-cam view: the car is the blue outline at the centre, drawn to scale, with forward up and left on the left.
+
+- **Status line** above the plot says what matters in one sentence, in plain words: *"All clear. Closest thing is 1.6 m away, to the left."*, *"Close: something 0.89 m ahead-right."*, or *"... Something ahead is getting closer (0.99 m)."* Its colour follows the same bands as the dots.
+- **View**: **Lines** (the default) is the original radar as first built - black screen, three green range rings, one continuous green outline, a scale that eases smoothly to fit (2 to 12 m) on Auto - with two additions: the **red (0.5 m) and amber (1 m) circles** around the car, labelled, and the **to-scale blue car**. **Detailed** is the second option: coloured dots, open space, danger circles and the 1 s movement trail. A range picked with the buttons or zoom applies to both. One choice for both plots, remembered per browser. The status sentence and the readouts under the plot work the same in both views; the plot details below are for Detailed.
+- **Danger circles (both views)**: a soft red circle 0.5 m around the car and an amber one at 1 m, each labelled, so "too close" is a place on the picture.
+- The point count, field of view and update age are under **Technical details**, closed by default.
+
+- **Dots (Detailed)** / **line pieces (Lines)** are returns, coloured by distance: red under 0.5 m, amber under 1 m, green beyond. The same colours are used by the readouts underneath and the Drive tab's "Nearest obstacle" vital (`LIDAR_NEAR` / `LIDAR_CLOSE` in `metrics.js`).
+- **Soft green area (Detailed)** is free space, where the car can go. A beam with no return counts as open to the edge of the plot.
+- **Faint grey dots (Detailed)** are the same scan from about 1 s ago. A gap between grey and colour is something moving. **White rings** mark returns that came 15 cm or more closer in that second.
+- **Dashed line and label** point at the nearest return.
+- **Shaded wedge at the back** is the blind spot (the Hokuyo sees 270°).
+- **Range / zoom**: Auto steps between 2 / 4 / 8 / 15 m. It zooms out within half a second and zooms in only after the smaller step has fitted for 2.5 s, so the rings do not keep resizing. Pick a number to pin it, **scroll on the plot** to zoom in and out, and **double-click** to go back to Auto. The Drive tab's plot starts at a fixed 4 m and has **− / + / Auto** buttons in its corner.
+- **Big view (Drive tab)**: **⤢ Enlarge** swaps the LiDAR into the large slot and shrinks the camera under it; the controls and vitals stay where they are. **⤡ Shrink** puts it back. The choice is remembered per browser.
+- **Readouts** under each plot: the closest return **Ahead** (±20°), **Left** and **Right** (60 to 120°), and **Closest** overall (with its bearing), as large numbers in the same colours as the dots. The badge under each says ▼ closer (amber) / ▲ farther (green) / steady over the last second; a 10 cm dead band keeps sensor noise from flickering it.
+- The plot is drawn at the screen's real pixel density and its text scales with the plot, so it stays sharp and readable at any size.
+
 ### The joystick check button
 
 The one button on the page that makes the robot do something. It calls a `std_srvs/Trigger` service on `system_diagnostics.py` over the same websocket as everything else, which runs `ros2 run joy joy_enumerate_devices` on the car and reports what it found.
@@ -163,7 +182,7 @@ Drives the car from the browser, no gamepad needed. It publishes `ackermann_msgs
 - **Limits**: max speed (default 1.0 m/s) and max steering (default 19°) sliders. Speed ramps at 2 m/s² so a key press is not a step change; stopping is never ramped.
 - **The physical joystick wins.** It is the mux's higher-priority input, so holding its deadman overrides the page. The "Driving input" vital shows which input is driving.
 
-The tab is laid out so nothing you need while driving is off-screen: controls on the left, the camera in the middle with commanded / measured speed and steering drawn over it, and **Vitals** on the right - battery, link freshness, nearest LiDAR obstacle (amber under 0.6 m, red under 0.3 m), driving input, speed, temperature and CPU - with the LiDAR plot underneath. The camera is the same single MJPEG stream as the Overview card, moved into the Drive tab while it is open, so opening Drive does not double the Wi-Fi load.
+The tab is laid out so nothing you need while driving is off-screen: controls on the left, the camera in the middle with commanded / measured speed and steering drawn over it, and **Vitals** on the right - battery, link freshness, nearest LiDAR obstacle (amber under 1 m, red under 0.5 m, the same bands as the LiDAR plot), driving input, speed, temperature and CPU - with the LiDAR plot underneath. The camera is the same single MJPEG stream as the Overview card, moved into the Drive tab while it is open, so opening Drive does not double the Wi-Fi load.
 
 If the car does not move while "DRIVING" shows, check the Mux input readout: `Idle` means the mux is not taking `/drive` - look at `mux.yaml` on the robot for a lock or a different navigation topic.
 

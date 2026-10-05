@@ -17,7 +17,7 @@ const geo = src.slice(
   geoStart,
   src.indexOf('/* ==========', geoStart));
 
-const env = new Function(`${geo}\nreturn { isValidRange, polarToCanvas };`)();
+const env = new Function(`${geo}\nreturn { isValidRange, polarToCanvas, sectorMin, rangeTrend };`)();
 
 const fail = [];
 const RMIN = 0.02, RMAX = 30.0;
@@ -49,6 +49,29 @@ const left = env.polarToCanvas(Math.PI / 2, 5, 10, 100, 100);
 const right = env.polarToCanvas(-Math.PI / 2, 5, 10, 100, 100);
 (Math.abs(right.x - 150) < 1e-9 && Math.abs(right.y - 100) < 1e-9) ||
   fail.push('angle -90 (right) did not plot screen-right: ' + JSON.stringify(right));
+
+// Sector minimum: only beams inside the bearing window count, and
+// sentinel no-returns are never "the closest thing".
+{
+  // 5 beams at -90, -45, 0, +45, +90 degrees
+  const inc = Math.PI / 4, amin = -Math.PI / 2;
+  const ranges = [0.5, 3.0, 65.533, 1.2, 2.0];
+  const front = env.sectorMin(ranges, amin, inc, RMIN, RMAX, -0.1, 0.1);
+  front === null ||
+    fail.push('sector holding only a sentinel beam should be null: ' + JSON.stringify(front));
+  const leftHalf = env.sectorMin(ranges, amin, inc, RMIN, RMAX, 0.1, Math.PI);
+  (leftHalf && leftHalf.range === 1.2 && leftHalf.index === 3) ||
+    fail.push('left half should find 1.2 m at index 3: ' + JSON.stringify(leftHalf));
+  const all = env.sectorMin(ranges, amin, inc, RMIN, RMAX, -Math.PI, Math.PI);
+  (all && all.range === 0.5 && all.index === 0) ||
+    fail.push('whole scan should find 0.5 m at index 0 (right): ' + JSON.stringify(all));
+}
+
+// Trend arrow has a dead band, so noise does not flicker it.
+env.rangeTrend(1.00, 1.05) === 'steady' || fail.push('5 cm change should read steady');
+env.rangeTrend(0.80, 1.00) === 'closer' || fail.push('20 cm closer should read closer');
+env.rangeTrend(1.30, 1.00) === 'farther' || fail.push('30 cm farther should read farther');
+env.rangeTrend(1.00, NaN) === 'steady' || fail.push('missing history should read steady');
 
 if (fail.length) {
   console.error('FAIL:\n  ' + fail.join('\n  '));
