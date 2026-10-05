@@ -60,6 +60,54 @@ function systemShortNames() {
   return { byShort, shorts };
 }
 
+/* Plain-English reading of the Network check. "2 links up" and
+   "eth0 carrier=1 up" mean little to someone who is not a network
+   person, so spell out what each interface is and whether it works. */
+function networkDetail(values) {
+
+  const lines = [];
+
+  Object.keys(values).forEach(key => {
+
+    const value = String(values[key]);
+
+    if (key.indexOf("lidar ") === 0) {
+
+      const ip = key.slice(6);
+
+      lines.push(
+        /NO REPLY/.test(value)
+          ? `Lidar (${ip}): not answering. Check its cable and power.`
+          : `Lidar (${ip}): answering (${value}).`
+      );
+
+      return;
+    }
+
+    if (key === "wifi signal") return;
+
+    const kind =
+      /^(wl|wlan)/.test(key) ? "Wi-Fi"
+      : /^(eth|en)/.test(key) ? "Wired Ethernet"
+      : null;
+
+    if (!kind) return;
+
+    lines.push(
+      /carrier=1/.test(value)
+        ? `${kind} (${key}): connected.`
+        : `${kind} (${key}): not connected. Nothing is plugged in or the signal is lost.`
+    );
+  });
+
+  return lines.length
+    ? `<div class="sys-explain">
+         A "link" is one network connection (wired or Wi-Fi) that is
+         physically connected.<br>${lines.map(escapeHtml).join("<br>")}
+       </div>`
+    : "";
+}
+
 function renderSystemList() {
 
   const { byShort, shorts } = systemShortNames();
@@ -113,6 +161,8 @@ function renderSystemList() {
               }</span>`
             ).join("")
           }</div>
+
+          ${short === "Network" ? networkDetail(values) : ""}
 
         </li>
       `;
