@@ -1735,6 +1735,20 @@ tr.topic-detail pre {
   color: var(--muted);
 }
 
+.sys-explain {
+  grid-column: 3;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .sys-explain {
+    grid-column: 1 / -1;
+  }
+}
+
 .lvl-ok   { color: var(--ok-ink); font-weight: 700; }
 .lvl-warn { color: var(--warn-ink); font-weight: 700; }
 .lvl-bad  { color: var(--bad-ink); font-weight: 700; }
