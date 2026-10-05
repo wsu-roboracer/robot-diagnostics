@@ -44,6 +44,12 @@
   </form>
 
   <div class="topbar-actions">
+    <!-- stops the car for EVERYONE — controller, this page, autonomous -->
+    <button class="estop-btn" id="estopBtn" type="button"
+            title="Emergency stop: the car stops and stays stopped, even if someone is driving with the controller">
+      🛑 E-STOP
+    </button>
+
     <button class="top-btn" id="refreshBtn" type="button" aria-label="Refresh"
             title="Reconnect and rescan the ROS graph">
       <span class="refresh-symbol">⟳</span>
@@ -59,6 +65,15 @@
 </header>
 
 <div class="conn-hint" id="connHint" hidden></div>
+
+<!-- shown on every tab while the emergency stop is on (or failed) -->
+<div class="estop-bar" id="estopBar" hidden role="alert">
+  <div class="estop-msg">
+    <div id="estopText"></div>
+    <div class="estop-detail" id="estopDetail"></div>
+  </div>
+  <button class="estop-release" id="estopRelease" type="button">Release e-stop</button>
+</div>
 
 <div class="page">
 
@@ -104,6 +119,13 @@
       <div>
         <span class="k">Nodes</span>
         <span class="v" id="factNodes">—</span>
+      </div>
+
+      <!-- how many people have the dashboard open -->
+      <div id="clientsFooter"
+           title="People with the dashboard open right now (rosbridge connections, including you). rosbridge serves 10 at once; the 11th onward gets no data. Updates when someone connects or leaves.">
+        <span class="k">Connected</span>
+        <span class="v" id="clientsValue">—</span>
       </div>
     </div>
 
@@ -517,6 +539,8 @@
 
             <div class="hud hud-top">
               <span class="drive-state" id="driveState">DISARMED</span>
+              <span class="hud-chip hud-fast" id="hudSpeedMode" hidden>⚠ HIGH SPEED</span>
+              <span class="hud-chip hud-fast" id="hudSteerMode" hidden>⚠ FULL STEERING</span>
               <span class="hud-chip" id="hudBattery">🔋 --.- V</span>
             </div>
 
@@ -609,6 +633,26 @@
 
       <div class="drive-col drive-right">
 
+        <!-- WHO'S DRIVING — every source that could move the car -->
+        <div class="side-card square">
+          <h2>Who's driving</h2>
+
+          <!-- the one answer, big -->
+          <div class="control-hero tone-none" id="controlHero">
+            <span class="control-icon" id="controlIcon" aria-hidden="true">⏸</span>
+            <div>
+              <div class="control-title" id="controlTitle">Not connected</div>
+              <div class="control-sub" id="controlSub">Connect to the robot in the top bar.</div>
+            </div>
+          </div>
+
+          <!-- the backup stop, always worth knowing -->
+          <div class="control-chips" id="controlChips"></div>
+
+          <!-- only when something needs attention -->
+          <ul class="control-alerts" id="controlAlerts"></ul>
+        </div>
+
         <!-- VITALS — what you need to keep an eye on while driving -->
         <div class="side-card square">
           <h2 class="split-head">
@@ -620,22 +664,37 @@
         </div>
 
         <div class="side-card square">
-          <h2>Limits</h2>
+          <h2 class="split-head">
+            <span>Limits</span>
+            <span class="limit-badges">
+              <span class="speed-mode" id="speedMode" hidden>HIGH SPEED</span>
+              <span class="speed-mode" id="steerMode" hidden>FULL STEERING</span>
+            </span>
+          </h2>
 
           <label class="slider-row">
             <span>Max speed</span>
-            <input type="range" id="maxSpeed" min="0.3" max="3" step="0.1" value="1">
-            <strong id="maxSpeedValue">1.0 m/s</strong>
+            <input type="range" id="maxSpeed" min="0.3" max="3" step="0.1" value="3">
+            <strong id="maxSpeedValue">3.0 m/s</strong>
           </label>
 
           <label class="slider-row">
             <span>Max steering</span>
-            <input type="range" id="maxSteer" min="0.05" max="0.41" step="0.01" value="0.34">
+            <input type="range" id="maxSteer" min="0.05" max="0.34" step="0.01" value="0.34">
             <strong id="maxSteerValue">19°</strong>
           </label>
 
+          <button class="top-btn warn-btn" id="speedUnlockBtn" type="button">
+            ⚠ Unlock high speed (up to 5 m/s)
+          </button>
+
+          <button class="top-btn warn-btn" id="steerUnlockBtn" type="button">
+            ⚠ Unlock full steering (up to 23°)
+          </button>
+
           <div class="card-hint">
-            Publishes <span class="mono">ackermann_msgs/AckermannDriveStamped</span>
+            Normal limits are 3 m/s and 19°. Publishes
+            <span class="mono">ackermann_msgs/AckermannDriveStamped</span>
             on <span class="mono">/drive</span> at 20 Hz.
           </div>
         </div>
@@ -646,6 +705,91 @@
     </section>
 
   </div>
+
+  <!-- HIGH-SPEED UNLOCK — what 5 m/s actually means, before it is allowed -->
+  <dialog class="speed-dialog" id="speedDialog" aria-labelledby="speedDialogTitle">
+
+    <h2 id="speedDialogTitle">⚠ Unlock high speed?</h2>
+
+    <p>
+      This raises the speed limit from <strong>3 m/s</strong> to
+      <strong>5 m/s</strong> (about 18 km/h, 11 mph). At that speed:
+    </p>
+
+    <ul>
+      <li>The car covers <strong>5 metres every second</strong> — across most rooms in two.</li>
+      <li>Your reaction time adds roughly <strong>1.5 m</strong> before you even press STOP.</li>
+      <li>If Wi-Fi drops, the car keeps its last speed until the motor
+        controller times out (about 1 s, not yet measured) — up to
+        <strong>5 m with nobody in control</strong>.</li>
+      <li>The car's motor controller (VESC) may cap speed lower than 5 m/s.
+        This page cannot go past that limit.</li>
+    </ul>
+
+    <label class="speed-ack">
+      <input type="checkbox" id="speedAck1">
+      There is a large clear area and nobody is in the car's path.
+    </label>
+
+    <label class="speed-ack">
+      <input type="checkbox" id="speedAck2">
+      Someone is holding the physical controller as a backup stop.
+    </label>
+
+    <p class="speed-note">
+      High speed switches off again when you leave the Drive tab or reload the page.
+    </p>
+
+    <div class="speed-actions">
+      <button class="top-btn" id="speedCancel" type="button">Cancel</button>
+      <button class="top-btn warn-btn" id="speedConfirm" type="button" disabled>
+        Unlock up to 5 m/s
+      </button>
+    </div>
+
+  </dialog>
+
+  <!-- FULL STEERING UNLOCK -->
+  <dialog class="speed-dialog" id="steerDialog" aria-labelledby="steerDialogTitle">
+
+    <h2 id="steerDialogTitle">⚠ Unlock full steering?</h2>
+
+    <p>
+      This raises the steering limit from <strong>19°</strong> (the normal
+      controller limit) to <strong>23°</strong>, the most the car allows.
+    </p>
+
+    <ul>
+      <li>A full turn at speed can <strong>tip the car over</strong> or spin it out.
+        Slow down before turning hard.</li>
+      <li>Combined with high speed this is the easiest way to crash.</li>
+      <li>The servo can be pushed against its end stops, which wears it.</li>
+      <li>The motor controller (VESC) may limit steering further. This page
+        cannot go past that limit.</li>
+    </ul>
+
+    <label class="speed-ack">
+      <input type="checkbox" id="steerAck1">
+      The floor is flat and there is open space around the car.
+    </label>
+
+    <label class="speed-ack">
+      <input type="checkbox" id="steerAck2">
+      I will slow down before turning hard.
+    </label>
+
+    <p class="speed-note">
+      Full steering switches off again when you leave the Drive tab or reload the page.
+    </p>
+
+    <div class="speed-actions">
+      <button class="top-btn" id="steerCancel" type="button">Cancel</button>
+      <button class="top-btn warn-btn" id="steerConfirm" type="button" disabled>
+        Unlock up to 23°
+      </button>
+    </div>
+
+  </dialog>
 
   <!-- ==========================================================
        ADVANCED — start with what needs attention, then the detail
@@ -816,13 +960,6 @@
       <strong id="networkFooter">unknown</strong>
     </span>
 
-    <span id="clientsFooter"
-          title="rosbridge serves 10 clients at once; the 11th onward gets nothing.
-Updates only when a client connects or disconnects, so a tab that joined after the
-last change shows — until the next one.">
-      Clients:
-      <strong id="clientsValue">—</strong>
-    </span>
   </div>
 
   <div class="footer-group">
@@ -881,6 +1018,7 @@ last change shows — until the next one.">
 <script src="js/camera.js"></script>
 <script src="js/checks.js"></script>
 <script src="js/lidar-select.js"></script>
+<script src="js/estop.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/main.js"></script>
 

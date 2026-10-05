@@ -23,6 +23,7 @@ import grp
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -34,6 +35,7 @@ try:
     from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
+    from std_msgs.msg import Float64
     from std_srvs.srv import Trigger
 except ImportError:
     # --self-test exercises the pure decision logic, which is the part worth
@@ -147,6 +149,33 @@ def cpu_busy_pct(prev, cur):
     if total <= 0:
         return None
     return max(0.0, min(100.0, 100.0 * (total - idle) / total))
+
+
+# ---------- emergency stop ----------
+#
+# The command mux gives the physical controller priority, so nothing a web
+# page publishes can stop a car someone is driving with the pad. Every input
+# - pad, web, autonomous - reaches the motor through ONE node, which turns
+# the mux output into /commands/motor/* for the VESC. Freezing that node
+# (SIGSTOP) cuts all of them at once; this node then holds the motor at 0
+# ERPM itself, at 50 Hz, so the VESC actively brakes to a stop and keeps
+# getting a command (no firmware timeout). SIGCONT releases it.
+#
+# Speed 0, not a brake current: the joystick's own release path already
+# sends speed 0, and a brake value has units (A vs mA) that differ between
+# vesc_driver versions - the wrong guess would be 1000x off.
+
+DRIVE_CHAIN_NODE = "ackermann_to_vesc_node"
+ESTOP_HZ = 50.0
+
+
+def parse_pgrep(out, own_pid):
+    """PIDs from `pgrep -f` output, never our own (pgrep -f can match it)."""
+    pids = []
+    for token in (out or "").split():
+        if token.isdigit() and int(token) != own_pid:
+            pids.append(int(token))
+    return pids
 
 
 def parse_joy_devices(out):
@@ -268,9 +297,24 @@ class SystemDiagnostics(Node):
         self.create_service(Trigger, "~/joystick_check", self.joystick_check,
                             callback_group=MutuallyExclusiveCallbackGroup())
 
+        # Emergency stop. Own callback group so a slow joystick check can never
+        # delay it; the 50 Hz hold timer shares it so stop/release/hold never
+        # interleave.
+        self.estop_active = False
+        self.estop_since = None
+        self.estop_pids = []
+        self.estop_note = ""
+        estop_group = MutuallyExclusiveCallbackGroup()
+        self.motor_pub = self.create_publisher(Float64, "/commands/motor/speed", 10)
+        self.create_service(Trigger, "~/emergency_stop", self.emergency_stop,
+                            callback_group=estop_group)
+        self.create_service(Trigger, "~/emergency_release", self.emergency_release,
+                            callback_group=estop_group)
+        self.create_timer(1.0 / ESTOP_HZ, self.estop_hold, callback_group=estop_group)
+
         self.get_logger().info(
             f"publishing system diagnostics on /diagnostics ({self.ncores} cores); "
-            "service ~/joystick_check ready")
+            "services ~/joystick_check, ~/emergency_stop, ~/emergency_release ready")
 
     # ---------- on-demand checks, called from the dashboard ----------
 
@@ -292,6 +336,75 @@ class SystemDiagnostics(Node):
         self.get_logger().info(f"joystick_check: {len(devices)} device(s), "
                                f"success={response.success}")
         return response
+
+    # ---------- emergency stop ----------
+
+    def emergency_stop(self, _request, response):
+        """Stop the car whoever is driving it, and keep it stopped."""
+        rc, out = probe(["pgrep", "-f", DRIVE_CHAIN_NODE], timeout=3)
+        pids = parse_pgrep(out if rc == 0 else "", os.getpid())
+        frozen, failed = [], []
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGSTOP)
+                frozen.append(pid)
+            except OSError as e:
+                failed.append(f"{pid} ({e.strerror})")
+
+        # Even if nothing could be frozen, holding speed 0 at 50 Hz still wins
+        # most of the time against a ~50 Hz driver - say so honestly.
+        self.estop_active = True
+        self.estop_since = self.estop_since or time.time()
+        self.estop_pids = sorted(set(self.estop_pids) | set(frozen))
+        if frozen:
+            self.estop_note = f"froze {DRIVE_CHAIN_NODE} (pid {', '.join(map(str, frozen))})"
+        else:
+            self.estop_note = (f"could not find or freeze {DRIVE_CHAIN_NODE}"
+                               + (f": {', '.join(failed)}" if failed else "")
+                               + " - holding speed 0 only, the controller may still fight it")
+        self.estop_hold()
+        self.get_logger().warn(f"EMERGENCY STOP: {self.estop_note}")
+        response.success = bool(frozen)
+        response.message = self.estop_note
+        return response
+
+    def emergency_release(self, _request, response):
+        """Let the drive chain run again. The page only offers this when the
+        mux says nobody is holding a deadman, so it resumes to idle."""
+        if not self.estop_active:
+            response.success, response.message = True, "emergency stop was not active"
+            return response
+        resumed, gone = [], []
+        for pid in self.estop_pids:
+            try:
+                os.kill(pid, signal.SIGCONT)
+                resumed.append(pid)
+            except OSError:
+                gone.append(pid)
+        self.estop_active = False
+        self.estop_since = None
+        self.estop_pids = []
+        self.estop_note = ""
+        msg = f"released; resumed pid {', '.join(map(str, resumed)) or 'none'}"
+        if gone:
+            msg += f" (gone: {', '.join(map(str, gone))} - restart bringup)"
+        self.get_logger().warn(f"emergency stop {msg}")
+        response.success, response.message = True, msg
+        return response
+
+    def estop_hold(self):
+        if self.estop_active:
+            m = Float64()
+            m.data = 0.0
+            self.motor_pub.publish(m)
+
+    def estop_status(self):
+        if not self.estop_active:
+            return status("system: E-stop", OK, "released", [("active", "no")])
+        since = time.strftime("%H:%M:%S", time.localtime(self.estop_since))
+        return status("system: E-stop", ERROR, f"EMERGENCY STOP ACTIVE since {since}",
+                      [("active", "yes"), ("since", since), ("action", self.estop_note),
+                       ("frozen pids", ", ".join(map(str, self.estop_pids)) or "none")])
 
     # ---------- fast probes: pure sysfs reads, safe at 1 Hz ----------
 
@@ -630,9 +743,9 @@ class SystemDiagnostics(Node):
     def tick(self):
         msg = DiagnosticArray()
         msg.header.stamp = self.get_clock().now().to_msg()
-        for build in (self.thermal, self.cpu, self.gpu, self.memory, self.storage,
-                      self.power, self.vesc_device, self.network,
-                      self.gamepad, self.camera, self.clock):
+        for build in (self.estop_status, self.thermal, self.cpu, self.gpu,
+                      self.memory, self.storage, self.power, self.vesc_device,
+                      self.network, self.gamepad, self.camera, self.clock):
             try:
                 msg.status.append(build())
             except Exception as e:  # noqa: BLE001
@@ -703,6 +816,12 @@ def self_test():
     assert cpu_busy_pct(None, b) is None and cpu_busy_pct(a, a) is None
     print("gpu/cpu parser self-test passed")
 
+    # pgrep -f can match the diagnostics node itself; it must never be frozen
+    assert parse_pgrep("1234\n5678\n", 5678) == [1234]
+    assert parse_pgrep("", 1) == [] and parse_pgrep(None, 1) == []
+    assert parse_pgrep("12 junk 34", 0) == [12, 34]
+    print("e-stop pid self-test passed")
+
 
 def main():
     if "--self-test" in sys.argv:
@@ -716,6 +835,10 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        # Deliberately NOT releasing an active e-stop on exit: fail safe. Say how.
+        if node.estop_active and node.estop_pids:
+            print(f"e-stop still active: {DRIVE_CHAIN_NODE} is frozen. To resume: "
+                  f"kill -CONT {' '.join(map(str, node.estop_pids))}  (or restart bringup)")
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

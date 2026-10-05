@@ -52,6 +52,22 @@ let cmdSteer = 0;
 let stopBurst = 0;
 let lastDriveTick = performance.now();
 
+/* When this page last sent a /drive command, and when it last stopped
+   advertising — so commands and publishers that are NOT ours can be
+   told apart from our own echo. */
+let lastOwnSend = 0;
+let lastOwnUnadvertise = -Infinity;   // never, until we disarm
+
+/* Limits. Past the NORMAL values needs an unlock with a warning,
+   which re-locks when you leave the tab or reload. */
+const NORMAL_MAX_SPEED = 3.0;   // m/s — also the default
+const HIGH_MAX_SPEED = 5.0;     // m/s
+let highSpeed = false;
+
+const NORMAL_MAX_STEER = 0.34;  // rad, 19° — stock joy_teleop limit, the default
+const FULL_MAX_STEER = 0.41;    // rad, 23.5°
+let fullSteer = false;
+
 const driveKeys = new Set();
 /* fixed 4 m: while driving, what matters is what is close */
 const driveRadarScale = { ...newRadarScale(), mode: "fixed", range: 4 };
@@ -80,6 +96,8 @@ function limitSteer() {
 function publishDrive(speed, steer) {
 
   const now = Date.now();
+
+  lastOwnSend = performance.now();
 
   send({
     op: "publish",
@@ -114,6 +132,18 @@ function armDrive() {
 
   if (!$("driveConfirm").checked) return;
 
+  if (estopActive()) {
+    setDriveNote("The emergency stop is on. Release it at the top of the page first.");
+    return;
+  }
+
+  if (foreignDriveActive()) {
+    setDriveNote(
+      "Someone else is sending drive commands right now. " +
+      "Wait until they stop, or ask them to disarm.");
+    return;
+  }
+
   send({
     op: "advertise",
     topic: DRIVE_TOPIC,
@@ -139,6 +169,7 @@ function disarmDrive(reason) {
 
   if (driveArmed && socketOpen()) {
     send({ op: "unadvertise", topic: DRIVE_TOPIC });
+    lastOwnUnadvertise = performance.now();
   }
 
   driveArmed = false;
@@ -190,6 +221,10 @@ function driveTick() {
     disarmDrive("connection lost or replaced");
   }
 
+  if (driveArmed && estopActive()) {
+    disarmDrive("the emergency stop is on");
+  }
+
   let targetSpeed = 0;
   let targetSteer = 0;
 
@@ -237,7 +272,8 @@ function driveTick() {
 function renderDriveControls() {
 
   const ready =
-    $("driveConfirm").checked && socketOpen();
+    $("driveConfirm").checked && socketOpen() &&
+    !foreignDriveActive() && !estopActive();
 
   $("armBtn").disabled = !driveArmed && !ready;
   $("armBtn").textContent = driveArmed ? "Disarm" : "Arm";
@@ -346,23 +382,6 @@ function driveVitals() {
         : BAND_TONE[bandOf(scanStats.min)]
   });
 
-  /* who is driving */
-
-  rows.push({
-    label: "Driving input",
-    value:
-      mux === "teleop" ? "Physical controller"
-      : mux === "autonomous" ? "This page (/drive)"
-      : mux === "idle" ? "Idle"
-      : "—",
-    note:
-      mux === "teleop" ? "has priority over this page"
-      : mux === "autonomous" ? "car is taking these commands"
-      : mux === "idle" ? "nothing is driving"
-      : "no ackermann_mux diagnostics",
-    tone: mux === "teleop" ? "warn" : mux ? "ok" : ""
-  });
-
   /* the compute metrics the Overview already grades */
 
   const tiles = {};
@@ -393,6 +412,7 @@ function driveVitals() {
 function renderDrive() {
 
   renderDriveControls();
+  renderControl();
 
   const fresh =
     robotSpeedMps !== null &&
@@ -574,7 +594,245 @@ $("driveConfirm").addEventListener("change", () => {
   renderDriveControls();
 });
 
-/* ---------- limits ---------- */
+/* ---------- who's driving ----------
+
+   Everything that could be moving the car, in one place:
+   the physical controller, this page, another dashboard, and
+   autonomous code — plus which one the mux is actually following. */
+
+/* /drive messages arrived that this page did not send. Our own
+   commands echo back from rosbridge within a few tens of ms, so
+   anything more than 400 ms after our last send is someone else. */
+function foreignDriveActive() {
+
+  const topic = topics.get(DRIVE_TOPIC);
+
+  if (!topic || topic.last === null) return false;
+
+  const now = performance.now();
+
+  return now - topic.last < 1000 && topic.last - lastOwnSend > 400;
+}
+
+function drivePublishers() {
+
+  const topic = topics.get(DRIVE_TOPIC);
+  const names = (topic && topic.publishers) || [];
+
+  return {
+    /* every web dashboard publishes through the rosbridge node */
+    web: names.some(name => /rosbridge/.test(name)),
+    autonomous: names.filter(name => !/rosbridge/.test(name))
+  };
+}
+
+/* One answer to "who has the car right now?", most urgent first,
+   plus the extras that matter: whether there is a physical backup
+   stop, and warnings only when something is actually going on. */
+function controlState() {
+
+  const connected = socketOpen();
+  const pubs = drivePublishers();
+  const foreign = foreignDriveActive();
+  const active = driveArmed && (padHeld || driveKeys.size > 0);
+
+  /* right after we disarm, rosbridge can still list us for a few
+     seconds — do not call that "another dashboard" */
+  const otherArmed =
+    !driveArmed &&
+    pubs.web &&
+    performance.now() - lastOwnUnadvertise > 15000;
+
+  /* ---- the headline ---- */
+
+  let hero;
+
+  if (estopActive()) {
+
+    hero = { tone: "bad", icon: "🛑", title: "Emergency stop is on",
+             sub: "Nobody can drive the car until it is released at the top of the page." };
+
+  } else if (!connected) {
+
+    hero = { tone: "none", icon: "⏸", title: "Not connected",
+             sub: "Connect to the robot in the top bar." };
+
+  } else if (foreign && pubs.autonomous.length && !pubs.web) {
+
+    hero = { tone: "bad", icon: "🤖", title: "Autonomous code is driving",
+             sub: pubs.autonomous.join(", ") + " is sending drive commands." };
+
+  } else if (foreign) {
+
+    hero = { tone: "bad", icon: "🖥️", title: "Someone else is driving",
+             sub: "Another dashboard is sending drive commands. You can't arm until they stop." };
+
+  } else if (mux === "teleop") {
+
+    hero = { tone: "warn", icon: "🎮", title: "The controller is driving",
+             sub: "Someone is holding the controller's deadman. It overrides this page." };
+
+  } else if (active) {
+
+    hero = { tone: "you", icon: "🕹️", title: "You are driving",
+             sub: "Let go to stop. STOP, Space or Esc disarms." };
+
+  } else if (driveArmed) {
+
+    hero = { tone: "you", icon: "🕹️", title: "You're armed",
+             sub: "Hold the pad or a drive key to move." };
+
+  } else if (mux === "autonomous") {
+
+    hero = { tone: "warn", icon: "🤖", title: "The car is following /drive",
+             sub: "Something is sending drive commands." };
+
+  } else {
+
+    hero = { tone: "ok", icon: "⏸", title: "Nobody is driving",
+             sub: "The car is idle. Arm the controls to drive." };
+  }
+
+  /* ---- the backup stop ---- */
+
+  const pad = diag["system: Gamepad"];
+  const padValues = (pad && pad.values) || {};
+  const padLinked =
+    padValues["bluetooth"] === "connected" ||
+    (padValues["js devices"] && padValues["js devices"] !== "none");
+
+  const chips = [
+    !pad
+      ? { tone: "", text: "🎮 Controller: unknown",
+          title: "Needs system_diagnostics.py running on the robot" }
+      : padLinked
+      ? { tone: "ok", text: "🎮 Controller connected",
+          title: "The physical controller is your backup stop" }
+      : { tone: "warn", text: "🎮 No controller — no backup stop",
+          title: "Pair the PS4 controller so someone can take over" }
+  ];
+
+  /* ---- warnings, only when true ---- */
+
+  const alerts = [];
+
+  if (connected && otherArmed && !foreign) {
+    alerts.push({ tone: "warn",
+      text: "Another dashboard is armed and could start driving at any moment." });
+  }
+
+  if (connected && pubs.autonomous.length && !(foreign && !pubs.web)) {
+    alerts.push({ tone: "warn",
+      text: "Autonomous code is running: " + pubs.autonomous.join(", ") + "." });
+  }
+
+  if (clients !== null && clients > CLIENT_LIMIT) {
+    alerts.push({ tone: "bad",
+      text: `${clients} people connected — rosbridge serves ${CLIENT_LIMIT}, so some dashboards get no data.` });
+  }
+
+  return { hero, chips, alerts };
+}
+
+function renderControl() {
+
+  const { hero, chips, alerts } = controlState();
+
+  $("controlHero").className = "control-hero tone-" + hero.tone;
+  $("controlIcon").textContent = hero.icon;
+  $("controlTitle").textContent = hero.title;
+  $("controlSub").textContent = hero.sub;
+
+  $("controlChips").innerHTML =
+    chips.map(chip =>
+      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.text)}</span>`
+    ).join("");
+
+  $("controlAlerts").innerHTML =
+    alerts.map(alert =>
+      `<li class="${alert.tone}">${escapeHtml(alert.text)}</li>`
+    ).join("");
+}
+
+/* ---------- limits and high speed ---------- */
+
+function setHighSpeed(on) {
+
+  highSpeed = on;
+
+  const slider = $("maxSpeed");
+
+  slider.max = on ? HIGH_MAX_SPEED : NORMAL_MAX_SPEED;
+
+  if (!on && parseFloat(slider.value) > NORMAL_MAX_SPEED) {
+    slider.value = NORMAL_MAX_SPEED;
+  }
+
+  $("speedUnlockBtn").textContent =
+    on ? "Lock back to 3 m/s" : "⚠ Unlock high speed (up to 5 m/s)";
+
+  $("speedUnlockBtn").classList.toggle("unlocked", on);
+  $("speedMode").hidden = !on;
+  $("hudSpeedMode").hidden = !on;
+
+  renderLimits();
+}
+
+function setFullSteer(on) {
+
+  fullSteer = on;
+
+  const slider = $("maxSteer");
+
+  slider.max = on ? FULL_MAX_STEER : NORMAL_MAX_STEER;
+
+  if (!on && parseFloat(slider.value) > NORMAL_MAX_STEER) {
+    slider.value = NORMAL_MAX_STEER;
+  }
+
+  $("steerUnlockBtn").textContent =
+    on ? "Lock back to 19°" : "⚠ Unlock full steering (up to 23°)";
+
+  $("steerUnlockBtn").classList.toggle("unlocked", on);
+  $("steerMode").hidden = !on;
+  $("hudSteerMode").hidden = !on;
+
+  renderLimits();
+}
+
+/* One pattern for both unlocks: opening disarms, the confirm button
+   waits for every box, cancelling changes nothing. */
+function wireUnlock(prefix, isOn, setOn) {
+
+  const acks = [prefix + "Ack1", prefix + "Ack2"];
+
+  $(prefix + "UnlockBtn").onclick = () => {
+
+    if (isOn()) {
+      setOn(false);
+      return;
+    }
+
+    if (driveArmed) disarmDrive("changing the limits");
+
+    acks.forEach(id => { $(id).checked = false; });
+    $(prefix + "Confirm").disabled = true;
+    $(prefix + "Dialog").showModal();
+  };
+
+  acks.forEach(id =>
+    $(id).addEventListener("change", () => {
+      $(prefix + "Confirm").disabled = !acks.every(a => $(a).checked);
+    })
+  );
+
+  $(prefix + "Cancel").onclick = () => $(prefix + "Dialog").close();
+
+  $(prefix + "Confirm").onclick = () => {
+    $(prefix + "Dialog").close();
+    setOn(true);
+  };
+}
 
 function renderLimits() {
 
@@ -586,6 +844,11 @@ function renderLimits() {
 }
 
 $("maxSpeed").addEventListener("input", renderLimits);
+
+/* Each unlock is deliberate: a dialog that spells out the risk,
+   and two confirmations. */
+wireUnlock("speed", () => highSpeed, setHighSpeed);
+wireUnlock("steer", () => fullSteer, setFullSteer);
 $("maxSteer").addEventListener("input", renderLimits);
 
 /* ---------- LiDAR: zoom and big view ---------- */
@@ -663,6 +926,8 @@ try {
 
 setCamSize(savedCamSize === "large" ? "large" : "small");
 
+setHighSpeed(false);
+setFullSteer(false);
 renderLimits();
 placeKnob(0, 0);
 

@@ -1,0 +1,172 @@
+"use strict";
+
+/* Emergency stop: the one button that stops the car for everyone. */
+
+/* ==========================================================
+   EMERGENCY STOP
+
+   The page's own STOP only stops THIS page — the physical
+   controller has priority in ackermann_mux and would carry on.
+   E-STOP instead asks system_diagnostics.py on the robot to
+   freeze ackermann_to_vesc_node, the single node every input
+   (controller, web, autonomous) passes through to reach the
+   motor, and to hold the motor at speed 0 itself. Nothing can
+   move the car until someone presses Release.
+
+   No confirmation on the way in — it is for emergencies. The
+   way out asks, and is refused while anyone is holding the
+   controller's deadman, so the car never resumes into a live
+   command.
+
+   The robot reports the state as "system: E-stop" on
+   /diagnostics, so every open dashboard shows the same banner.
+========================================================== */
+
+const ESTOP_SERVICE = "/system_diagnostics/emergency_stop";
+const ESTOP_RELEASE = "/system_diagnostics/emergency_release";
+
+/* what we believe until the robot's diagnostics confirm it */
+let estopLocal = false;
+let estopError = "";
+let estopBusy = false;
+
+function estopDiag() {
+
+  const item = diag["system: E-stop"];
+
+  return item && Date.now() - item.receivedAt < 5000 ? item : null;
+}
+
+function estopActive() {
+
+  const item = estopDiag();
+
+  return item ? item.level === 2 : estopLocal;
+}
+
+function estopFailureText(error) {
+
+  if (/not connected/i.test(error.message)) {
+    return "E-STOP could not reach the robot — not connected. " +
+      "Use the controller or the car's power switch.";
+  }
+
+  if (/does not exist|unavailable|not available/i.test(error.message)) {
+    return "E-STOP is not available on this robot: system_diagnostics.py " +
+      "is an older copy or not running. Use the controller or the power switch.";
+  }
+
+  return "E-STOP failed: " + error.message +
+    ". Use the controller or the car's power switch.";
+}
+
+async function triggerEstop() {
+
+  /* stop this page first, without waiting for the robot */
+  if (typeof driveArmed !== "undefined" && driveArmed) {
+    disarmDrive("emergency stop");
+  }
+
+  estopLocal = true;
+  estopError = "";
+  estopBusy = true;
+  renderEstop();
+
+  try {
+
+    const result = await call(ESTOP_SERVICE);
+
+    /* success:false still means "holding speed 0", just weaker */
+    if (!result.success) estopError = result.message;
+
+  } catch (error) {
+
+    estopLocal = false;
+    estopError = estopFailureText(error);
+
+  } finally {
+
+    estopBusy = false;
+    renderEstop();
+  }
+}
+
+async function releaseEstop() {
+
+  if (mux === "teleop") return;
+
+  const ok = confirm(
+    "Release the emergency stop?\n\n" +
+    "The car will accept driving commands again. Make sure the area " +
+    "is clear and nobody is about to drive.");
+
+  if (!ok) return;
+
+  estopBusy = true;
+  renderEstop();
+
+  try {
+
+    const result = await call(ESTOP_RELEASE);
+
+    estopLocal = false;
+    estopError = result.success ? "" : result.message;
+
+  } catch (error) {
+
+    estopError = "Release failed: " + error.message;
+
+  } finally {
+
+    estopBusy = false;
+    renderEstop();
+  }
+}
+
+function renderEstop() {
+
+  const active = estopActive();
+  const item = estopDiag();
+  const bar = $("estopBar");
+
+  bar.hidden = !active && !estopError;
+  bar.classList.toggle("error-only", !active && Boolean(estopError));
+
+  $("estopText").innerHTML =
+    active
+      ? "<strong>🛑 EMERGENCY STOP IS ON.</strong> " +
+        "The car will not move for anyone — controller, this page or autonomous code."
+      : escapeHtml(estopError);
+
+  /* what the robot actually did, e.g. "froze ackermann_to_vesc_node (pid 1234)" */
+  const action =
+    active && item && item.values ? item.values["action"] || "" : "";
+
+  $("estopDetail").textContent =
+    active
+      ? estopBusy && !item
+        ? "Sending to the robot…"
+        : (action ? "Robot: " + action + "." : "") +
+          (estopError ? " " + estopError : "")
+      : "";
+
+  const release = $("estopRelease");
+  const deadman = mux === "teleop";
+
+  release.hidden = !active;
+  release.disabled = estopBusy || deadman;
+  release.title =
+    deadman
+      ? "Someone is holding the controller's deadman — they must let go first"
+      : "Let the car be driven again";
+  release.textContent =
+    deadman ? "Release (controller in use)" : "Release e-stop";
+
+  const button = $("estopBtn");
+
+  button.classList.toggle("active", active);
+  button.textContent = active ? "🛑 E-STOP ON" : "🛑 E-STOP";
+}
+
+$("estopBtn").onclick = triggerEstop;
+$("estopRelease").onclick = releaseEstop;

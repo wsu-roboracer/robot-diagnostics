@@ -206,8 +206,8 @@ Keys combine (W + A is forward-left). Keys are ignored while you are typing in a
 
 | Setting | Default | Notes |
 |---|---|---|
-| Max speed | 1.0 m/s | Slider, 0.3 to 3.0 m/s |
-| Max steering | 0.34 rad (19°) | Slider, 0.05 to 0.41 rad |
+| Max speed | 3.0 m/s | Slider, 0.3 to 3.0 m/s; up to 5.0 m/s after the high-speed unlock |
+| Max steering | 0.34 rad (19°) | Slider, 0.05 to 0.34 rad; up to 0.41 rad (23°) after the full-steering unlock |
 | `DRIVE_ACCEL` | 2.0 m/s² | How fast the speed may rise or change |
 | `STEER_RATE` | 2.5 rad/s | How fast steering may change |
 | `DRIVE_HZ` | 20 | Commands per second while driving |
@@ -234,6 +234,90 @@ If **Command** is non-zero but **Driving input** stays `Idle` and **Measured** s
 the mux is not accepting `/drive`. See [Troubleshooting](#troubleshooting).
 
 ---
+
+## High speed and full steering
+
+The speed slider normally stops at **3 m/s** (also the default) and the steering slider at
+**19°** (0.34 rad, the stock joystick limit). Two buttons go past those limits:
+
+| Button | Raises | Confirmations |
+|---|---|---|
+| **⚠ Unlock high speed** | speed to **5 m/s** (`HIGH_MAX_SPEED`) | large clear area, nobody in the path; someone holding the physical controller as a backup stop |
+| **⚠ Unlock full steering** | steering to **23°** (0.41 rad, `FULL_MAX_STEER`) | flat floor with open space; "I will slow down before turning hard" |
+
+Each opens a dialog that spells out the risk in plain terms - for speed: 5 m every second,
+about 1.5 m of reaction time before STOP, and up to 5 m with nobody in control if Wi-Fi drops;
+for steering: a full turn at speed can tip the car or spin it out. The unlock button stays
+disabled until both boxes are ticked.
+
+Opening either dialog **disarms** the controller. While on, red **HIGH SPEED** / **FULL
+STEERING** badges show on the Limits card and on the camera. Both switch off again when you
+leave the Drive tab or reload. The speed still ramps at 2 m/s², so 5 m/s takes about 2.5 s.
+
+The VESC's `speed_max` (in `vesc.yaml` on the robot) is a hard ceiling the page cannot pass.
+With the stock F1TENTH values (`speed_max` 23250 ERPM, `speed_to_erpm_gain` 4614) that is about
+5 m/s; check your car's file.
+
+## Who's driving
+
+A card at the top of the Drive tab's right column answers one question - *who has the car
+right now?* - in a single colour-coded line, most urgent first:
+
+| Headline | When |
+|---|---|
+| **Autonomous code is driving** (red) | `/drive` commands this page did not send, and only non-rosbridge nodes publish `/drive` |
+| **Someone else is driving** (red) | `/drive` commands this page did not send (more than 400 ms after its own last command), with a web dashboard publishing |
+| **The controller is driving** (amber) | The `ackermann_mux` diagnostic says the joystick input is unmasked |
+| **You are driving** / **You're armed** (orange) | This page's own state |
+| **The car is following /drive** (amber) | The mux is on `/drive` but the source was not identified |
+| **Nobody is driving** (green) | None of the above |
+
+Under it, one chip: **Controller connected** (your backup stop) or **No controller - no backup
+stop**, from `system: Gamepad`. Warnings are listed only when they apply: another dashboard is
+armed (rosbridge listed as a `/drive` publisher while this page is not armed), autonomous code
+is running (any non-rosbridge `/drive` publisher, from `/rosapi/publishers` every 5 s), or more
+people are connected than rosbridge serves.
+
+How many people have the dashboard open is shown as **Connected** in the status banner on every
+tab, from rosbridge's `/client_count` (it updates only when someone connects or leaves).
+
+**Arming is refused** while another source is actively sending `/drive` commands. All web
+dashboards publish through the same rosbridge node, so once *this* page is armed it cannot
+tell its own commands from another dashboard's; the check works before you arm.
+
+## Emergency stop (E-STOP)
+
+The Drive tab's **STOP** only stops *this page*. The physical controller has priority in
+`ackermann_mux`, so if someone is driving with it, nothing the page publishes can stop the car.
+
+The red **🛑 E-STOP** button in the top bar (on every tab) can. It calls
+`/system_diagnostics/emergency_stop` (a `std_srvs/Trigger` on `system_diagnostics.py`), which:
+
+1. **freezes `ackermann_to_vesc_node`** with `SIGSTOP`. Every input - controller, web,
+   autonomous - reaches the motor through that one node, so all of them are cut at once;
+2. **holds the motor at speed 0** itself, publishing `/commands/motor/speed = 0.0` at 50 Hz. The
+   VESC actively brakes to a stop and keeps receiving a command, so its own timeout never
+   kicks in. Speed 0 rather than a brake current: the joystick's own release already sends
+   speed 0, and brake units differ between `vesc_driver` versions;
+3. **reports `system: E-stop` = ERROR** on `/diagnostics`, so every open dashboard shows the
+   red banner, the Who's-driving card says *Emergency stop is on*, and arming is refused.
+
+There is no confirmation on the way in. **Release** (in the banner) calls
+`/system_diagnostics/emergency_release`, which resumes the node with `SIGCONT`. It asks first,
+and is refused while the mux says someone is holding the controller's deadman, so the car never
+resumes into a live command.
+
+Fail-safe details:
+
+- If `system_diagnostics.py` exits while the e-stop is on, the drive node **stays frozen**. It
+  prints the `kill -CONT <pid>` to run, or restart bringup.
+- If the node cannot be found or frozen, the e-stop still holds speed 0 and the banner says
+  *"holding speed 0 only, the controller may still fight it"*.
+- If the robot is unreachable, or `system_diagnostics.py` is an older copy without the service,
+  the page says so plainly and points to the controller or the power switch. **E-STOP needs the
+  rosbridge connection**; it is not a hardware kill switch.
+- Anything that publishes `/commands/motor/*` directly (bypassing `ackermann_to_vesc_node`) is
+  not stopped.
 
 ## Priority: the physical controller always wins
 
@@ -268,6 +352,8 @@ in `localStorage` under the key `driveCam`.
 
 | File | What it does |
 |---|---|
+| `prototype/js/estop.js` | The E-STOP button and banner: calls the robot's `emergency_stop` / `emergency_release` services, reads `system: E-stop` |
+| `prototype/system_diagnostics.py` | The robot side of E-STOP (`emergency_stop`, `emergency_release`, 50 Hz zero-speed hold) |
 | `prototype/js/drive.js` | The whole controller: arm and disarm, the 20 Hz loop (`driveTick`), pad and keyboard input, disarm triggers, the Vitals list (`driveVitals`), the camera size switch |
 | `prototype/js/main.js` | `showTab()`: disarms when leaving Drive, and moves the camera. Calls `renderDrive()` from the 2 Hz render loop |
 | `prototype/js/connection.js` | The rosbridge socket (`ws`) and `connect()`. Replacing the socket disarms the controller on its next tick |
@@ -365,13 +451,17 @@ Do this once per robot, with the **wheels off the ground** (car on a stand):
 5. **Check the physical override.** While holding `W` on the page, hold L1 on the PS4
    controller with the sticks centred. The wheels should stop, and **Driving input** should
    switch to `Physical controller`.
-6. **Measure a lost connection.** While driving on the stand, disconnect Wi-Fi on the laptop
+6. **Test the E-STOP against the controller.** Hold L1 and drive the wheels with the PS4
+   controller, then press **E-STOP** on the page. The wheels should stop at once and stay
+   stopped while you keep holding L1. Let go of L1, press **Release**, and check the
+   controller drives again.
+7. **Measure a lost connection.** While driving on the stand, disconnect Wi-Fi on the laptop
    and time how long the wheels keep turning. This is the VESC command timeout; with no zero
    coming from the page, nothing else stops them. `prototype/tools/estop_capture.py` records
    the chain with timestamps. If it is much more than 1 s, lower the VESC timeout before
    driving on the floor.
 
-Only then drive on the floor, starting at the default 1.0 m/s limit.
+Only then drive on the floor. Start with the speed slider well below the 3 m/s default.
 
 ---
 
@@ -381,8 +471,9 @@ Only then drive on the floor, starting at the default 1.0 m/s limit.
   publish `/drive`, with or without this page. The Drive tab does not create that risk,
   but it makes it a button. Restrict access (network isolation, or a rosbridge
   authentication layer) before this is used anywhere but a supervised lab.
-- **More than one dashboard can arm at once.** Two browsers publishing `/drive` would both
-  feed the same mux input. There is no "someone else is driving" check yet.
+- **More than one dashboard can still arm at once** if neither is moving yet. The page refuses
+  to arm while someone else is actively driving, and warns when another dashboard is armed,
+  but once armed it cannot tell its own commands from another browser's.
 - **The obstacle distance is a warning, not a brake.** Nothing on this page stops the car
   because something is close.
 - **Link loss is not covered by the page.** If the connection dies mid-drive, the car holds
