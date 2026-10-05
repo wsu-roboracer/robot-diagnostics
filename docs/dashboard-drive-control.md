@@ -304,7 +304,7 @@ The red **🛑 E-STOP** button in the top bar (on every tab) can. It calls
 
 There is no confirmation on the way in. **Release** (in the banner) calls
 `/system_diagnostics/emergency_release`, which resumes the node with `SIGCONT`. It asks first,
-and is refused while the mux says someone is holding the controller's deadman, so the car never
+and is refused while L1 or R1 is held on the controller (read from `/joy`), so the car never
 resumes into a live command.
 
 Fail-safe details:

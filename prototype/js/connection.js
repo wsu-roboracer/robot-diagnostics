@@ -254,6 +254,11 @@ function handleMessage(message) {
 
     onOdom(message.msg);
   }
+
+  else if (topicName === "/joy") {
+
+    onJoy(message.msg);
+  }
 }
 
 /* ==========================================================
