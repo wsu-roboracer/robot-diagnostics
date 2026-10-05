@@ -81,9 +81,11 @@ The **Release e-stop** button sits in the red banner. Releasing is deliberately 
 stopping:
 
 - **It asks for confirmation:** "Make sure the area is clear and nobody is about to drive."
-- **It is refused while someone holds the controller's deadman (L1).** The button reads
-  *Release (controller in use)* and is disabled. Otherwise the car would resume straight into a
-  live command.
+- **It is refused while someone holds a deadman on the controller** (L1 for manual driving or R1
+  for autonomous). The button reads *Release (controller in use)* and is disabled. Otherwise the
+  car would resume straight into a live command. The page reads L1 (`buttons[4]`) and R1
+  (`buttons[5]`) straight from `/joy`. It does not use the mux's "unmasked" flag, because that
+  flag is on whenever a controller is connected, even if nobody is touching it.
 - On release, the page calls `/system_diagnostics/emergency_release`. The robot sends
   `SIGCONT` to the frozen node, stops the zero-speed hold, and reports `system: E-stop` =
   OK. The banner then disappears from every dashboard.

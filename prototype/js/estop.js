@@ -30,6 +30,32 @@ let estopLocal = false;
 let estopError = "";
 let estopBusy = false;
 
+/* Deadman state, read straight from /joy. NOT the mux's
+   "unmasked": joy_teleop keeps /teleop alive whenever a pad is
+   connected, so the mux reads "joystick unmasked" with nobody
+   touching it (spike notes, S-22) and Release would never unlock.
+   L1 = buttons[4] (manual), R1 = buttons[5] (autonomous), from
+   joy_teleop.yaml. A silent /joy means no pad, so nothing held. */
+const JOY_L1 = 4;
+const JOY_R1 = 5;
+const JOY_FRESH_MS = 1000;
+
+let joyButtons = [];
+let joyAt = 0;
+
+function onJoy(message) {
+
+  joyButtons = message.buttons || [];
+  joyAt = Date.now();
+}
+
+function deadmanHeld() {
+
+  if (Date.now() - joyAt > JOY_FRESH_MS) return false;
+
+  return joyButtons[JOY_L1] === 1 || joyButtons[JOY_R1] === 1;
+}
+
 function estopDiag() {
 
   const item = diag["system: E-stop"];
@@ -93,7 +119,7 @@ async function triggerEstop() {
 
 async function releaseEstop() {
 
-  if (mux === "teleop") return;
+  if (deadmanHeld()) return;
 
   const ok = confirm(
     "Release the emergency stop?\n\n" +
@@ -151,7 +177,7 @@ function renderEstop() {
       : "";
 
   const release = $("estopRelease");
-  const deadman = mux === "teleop";
+  const deadman = deadmanHeld();
 
   release.hidden = !active;
   release.disabled = estopBusy || deadman;
