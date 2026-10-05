@@ -3,6 +3,7 @@
 # start_diagnostics.sh. Browsers can't speak the raw multipart TCP
 # stream directly; this just relays it as a proper HTTP response.
 import socket
+from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 GSTREAMER_HOST = "127.0.0.1"
@@ -13,7 +14,10 @@ HTTP_PORT = 8082
 class CameraHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
-        if self.path != "/camera.mjpg":
+        # The dashboard appends ?t=<timestamp> on a reconnect so the
+        # browser cannot hand back a cached failure; match on the path
+        # alone or that retry is a 404.
+        if urlsplit(self.path).path != "/camera.mjpg":
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b"Not found")
