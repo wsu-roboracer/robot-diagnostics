@@ -2426,3 +2426,472 @@ kbd {
     gap: 4px;
   }
 }
+
+/* ----------------------------------------------------------
+   PHONES — no sideways swiping: everything stacks and wraps
+---------------------------------------------------------- */
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 800px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .main-grid > *,
+  .critical-grid > *,
+  .live-card,
+  .side-card,
+  .advanced-card {
+    min-width: 0;
+  }
+
+  /* top bar: status + address, then big tappable actions */
+  .topbar {
+    gap: 8px;
+  }
+
+  .topbar-conn {
+    flex-wrap: wrap;
+  }
+
+  .topbar-conn input {
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .conn-status {
+    flex: 1;
+  }
+
+  .topbar-actions {
+    flex: 1 1 100%;
+  }
+
+  .topbar-actions .top-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .theme-switch {
+    flex: 1;
+  }
+
+  .theme-switch button {
+    flex: 1;
+  }
+
+  .top-btn,
+  .check-btn,
+  .arm-btn,
+  .theme-switch button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .size-switch button {
+    min-height: 36px;
+  }
+
+  .topbar-conn input,
+  .camera-controls input,
+  .table-tools input[type="search"] {
+    font-size: 16px; /* stops iOS zooming in on focus */
+    min-height: 44px;
+  }
+
+  .title h1 {
+    letter-spacing: -1px;
+  }
+
+  /* tabs share the row evenly */
+  .tabs {
+    margin-top: 16px;
+  }
+
+  .tab {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 6px;
+  }
+
+  .status-banner {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+
+  .status-facts {
+    gap: 8px;
+  }
+
+  .status-facts .v {
+    font-size: 15px;
+  }
+
+  .battery-card {
+    grid-template-columns: 1fr 120px;
+  }
+
+  .battery-gauge {
+    transform: scale(.9);
+    transform-origin: right center;
+  }
+
+  .metrics {
+    gap: 10px;
+  }
+
+  .metric .value {
+    font-size: 24px;
+  }
+
+  .critical-grid,
+  .live-grid,
+  .main-grid {
+    gap: 14px;
+  }
+
+  /* subsystem table -> one card per subsystem */
+  .subsystem-wrap {
+    overflow: visible;
+  }
+
+  .subsystem-table,
+  .subsystem-table tbody,
+  .subsystem-table tr,
+  .subsystem-table td {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .subsystem-table thead {
+    display: none;
+  }
+
+  .subsystem-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+
+  .subsystem-table tbody td {
+    padding: 4px 0;
+  }
+
+  .subsystem-table td:nth-child(2)::before,
+  .subsystem-table td:nth-child(4)::before {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .subsystem-table td:nth-child(2)::before { content: "Node / Source"; }
+  .subsystem-table td:nth-child(4)::before { content: "Details"; }
+
+  .source {
+    overflow-wrap: anywhere;
+  }
+
+  .details {
+    max-width: none;
+  }
+
+  /* ROS graph */
+  .node-list {
+    grid-template-columns: 1fr;
+  }
+
+  .topic-list li {
+    flex-wrap: wrap;
+  }
+
+  .topic-list .name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .topic-list .why {
+    white-space: normal;
+    margin-left: 15px;
+  }
+
+  /* live cards */
+  .live-grid .stream-box {
+    height: auto;
+    aspect-ratio: 16 / 10;
+  }
+
+  .live-grid .radar-box {
+    aspect-ratio: 1 / 1;
+    width: 100%;
+  }
+
+  .camera-controls .check-btn,
+  .snapshot-actions .check-btn,
+  .preset-row .check-btn {
+    flex: 1 1 calc(50% - 8px);
+    text-align: center;
+  }
+
+  .preset-row label {
+    flex: 1 1 40%;
+  }
+
+  .preset-row input {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .readout-grid .v {
+    font-size: 19px;
+  }
+
+  /* drive tab */
+  .drive-pad {
+    max-width: min(86vw, 320px);
+  }
+
+  .pad-side {
+    width: 100%;
+  }
+
+  .stop-btn {
+    height: 68px;
+    font-size: 26px;
+  }
+
+  .arm-check {
+    font-size: 15px;
+    align-items: flex-start;
+  }
+
+  .arm-check input {
+    width: 22px;
+    height: 22px;
+    flex: none;
+  }
+
+  .arm-btn {
+    width: 100%;
+    font-size: 17px;
+  }
+
+  .slider-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 4px;
+    margin: 14px 0;
+  }
+
+  .slider-row input {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 32px;
+  }
+
+  .drive-cam .stream-box {
+    max-height: 32vh;
+  }
+
+  .hud {
+    left: 6px;
+    right: 6px;
+  }
+
+  .hud-bottom {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .hud-k {
+    font-size: 9px;
+  }
+
+  .cam-tools {
+    gap: 8px;
+  }
+
+  /* advanced */
+  .attention {
+    padding: 12px 14px;
+  }
+
+  .attention-list .what {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .jump-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .jump-nav a {
+    white-space: nowrap;
+    padding: 9px 14px;
+  }
+
+  .table-tools {
+    flex-wrap: wrap;
+  }
+
+  .table-tools input[type="search"] {
+    flex: 1 1 100%;
+  }
+
+  .scroll {
+    max-height: 420px;
+  }
+
+  /* raw tables wrap instead of forcing a sideways swipe */
+  .raw-table {
+    font-size: 12.5px;
+  }
+
+  .raw-table th,
+  .raw-table td {
+    padding: 8px 6px;
+    overflow-wrap: anywhere;
+  }
+
+  .why {
+    max-width: none;
+  }
+
+  .sys-row {
+    grid-template-columns: 12px 1fr;
+  }
+
+  .sys-values {
+    grid-column: 1 / -1;
+  }
+
+  .check-btn {
+    white-space: normal;
+  }
+
+  .check-note {
+    max-width: none;
+  }
+
+  /* footer flows with the page instead of covering it */
+  .footer {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 16px;
+    padding: 10px 14px;
+  }
+
+  .footer-group {
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+
+  .page {
+    padding-bottom: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .battery-card {
+    grid-template-columns: 1fr;
+  }
+
+  .battery-gauge {
+    margin: 0 auto;
+    transform-origin: center;
+  }
+
+  .status-facts {
+    flex-wrap: wrap;
+  }
+}
+
+/* ----------------------------------------------------------
+   PHONES / TABLETS — centred header, tabs live in the top bar
+---------------------------------------------------------- */
+
+.topbar-toggle {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .top-header {
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+
+  /* script moves .tabs into the sticky top bar at this width */
+  .topbar .tabs {
+    flex: 1 1 100%;
+    order: 10;
+    margin: 0 -14px -9px;
+    padding: 0 14px;
+    border-bottom: 0;
+  }
+
+  .advanced-card {
+    scroll-margin-top: 190px;
+  }
+
+  /* fold the bar down to connection status + tabs */
+  .topbar-toggle {
+    display: flex;
+    order: 2;
+    min-width: 84px;
+    justify-content: center;
+  }
+
+  .topbar.collapsed .topbar-conn input,
+  .topbar.collapsed #connectBtn,
+  .topbar.collapsed .theme-switch {
+    display: none;
+  }
+
+  /* flatten the two groups so the compact refresh square can sit
+     right beside Hide, on the first row of the bar */
+  .topbar-conn,
+  .topbar-actions {
+    display: contents;
+  }
+
+  .conn-status        { order: 1; flex: 1; }
+  #connectBtn         { order: 2; }
+  #refreshBtn         { order: 3; }
+  .topbar-toggle      { order: 4; }
+  .topbar-conn input  { order: 5; flex: 1 1 100%; }
+  .theme-switch       { order: 6; flex: 1 1 100%; }
+
+  #refreshBtn {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    min-height: 0;
+    padding: 0;
+    justify-content: center;
+  }
+
+  #refreshBtn #refreshLabel {
+    display: none;
+  }
+
+  #refreshBtn .refresh-symbol {
+    font-size: 24px;
+  }
+
+  .topbar-toggle {
+    height: 44px;
+  }
+}
