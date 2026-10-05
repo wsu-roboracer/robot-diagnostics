@@ -37,10 +37,14 @@
            title="rosbridge WebSocket address — press Enter or Connect">
 
     <button class="top-btn" id="connectBtn" type="submit">Connect</button>
+
+    <!-- phones/tablets only: folds the bar down to status + tabs -->
+    <button class="top-btn topbar-toggle" id="topbarToggle" type="button"
+            aria-expanded="true" aria-controls="connForm">Hide ▲</button>
   </form>
 
   <div class="topbar-actions">
-    <button class="top-btn" id="refreshBtn" type="button"
+    <button class="top-btn" id="refreshBtn" type="button" aria-label="Refresh"
             title="Reconnect and rescan the ROS graph">
       <span class="refresh-symbol">⟳</span>
       <span id="refreshLabel">Refresh</span>
@@ -735,6 +739,35 @@ last change shows — until the next one.">
   </div>
 
 </footer>
+
+<script>
+  /* Phones/tablets: the tab bar lives in the sticky top bar. Wider
+     screens keep it in the page, exactly where it was. */
+  (function () {
+    const tabs = document.querySelector(".tabs");
+    const topbar = document.querySelector(".topbar");
+    const marker = document.createComment("tabs-home");
+    tabs.before(marker);
+    const mq = window.matchMedia("(max-width: 800px)");
+    function place() {
+      if (mq.matches) topbar.appendChild(tabs);
+      else marker.after(tabs);
+    }
+    mq.addEventListener("change", place);
+    place();
+
+    const toggle = document.getElementById("topbarToggle");
+    function fold(collapsed) {
+      topbar.classList.toggle("collapsed", collapsed);
+      toggle.textContent = collapsed ? "Show ▼" : "Hide ▲";
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      try { localStorage.setItem("topbarCollapsed", collapsed ? "1" : "0"); } catch (e) {}
+    }
+    toggle.addEventListener("click", () =>
+      fold(!topbar.classList.contains("collapsed")));
+    try { if (localStorage.getItem("topbarCollapsed") === "1") fold(true); } catch (e) {}
+  })();
+</script>
 
 <script src="js/config.js"></script>
 <script src="js/helpers.js"></script>
