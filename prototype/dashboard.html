@@ -848,7 +848,7 @@ last change shows — until the next one.">
     const topbar = document.querySelector(".topbar");
     const marker = document.createComment("tabs-home");
     tabs.before(marker);
-    const mq = window.matchMedia("(max-width: 800px), (orientation: landscape) and (max-height: 520px)");
+    const mq = window.matchMedia("(max-width: 800px)");
     function place() {
       if (mq.matches) topbar.appendChild(tabs);
       else marker.after(tabs);

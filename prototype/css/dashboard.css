@@ -2767,7 +2767,7 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
-@media (max-width: 800px), (orientation: landscape) and (max-height: 520px) {
+@media (max-width: 800px) {
   body {
     overflow-x: hidden;
   }
@@ -3158,7 +3158,7 @@ html {
   display: none;
 }
 
-@media (max-width: 800px), (orientation: landscape) and (max-height: 520px) {
+@media (max-width: 800px) {
   .top-header {
     align-items: center;
     text-align: center;
@@ -3225,184 +3225,5 @@ html {
 
   .topbar-toggle {
     height: 44px;
-  }
-}
-
-/* ----------------------------------------------------------
-   PHONES IN LANDSCAPE — drive with the pad and camera side by
-   side, thumbs on the left, view on the right, no scrolling
----------------------------------------------------------- */
-
-@media (orientation: landscape) and (max-height: 520px) {
-  .page {
-    padding: 8px 14px 16px;
-  }
-
-  /* one slim row: status, refresh, hide, tabs */
-  .topbar {
-    padding: 4px 14px;
-    gap: 6px;
-  }
-
-  .topbar .tabs {
-    flex: 1 1 auto;
-    order: 5;
-    margin: 0;
-    padding: 0;
-    min-width: 0;
-  }
-
-  .tab {
-    padding: 8px 10px;
-  }
-
-  .topbar-conn input {
-    order: 6;
-  }
-
-  .theme-switch {
-    order: 7;
-  }
-
-  #refreshBtn,
-  .topbar-toggle {
-    width: auto;
-    height: 36px;
-    min-height: 0;
-  }
-
-  #refreshBtn {
-    width: 36px;
-  }
-
-  .top-header {
-    flex-direction: row;
-    justify-content: center;
-    gap: 16px;
-    align-items: baseline;
-  }
-
-  .title h1 {
-    font-size: 26px;
-  }
-
-  .title p {
-    display: none;
-  }
-
-  /* controls | camera */
-  .drive-warning {
-    margin-top: 8px;
-    padding: 6px 10px;
-    font-size: 11.5px;
-    line-height: 1.35;
-  }
-
-  .drive-grid,
-  .drive-grid[data-cam="large"] {
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    grid-template-areas:
-      "left center"
-      "right center";
-    gap: 10px;
-    margin-top: 8px;
-  }
-
-  .drive-col {
-    gap: 10px;
-  }
-
-  .drive-card,
-  .drive-view,
-  .side-card {
-    padding: 10px;
-  }
-
-  .live-card h2,
-  .side-card h2 {
-    margin-bottom: 8px;
-    font-size: 15px;
-  }
-
-  .arm-row {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 10px;
-  }
-
-  .arm-check {
-    font-size: 13px;
-  }
-
-  .arm-btn {
-    width: auto;
-    min-width: 96px;
-    min-height: 40px;
-  }
-
-  /* pad on the left, a tall STOP beside it */
-  .pad-wrap {
-    flex-direction: row;
-    align-items: stretch;
-    justify-content: center;
-    gap: 12px;
-    margin-top: 8px;
-  }
-
-  .drive-pad {
-    flex: none;
-    width: min(48vh, 46%);
-    max-width: none;
-    margin: 0;
-  }
-
-  .pad-side {
-    flex: 1;
-    width: auto;
-    min-width: 0;
-  }
-
-  .pad-side .card-hint {
-    display: none;
-  }
-
-  .stop-btn {
-    flex: 1;
-    width: 100%;
-    height: auto;
-    min-height: 64px;
-    font-size: 24px;
-  }
-
-  .drive-cam .stream-box,
-  .drive-grid[data-cam="large"] .drive-cam .stream-box {
-    max-height: 62vh;
-  }
-
-  .drive-radar {
-    width: min(100%, 40vh);
-  }
-
-  .slider-row {
-    grid-template-columns: 92px 1fr 58px;
-    margin: 8px 0;
-  }
-
-  .slider-row input {
-    grid-column: auto;
-    grid-row: auto;
-    height: auto;
-  }
-
-  /* the other tabs just need to use the width */
-  .critical-grid,
-  .live-grid,
-  .advanced-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .live-grid .stream-box {
-    height: 200px;
   }
 }
