@@ -446,11 +446,11 @@ input {
    capped by width and centred instead of stretched. */
 .live-grid .stream-box {
   aspect-ratio: auto;
-  height: 380px;
+  height: 420px;
 }
 
 .live-grid .radar-box {
-  width: min(100%, 380px);
+  width: min(100%, 420px);
   margin: 0 auto 12px;
 }
 
@@ -1993,8 +1993,88 @@ kbd {
 }
 
 .drive-radar {
-  width: min(100%, 300px);
-  margin: 0 auto;
+  position: relative;
+  width: min(100%, 360px);
+  margin: 0 auto 12px;
+}
+
+/* zoom buttons sit on the plot's top-right corner */
+.radar-zoom {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(11, 13, 16, 0.75);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.radar-zoom button {
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.radar-zoom button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.radar-zoom button[aria-pressed="true"] {
+  background: var(--orange);
+}
+
+#driveZoomAuto {
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+#driveZoomLabel {
+  min-width: 58px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.small-btn {
+  padding: 3px 10px;
+  font-size: 12.5px;
+}
+
+/* Drive readouts: 2 × 2 in the narrower card */
+.surround-card .sector-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.surround-card .sector-v {
+  font-size: 24px;
+}
+
+/* BIG LIDAR: the plot takes the camera's slot and grows; the camera
+   shrinks to a strip under it; controls and vitals never move */
+.drive-grid[data-lidar="big"] .surround-card {
+  order: -1;
+}
+
+.drive-grid[data-lidar="big"] .drive-radar {
+  width: min(100%, 62vh);
+}
+
+.drive-grid[data-lidar="big"] .surround-card .sector-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.drive-grid[data-lidar="big"] .drive-cam .stream-box {
+  max-height: 24vh;
 }
 
 .drive-radar canvas {
@@ -2313,6 +2393,248 @@ kbd {
 }
 
 /* ----------------------------------------------------------
+   LIDAR CARD — range steps, plot key, sector readouts
+---------------------------------------------------------- */
+
+.lidar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: -4px 0 10px;
+}
+
+.lidar-toolbar .view-switch {
+  margin-right: auto;
+}
+
+/* the one-sentence answer, above the map */
+.lidar-status {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-left-width: 6px;
+  font-size: 15px;
+  line-height: 1.4;
+  background: var(--panel-soft);
+}
+
+.lidar-status.tone-far {
+  border-left-color: var(--healthy);
+  background: var(--healthy-soft);
+}
+
+.lidar-status.tone-close {
+  border-left-color: var(--degraded);
+  background: var(--degraded-soft);
+}
+
+.lidar-status.tone-near {
+  border-left-color: var(--failed);
+  background: var(--failed-soft);
+}
+
+.lidar-status.tone-none {
+  border-left-color: var(--unknown);
+  color: var(--muted);
+}
+
+.lidar-howto {
+  margin: -6px 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.lidar-tech {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.lidar-tech summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.lidar-tech .card-hint {
+  margin-top: 6px;
+}
+
+.lidar-toolbar-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.range-switch {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.range-switch button {
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.range-switch button + button {
+  border-left: 1px solid var(--border-strong);
+}
+
+.range-switch button[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.lidar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  margin: 4px 0 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.lidar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sw {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.sw-near  { background: #ff5a52; }
+.sw-close { background: #ffc400; }
+.sw-far   { background: #39ff88; }
+.sw-ghost { background: rgba(140, 150, 168, 0.7); }
+.sw-free  { background: rgba(57, 200, 120, 0.25); border: 1px solid rgba(57, 200, 120, 0.5); }
+
+.sw-moved {
+  background: transparent;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+}
+
+/* each view's key shows only its own items */
+.lidar-legend[data-view="lines"] .only-detailed,
+.lidar-legend[data-view="detailed"] .only-lines {
+  display: none;
+}
+
+.sw-ring-near,
+.sw-ring-close {
+  background: transparent;
+  border-radius: 50%;
+  border: 2px dashed #ff5a52;
+}
+
+.sw-ring-close {
+  border-color: #ffc400;
+}
+
+.sw-line {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+  background: #39ff88;
+}
+
+.sw-car {
+  width: 9px;
+  height: 14px;
+  border-radius: 1px;
+  border: 2px solid #8ab4ff;
+  background: rgba(138, 180, 255, 0.25);
+}
+
+.surround-card .lidar-legend {
+  font-size: 12px;
+  gap: 4px 12px;
+}
+
+/* readouts: one card per direction, the distance as big as the
+   plot labels are small, so it reads from a step back */
+.sector-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.sector-k {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sector-v {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sector-trend {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-3);
+  max-width: 100%;
+}
+
+.sector-trend:empty {
+  visibility: hidden;
+}
+
+.band-near  { color: var(--bad-ink); }
+.band-close { color: var(--warn-ink); }
+.band-far   { color: var(--ok-ink); }
+.band-clear { color: var(--muted); }
+
+.sector-trend.trend-closer {
+  color: var(--warn-ink);
+  background: var(--degraded-soft);
+}
+
+.sector-trend.trend-farther {
+  color: var(--ok-ink);
+  background: var(--healthy-soft);
+}
+
+/* ----------------------------------------------------------
    RESPONSIVE
 ---------------------------------------------------------- */
 
@@ -2350,6 +2672,16 @@ kbd {
 @media (max-width: 800px) {
   .metrics {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .sector-grid,
+  .drive-grid[data-lidar="big"] .surround-card .sector-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lidar-toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .topbar {

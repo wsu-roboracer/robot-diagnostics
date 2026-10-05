@@ -53,7 +53,8 @@ let stopBurst = 0;
 let lastDriveTick = performance.now();
 
 const driveKeys = new Set();
-const driveRadarScale = { value: 6 };
+/* fixed 4 m: while driving, what matters is what is close */
+const driveRadarScale = { ...newRadarScale(), mode: "fixed", range: 4 };
 
 const KEY_FWD = new Set(["w", "arrowup"]);
 const KEY_BACK = new Set(["s", "arrowdown"]);
@@ -277,11 +278,10 @@ function renderDriveReadout(active) {
 
 /* ---------- vitals: what to watch while driving ---------- */
 
-/* Obstacle distance, from the scan we already receive. PROVISIONAL
-   — a car at 1 m/s covers 0.3 m in the ~300 ms it takes a person
-   to react. */
-const OBSTACLE_WARN = 0.6;
-const OBSTACLE_BAD = 0.3;
+/* Obstacle distance uses the LiDAR card's bands (LIDAR_NEAR /
+   LIDAR_CLOSE in metrics.js), so a colour means the same distance
+   on the plot and here. */
+const BAND_TONE = { near: "bad", close: "warn", far: "ok" };
 
 const GRADE_TONE = { ok: "ok", warn: "warn", bad: "bad" };
 
@@ -341,10 +341,9 @@ function driveVitals() {
         : "—",
     note: scanFresh ? "LiDAR, any direction" : "no LiDAR scan",
     tone:
-      !scanFresh || scanStats.min === null ? "warn"
-      : scanStats.min < OBSTACLE_BAD ? "bad"
-      : scanStats.min < OBSTACLE_WARN ? "warn"
-      : "ok"
+      !scanFresh || scanStats.min === null
+        ? "warn"
+        : BAND_TONE[bandOf(scanStats.min)]
   });
 
   /* who is driving */
@@ -429,7 +428,7 @@ function renderDrive() {
     bad ? "var(--bad-ink)" : warn ? "var(--warn-ink)" : "var(--ok-ink)";
 
   if (driveTabVisible()) {
-    drawScanCanvas($("driveRadar"), driveRadarScale, null, null);
+    redrawDriveRadar();
   }
 }
 
@@ -588,6 +587,52 @@ function renderLimits() {
 
 $("maxSpeed").addEventListener("input", renderLimits);
 $("maxSteer").addEventListener("input", renderLimits);
+
+/* ---------- LiDAR: zoom and big view ---------- */
+
+function renderDriveZoom() {
+  $("driveZoomLabel").textContent = radarRangeLabel(driveRadarScale);
+  $("driveZoomAuto").setAttribute("aria-pressed", String(driveRadarScale.mode === "auto"));
+}
+
+function redrawDriveRadar() {
+  drawScanCanvas($("driveRadar"), driveRadarScale, null, null);
+  renderDriveZoom();
+}
+
+$("driveZoomIn").onclick = () => { zoomRadar(driveRadarScale, -1); redrawDriveRadar(); };
+$("driveZoomOut").onclick = () => { zoomRadar(driveRadarScale, 1); redrawDriveRadar(); };
+$("driveZoomAuto").onclick = () => { driveRadarScale.mode = "auto"; redrawDriveRadar(); };
+
+attachRadarZoom($("driveRadar"), driveRadarScale, redrawDriveRadar);
+
+/* Big view swaps the LiDAR into the camera's large slot and shrinks
+   the camera; the controls never move. Kept per browser. */
+function setLidarBig(big) {
+
+  $("driveGrid").dataset.lidar = big ? "big" : "normal";
+
+  $("lidarBigBtn").textContent = big ? "⤡ Shrink" : "⤢ Enlarge";
+  $("lidarBigBtn").setAttribute("aria-pressed", String(big));
+
+  try {
+    localStorage.setItem("driveLidar", big ? "big" : "normal");
+  } catch (error) {}
+
+  /* the canvas changed size; redraw now rather than at the next tick */
+  requestAnimationFrame(redrawDriveRadar);
+}
+
+$("lidarBigBtn").onclick =
+  () => setLidarBig($("driveGrid").dataset.lidar !== "big");
+
+let savedLidar = "normal";
+
+try {
+  savedLidar = localStorage.getItem("driveLidar") || "normal";
+} catch (error) {}
+
+setLidarBig(savedLidar === "big");
 
 /* ---------- camera size ---------- */
 

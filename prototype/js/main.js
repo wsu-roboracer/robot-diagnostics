@@ -259,6 +259,40 @@ window.addEventListener("mouseup", () => {
   selDragging = false;
 });
 
+attachRadarZoom($("radarCanvas"), radarScaleState, renderRadar);
+
+/* Simple / Lines: one choice for both plots, kept per browser */
+document.querySelectorAll("[data-lidar-view]").forEach(button => {
+
+  button.onclick = () => {
+
+    setLidarView(button.dataset.lidarView);
+
+    renderRadar();
+    redrawDriveRadar();
+  };
+});
+
+setLidarView(lidarView);
+
+/* LiDAR plot range: Auto steps on its own, a number pins it */
+document.querySelectorAll("[data-lidar-range]").forEach(button => {
+
+  button.onclick = () => {
+
+    const value = button.dataset.lidarRange;
+
+    if (value === "auto") {
+      radarScaleState.mode = "auto";
+    } else {
+      radarScaleState.mode = "fixed";
+      radarScaleState.range = Number(value);
+    }
+
+    renderRadar();
+  };
+});
+
 $("presetAbsBtn").onclick = () => presetCentered(0);
 $("presetLeftBtn").onclick = () => presetCentered(90);   // REP-103: +90 = left
 $("presetRightBtn").onclick = () => presetCentered(-90); // -90 = right

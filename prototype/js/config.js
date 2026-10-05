@@ -252,6 +252,14 @@ let scanStats = null;
    the sensor's real 40 Hz. */
 let lastScan = null;
 
+/* The last ~1.5 s of scans ({at, ranges}), so the plot can draw
+   where things were a second ago and the readouts can say whether
+   something is getting closer. Same throttled 5 Hz feed, so this
+   is a handful of arrays, never more. */
+const scanHistory = [];
+const SCAN_HISTORY_MS = 1500;
+const SCAN_GHOST_MS = 1000;
+
 let lastAnything = 0;
 
 /* Tracked apart from lastAnything, which service responses also

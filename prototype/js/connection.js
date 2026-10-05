@@ -80,6 +80,7 @@ function connect(url) {
   mux = null;
   scanStats = null;
   lastScan = null;
+  scanHistory.length = 0;
 
   expanded.clear();
   latestMsg.clear();
@@ -341,6 +342,15 @@ function onScan(message) {
   };
 
   lastScan = message;
+
+  scanHistory.push({ at: scanStats.at, ranges });
+
+  while (
+    scanHistory.length &&
+    scanStats.at - scanHistory[0].at > SCAN_HISTORY_MS
+  ) {
+    scanHistory.shift();
+  }
 }
 
 /* ---- radar geometry ----
@@ -379,6 +389,57 @@ function polarToCanvas(
     y: originY -
       range * pxPerMeter * Math.cos(angle)
   };
+}
+
+/* Closest valid return between two bearings (radians, REP-103:
+   0 ahead, positive left). Returns { range, index } or null when
+   every beam in the sector is a no-return. */
+
+function sectorMin(
+  ranges,
+  angleMin,
+  angleInc,
+  rangeMin,
+  rangeMax,
+  fromAngle,
+  toAngle
+) {
+
+  const lo = Math.min(fromAngle, toAngle);
+  const hi = Math.max(fromAngle, toAngle);
+
+  let best = null;
+
+  for (let i = 0; i < ranges.length; i++) {
+
+    const angle = angleMin + i * angleInc;
+
+    if (angle < lo || angle > hi) continue;
+
+    const value = ranges[i];
+
+    if (!isValidRange(value, rangeMin, rangeMax)) continue;
+
+    if (!best || value < best.range) {
+      best = { range: value, index: i };
+    }
+  }
+
+  return best;
+}
+
+/* "Closer", "farther" or "steady" between two readings, with a
+   dead band so sensor noise (~3 cm on this Hokuyo) does not make
+   the arrow flicker. */
+
+function rangeTrend(now, before, deadBand = 0.1) {
+
+  if (!Number.isFinite(now) || !Number.isFinite(before)) return "steady";
+
+  if (now < before - deadBand) return "closer";
+  if (now > before + deadBand) return "farther";
+
+  return "steady";
 }
 
 /* ==========================================================

@@ -293,35 +293,78 @@
         <span class="live-tag" id="lidarTag">waiting</span>
       </h2>
 
+      <div class="lidar-status tone-none" id="lidarStatus">
+        <strong>No LiDAR data yet.</strong> Waiting for the sensor.
+      </div>
+
+      <div class="lidar-toolbar">
+        <span class="lidar-toolbar-label">View</span>
+        <div class="range-switch view-switch" role="group" aria-label="LiDAR view">
+          <button type="button" data-lidar-view="lines" title="The original radar: green outline and distance circles">Lines</button>
+          <button type="button" data-lidar-view="detailed" title="Coloured dots, open space and a movement trail">Detailed</button>
+        </div>
+        <span class="lidar-toolbar-label">Range</span>
+        <div class="range-switch" role="group" aria-label="LiDAR plot range">
+          <button type="button" data-lidar-range="auto">Auto</button>
+          <button type="button" data-lidar-range="2">2 m</button>
+          <button type="button" data-lidar-range="4">4 m</button>
+          <button type="button" data-lidar-range="8">8 m</button>
+          <button type="button" data-lidar-range="15">15 m</button>
+        </div>
+      </div>
+
       <div class="stream-box radar-box">
         <canvas id="radarCanvas" width="480" height="480"></canvas>
       </div>
 
-      <div class="readout-grid">
-        <div>
-          <span class="k">Points</span>
-          <span class="v" id="lidarPoints">—</span>
-        </div>
+      <div class="lidar-legend" data-view="lines" aria-label="Colour key">
+        <span class="only-detailed"><i class="sw sw-near"></i>Very close (under 0.5 m)</span>
+        <span class="only-detailed"><i class="sw sw-close"></i>Close (under 1 m)</span>
+        <span class="only-detailed"><i class="sw sw-far"></i>Far away</span>
+        <span class="only-detailed"><i class="sw sw-free"></i>Open space</span>
+        <span class="only-detailed"><i class="sw sw-ghost"></i>Where things were 1 s ago</span>
+        <span class="only-detailed"><i class="sw sw-moved"></i>Moving toward the car</span>
+        <span class="only-lines"><i class="sw sw-line"></i>Green line: outline of everything the LiDAR sees</span>
+        <span class="only-lines"><i class="sw sw-ring-near"></i>Red circle: very close (0.5 m)</span>
+        <span class="only-lines"><i class="sw sw-ring-close"></i>Amber circle: close (1 m)</span>
+        <span class="only-lines"><i class="sw sw-car"></i>The car</span>
+      </div>
 
-        <div>
-          <span class="k">Nearest</span>
-          <span class="v" id="lidarMin">—</span>
-        </div>
+      <div class="lidar-howto">
+        The car is in the middle, facing up — this is a top-down map of
+        what is around it. Scroll the map to zoom, double-click to reset.
+      </div>
 
-        <div>
-          <span class="k">Farthest</span>
-          <span class="v" id="lidarMax">—</span>
+      <!-- closest return in each direction, with the trend over ~1 s -->
+      <div class="sector-grid">
+        <div class="sector">
+          <span class="sector-k">Ahead</span>
+          <span class="sector-v" id="lidarSectorFront">—</span>
+          <span class="sector-trend" id="lidarTrendFront"></span>
         </div>
-
-        <div>
-          <span class="k">Field of view</span>
-          <span class="v" id="lidarFov">—</span>
+        <div class="sector">
+          <span class="sector-k">Left</span>
+          <span class="sector-v" id="lidarSectorLeft">—</span>
+          <span class="sector-trend" id="lidarTrendLeft"></span>
+        </div>
+        <div class="sector">
+          <span class="sector-k">Right</span>
+          <span class="sector-v" id="lidarSectorRight">—</span>
+          <span class="sector-trend" id="lidarTrendRight"></span>
+        </div>
+        <div class="sector">
+          <span class="sector-k">Closest</span>
+          <span class="sector-v" id="lidarSectorNearest">—</span>
+          <span class="sector-trend" id="lidarTrendNearest"></span>
         </div>
       </div>
 
-      <div class="card-hint" id="lidarHint">
-        Live from <span class="mono">/scan</span>.
-      </div>
+      <details class="lidar-tech">
+        <summary>Technical details</summary>
+        <div class="card-hint" id="lidarHint">
+          Live from <span class="mono">/scan</span>.
+        </div>
+      </details>
 
       <div class="card-hint">
         <button class="link-btn" id="lidarAdvancedToggle">show test controls</button>
@@ -496,14 +539,71 @@
           </div>
         </div>
 
-        <div class="side-card square">
+        <div class="side-card square surround-card">
           <h2 class="split-head">
             <span>Surroundings</span>
-            <span class="h3-note">LiDAR, car at centre</span>
+            <span class="cam-tools">
+              <div class="range-switch view-switch" role="group" aria-label="LiDAR view">
+                <button type="button" data-lidar-view="lines" title="The original radar: green outline and distance circles">Lines</button>
+                <button type="button" data-lidar-view="detailed" title="Coloured dots, open space and a movement trail">Detailed</button>
+              </div>
+              <button class="top-btn small-btn" id="lidarBigBtn" type="button"
+                      title="Swap the LiDAR into the big view">⤢ Enlarge</button>
+            </span>
           </h2>
+
+          <div class="lidar-status tone-none" id="driveLidarStatus">
+            <strong>No LiDAR data yet.</strong> Waiting for the sensor.
+          </div>
+
           <div class="stream-box radar-box drive-radar">
             <canvas id="driveRadar" width="360" height="360"></canvas>
+
+            <div class="radar-zoom" role="group" aria-label="Zoom">
+              <button type="button" id="driveZoomIn" title="Zoom in">+</button>
+              <span id="driveZoomLabel">4 m</span>
+              <button type="button" id="driveZoomOut" title="Zoom out">−</button>
+              <button type="button" id="driveZoomAuto" title="Automatic range">Auto</button>
+            </div>
           </div>
+
+          <div class="lidar-legend" data-view="lines" aria-label="Colour key">
+            <span class="only-detailed"><i class="sw sw-near"></i>Very close (under 0.5 m)</span>
+            <span class="only-detailed"><i class="sw sw-close"></i>Close (under 1 m)</span>
+            <span class="only-detailed"><i class="sw sw-far"></i>Far away</span>
+            <span class="only-detailed"><i class="sw sw-free"></i>Open space</span>
+            <span class="only-detailed"><i class="sw sw-ghost"></i>Where things were 1 s ago</span>
+            <span class="only-detailed"><i class="sw sw-moved"></i>Moving toward the car</span>
+        <span class="only-lines"><i class="sw sw-line"></i>Green line: outline of everything the LiDAR sees</span>
+        <span class="only-lines"><i class="sw sw-ring-near"></i>Red circle: very close (0.5 m)</span>
+        <span class="only-lines"><i class="sw sw-ring-close"></i>Amber circle: close (1 m)</span>
+        <span class="only-lines"><i class="sw sw-car"></i>The car</span>
+          </div>
+
+          <!-- closest return in each direction, with the trend over ~1 s -->
+          <div class="sector-grid">
+            <div class="sector">
+              <span class="sector-k">Ahead</span>
+              <span class="sector-v" id="driveSectorFront">—</span>
+              <span class="sector-trend" id="driveTrendFront"></span>
+            </div>
+            <div class="sector">
+              <span class="sector-k">Left</span>
+              <span class="sector-v" id="driveSectorLeft">—</span>
+              <span class="sector-trend" id="driveTrendLeft"></span>
+            </div>
+            <div class="sector">
+              <span class="sector-k">Right</span>
+              <span class="sector-v" id="driveSectorRight">—</span>
+              <span class="sector-trend" id="driveTrendRight"></span>
+            </div>
+            <div class="sector">
+              <span class="sector-k">Closest</span>
+              <span class="sector-v" id="driveSectorNearest">—</span>
+              <span class="sector-trend" id="driveTrendNearest"></span>
+            </div>
+          </div>
+
         </div>
       </div>
 
