@@ -35,6 +35,7 @@ try:
     from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
+    from sensor_msgs.msg import Joy
     from std_msgs.msg import Float64
     from std_srvs.srv import Trigger
 except ImportError:
@@ -178,6 +179,30 @@ def parse_pgrep(out, own_pid):
     return pids
 
 
+# ---------- disconnecting the controller (Drive tab) ----------
+#
+# Refused while a deadman is held: cutting /joy mid-drive leaves the motor on
+# its last command, because the mux sends no zero when an input goes quiet.
+
+JOY_DEADMEN = (4, 5)               # L1 manual, R1 autonomous - joy_teleop.yaml
+JOY_FRESH_S = 1.0
+PAD_NAME_RE = re.compile(r"controller|dualshock|dualsense|gamepad", re.IGNORECASE)
+
+
+def deadman_held(buttons, age_s):
+    """True if a fresh /joy message has L1 or R1 down. Silent /joy = no pad."""
+    if buttons is None or age_s > JOY_FRESH_S:
+        return False
+    return any(i < len(buttons) and buttons[i] == 1 for i in JOY_DEADMEN)
+
+
+def connected_pads(devices_out, info_for):
+    """[(mac, name)] of connected controllers from `bluetoothctl devices` + `info`."""
+    return [(mac, name.strip())
+            for mac, name in re.findall(r"Device (\S+) (.+)", devices_out or "")
+            if PAD_NAME_RE.search(name) and "Connected: yes" in (info_for(mac) or "")]
+
+
 def parse_joy_devices(out):
     """Pull "<id>: <name>" out of joy_enumerate_devices' table.
 
@@ -312,9 +337,18 @@ class SystemDiagnostics(Node):
                             callback_group=estop_group)
         self.create_timer(1.0 / ESTOP_HZ, self.estop_hold, callback_group=estop_group)
 
+        # Disconnecting the controller. Needs the deadman state, so watch /joy;
+        # bluetoothctl can take seconds, so its own group.
+        self.joy_buttons = None
+        self.joy_at = 0.0
+        self.create_subscription(Joy, "/joy", self.on_joy, 10)
+        self.create_service(Trigger, "~/controller_disconnect", self.controller_disconnect,
+                            callback_group=MutuallyExclusiveCallbackGroup())
+
         self.get_logger().info(
             f"publishing system diagnostics on /diagnostics ({self.ncores} cores); "
-            "services ~/joystick_check, ~/emergency_stop, ~/emergency_release ready")
+            "services ~/joystick_check, ~/emergency_stop, ~/emergency_release, "
+            "~/controller_disconnect ready")
 
     # ---------- on-demand checks, called from the dashboard ----------
 
@@ -335,6 +369,39 @@ class SystemDiagnostics(Node):
             rc, out, devices, bool(pad.get("connected")), in_input_group())
         self.get_logger().info(f"joystick_check: {len(devices)} device(s), "
                                f"success={response.success}")
+        return response
+
+    # ---------- disconnecting the controller ----------
+
+    def on_joy(self, msg):
+        self.joy_buttons = list(msg.buttons)
+        self.joy_at = time.time()
+
+    def controller_disconnect(self, _request, response):
+        """Drop the pad's Bluetooth link. Refused while L1/R1 is held, unless the
+        e-stop is on (then nothing the pad sends can move the car)."""
+        if not self.estop_active and deadman_held(self.joy_buttons,
+                                                  time.time() - self.joy_at):
+            response.success = False
+            response.message = "someone is holding L1/R1 - let go first, or press E-STOP"
+            return response
+        _rc, devices = probe(["bluetoothctl", "devices"], timeout=5)
+        pads = connected_pads(devices,
+                              lambda m: probe(["bluetoothctl", "info", m], timeout=5)[1])
+        if not pads:
+            response.success, response.message = False, "no controller is connected"
+            return response
+        done, failed = [], []
+        for mac, name in pads:
+            rc, out = probe(["bluetoothctl", "disconnect", mac], timeout=8)
+            if rc == 0 and "successful" in out.lower():
+                done.append(name)
+            else:
+                failed.append(f"{name} ({out.splitlines()[-1] if out else rc})")
+        parts = ([f"disconnected {', '.join(done)}"] if done else []) + \
+                ([f"failed: {', '.join(failed)}"] if failed else [])
+        response.success, response.message = bool(done) and not failed, "; ".join(parts)
+        self.get_logger().warn(f"controller_disconnect: {response.message}")
         return response
 
     # ---------- emergency stop ----------
@@ -821,6 +888,21 @@ def self_test():
     assert parse_pgrep("", 1) == [] and parse_pgrep(None, 1) == []
     assert parse_pgrep("12 junk 34", 0) == [12, 34]
     print("e-stop pid self-test passed")
+
+    # controller disconnect: only connected controllers, never while a fresh
+    # /joy says a deadman is down
+    devs = ("Device AA:BB:CC:DD:EE:FF Wireless Controller\n"
+            "Device 11:22:33:44:55:66 Mouse\nDevice 22:33:44:55:66:77 Wireless Controller\n")
+    info = {"AA:BB:CC:DD:EE:FF": "Connected: yes", "11:22:33:44:55:66": "Connected: yes",
+            "22:33:44:55:66:77": "Connected: no"}
+    assert connected_pads(devs, info.get) == [("AA:BB:CC:DD:EE:FF", "Wireless Controller")]
+    assert connected_pads(None, info.get) == []
+    held = [0, 0, 0, 0, 1, 0]
+    assert deadman_held(held, 0.1) and deadman_held([0] * 5 + [1], 0.1)
+    assert not deadman_held(held, 2.0), "stale /joy must not block"
+    assert not deadman_held([0] * 13, 0.1) and not deadman_held(None, 0.0)
+    assert not deadman_held([0, 0], 0.1), "short button arrays must not crash"
+    print("controller disconnect self-test passed")
 
 
 def main():

@@ -731,12 +731,12 @@ function controlState() {
       text: `${clients} people connected — rosbridge serves ${CLIENT_LIMIT}, so some dashboards get no data.` });
   }
 
-  return { hero, chips, alerts };
+  return { hero, chips, alerts, padLinked: Boolean(pad) && padLinked };
 }
 
 function renderControl() {
 
-  const { hero, chips, alerts } = controlState();
+  const { hero, chips, alerts, padLinked } = controlState();
 
   $("controlHero").className = "control-hero tone-" + hero.tone;
   $("controlIcon").textContent = hero.icon;
@@ -752,7 +752,108 @@ function renderControl() {
     alerts.map(alert =>
       `<li class="${alert.tone}">${escapeHtml(alert.text)}</li>`
     ).join("");
+
+  renderPadDisconnect(padLinked);
 }
+
+/* ---------- disconnect the controller ----------
+
+   Drops the PS4 pad's Bluetooth link (bluetoothctl, on the robot's
+   system_diagnostics.py). Refused while L1/R1 is held: the mux
+   sends no zero when an input goes quiet, so cutting the link
+   mid-drive would leave the motor on its last command. With the
+   e-stop on nothing the pad sends can move the car, so it is
+   allowed then. The robot checks the same thing. */
+
+const PAD_DISCONNECT_SERVICE = "/system_diagnostics/controller_disconnect";
+
+let padDisconnectBusy = false;
+let padDisconnectNote = "";
+let padDisconnectBad = false;
+let padDisconnectTimer = null;
+
+function setPadDisconnectNote(text, bad) {
+
+  padDisconnectNote = text;
+  padDisconnectBad = bad;
+
+  clearTimeout(padDisconnectTimer);
+
+  padDisconnectTimer = setTimeout(() => {
+    padDisconnectNote = "";
+    renderControl();
+  }, 8000);
+}
+
+function renderPadDisconnect(padLinked) {
+
+  const held = deadmanHeld() && !estopActive();
+  const button = $("padDisconnectBtn");
+
+  /* keep the row while a result is showing, even once the pad is gone */
+  $("padDisconnectRow").hidden =
+    !socketOpen() || (!padLinked && !padDisconnectNote);
+
+  button.hidden = !padLinked;
+  button.disabled = padDisconnectBusy || held;
+  button.textContent =
+    padDisconnectBusy ? "Disconnecting…" : "🎮 Disconnect controller";
+  button.title =
+    held
+      ? "Someone is holding L1/R1 — they must let go first, or press E-STOP"
+      : "Drop the controller's Bluetooth link. Press its PS button to reconnect.";
+
+  const note = $("padDisconnectNote");
+
+  note.textContent =
+    held && !padDisconnectBusy && !padDisconnectNote
+      ? "Let go of L1/R1 first."
+      : padDisconnectNote;
+  note.classList.toggle("bad", padDisconnectBad && Boolean(padDisconnectNote));
+}
+
+async function disconnectPad() {
+
+  if (deadmanHeld() && !estopActive()) return;
+
+  const ok = confirm(
+    "Disconnect the controller?\n\n" +
+    "Its Bluetooth link to the robot is dropped, so it can no longer " +
+    "drive the car or act as a backup stop. Press the PS button on the " +
+    "controller to reconnect.");
+
+  if (!ok) return;
+
+  padDisconnectBusy = true;
+  padDisconnectNote = "";
+  renderControl();
+
+  try {
+
+    const result = await call(PAD_DISCONNECT_SERVICE);
+
+    setPadDisconnectNote(
+      result.success
+        ? "Disconnected. Press the PS button to reconnect."
+        : "Not disconnected: " + result.message + ".",
+      !result.success);
+
+  } catch (error) {
+
+    setPadDisconnectNote(
+      /does not exist|unavailable|not available/i.test(error.message)
+        ? "Not available: system_diagnostics.py on the robot is an older copy."
+        : "Disconnect failed: " + error.message + ".",
+      true);
+
+  } finally {
+
+    padDisconnectBusy = false;
+    renderControl();
+  }
+}
+
+$("padDisconnectBtn").onclick = disconnectPad;
 
 /* ---------- limits and high speed ---------- */
 

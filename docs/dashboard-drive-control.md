@@ -285,6 +285,19 @@ tab, from rosbridge's `/client_count` (it updates only when someone connects or 
 dashboards publish through the same rosbridge node, so once *this* page is armed it cannot
 tell its own commands from another dashboard's; the check works before you arm.
 
+### Disconnecting the controller
+
+While a controller is connected, a large amber **🎮 Disconnect controller** button appears in
+the Controls card, right under **STOP**. It calls `/system_diagnostics/controller_disconnect` (a `std_srvs/Trigger`), which runs
+`bluetoothctl disconnect` on the robot for the connected controller. Press the controller's
+**PS button** to reconnect it.
+
+It asks for confirmation first, and it is **refused while L1 or R1 is held** (read from `/joy`).
+The page disables the button, and the robot checks again. Cutting the link mid-drive is unsafe:
+the mux sends no zero when an input goes quiet, so the motor would stay on its last command.
+If the E-STOP is on, disconnecting is allowed even with a button held, because nothing the
+controller sends can move the car.
+
 ## Emergency stop (E-STOP)
 
 The Drive tab's **STOP** only stops *this page*. The physical controller has priority in
@@ -353,7 +366,7 @@ in `localStorage` under the key `driveCam`.
 | File | What it does |
 |---|---|
 | `prototype/js/estop.js` | The E-STOP button and banner: calls the robot's `emergency_stop` / `emergency_release` services, reads `system: E-stop` |
-| `prototype/system_diagnostics.py` | The robot side of E-STOP (`emergency_stop`, `emergency_release`, 50 Hz zero-speed hold) |
+| `prototype/system_diagnostics.py` | The robot side of E-STOP (`emergency_stop`, `emergency_release`, 50 Hz zero-speed hold) and `controller_disconnect` |
 | `prototype/js/drive.js` | The whole controller: arm and disarm, the 20 Hz loop (`driveTick`), pad and keyboard input, disarm triggers, the Vitals list (`driveVitals`), the camera size switch |
 | `prototype/js/main.js` | `showTab()`: disarms when leaving Drive, and moves the camera. Calls `renderDrive()` from the 2 Hz render loop |
 | `prototype/js/connection.js` | The rosbridge socket (`ws`) and `connect()`. Replacing the socket disarms the controller on its next tick |

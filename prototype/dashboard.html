@@ -507,6 +507,12 @@
                 STOP
               </button>
 
+              <!-- only while a controller is connected; PS button reconnects it -->
+              <div class="pad-disconnect" id="padDisconnectRow" hidden>
+                <button class="pad-disconnect-btn" id="padDisconnectBtn" type="button">🎮 Disconnect controller</button>
+                <span class="pad-disconnect-note" id="padDisconnectNote" role="status"></span>
+              </div>
+
               <div class="card-hint">
                 Drag the knob, or hold
                 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows.
