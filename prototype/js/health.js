@@ -6,6 +6,24 @@
    SUBSYSTEM HEALTH
 ========================================================== */
 
+/* vesc_to_odom publishes nothing until it has seen one steering command
+   (vesc_to_odom.cpp: vescStateCallback returns early with no servo
+   command yet), so after every bringup /odom is silent on a healthy car
+   until someone steers. True while that is the likely reason: the node
+   is up, the VESC is reporting, and neither odometry nor a steering
+   command has arrived since this page loaded. */
+function odomWaitingForSteer() {
+
+  const odom = topics.get("/odom");
+  const steer = topics.get("/sensors/servo_position_command");
+  const core = topics.get("/sensors/core");
+
+  return runningNodes.has("/vesc_to_odom_node") &&
+    Boolean(odom) && odom.count === 0 &&
+    !(steer && steer.count > 0) &&
+    Boolean(core) && classifyTopic(core) === "OK";
+}
+
 function subsystemData() {
 
   const systemGamepad =
@@ -215,6 +233,13 @@ function subsystemData() {
 
     odomDetail =
       "/vesc_to_odom_node not running";
+  }
+
+  else if (odomWaitingForSteer()) {
+
+    odomHealth = "unknown";
+    odomDetail =
+      "Waiting for the first steering command - odometry starts once the car is steered";
   }
 
   else if (odomTopic) {

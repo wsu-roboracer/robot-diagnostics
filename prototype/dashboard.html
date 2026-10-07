@@ -275,7 +275,13 @@
     <div class="live-card">
       <h2>
         <span>Camera</span>
-        <span class="live-tag" id="camTag">no stream</span>
+        <span class="cam-tools">
+          <button class="link-btn" type="button" data-viewer-open="camera"
+                  title="Camera full screen, with battery and speed on top">⤢ Full screen</button>
+          <button class="link-btn" type="button" data-viewer-open="split"
+                  title="Camera and LiDAR side by side, full screen">◫ Split</button>
+          <span class="live-tag" id="camTag">no stream</span>
+        </span>
       </h2>
 
       <!-- One live stream, moved between here and the Drive tab
@@ -325,18 +331,75 @@
           <button type="button" data-lidar-view="lines" title="The original radar: green outline and distance circles">Lines</button>
           <button type="button" data-lidar-view="detailed" title="Coloured dots, open space and a movement trail">Detailed</button>
         </div>
-        <span class="lidar-toolbar-label">Range</span>
-        <div class="range-switch" role="group" aria-label="LiDAR plot range">
+        <button type="button" class="select-toggle" data-beam-select aria-pressed="false"
+                title="Pick a range of beams by index, for your own test code">⌖ Select beams</button>
+        <span class="lidar-toolbar-label">Range (m)</span>
+        <div class="range-switch" role="group" aria-label="LiDAR plot range" data-range-for="overview">
           <button type="button" data-lidar-range="auto">Auto</button>
-          <button type="button" data-lidar-range="2">2 m</button>
-          <button type="button" data-lidar-range="4">4 m</button>
-          <button type="button" data-lidar-range="8">8 m</button>
-          <button type="button" data-lidar-range="15">15 m</button>
+          <button type="button" data-lidar-range="0.5">0.5</button>
+          <button type="button" data-lidar-range="1">1</button>
+          <button type="button" data-lidar-range="2">2</button>
+          <button type="button" data-lidar-range="4">4</button>
+          <button type="button" data-lidar-range="8">8</button>
+          <button type="button" data-lidar-range="15">15</button>
+        </div>
+      </div>
+
+      <!-- BEAM SELECT: which ranges[] indices a test should read. One
+           panel, moved into the full screen viewer while that shows the
+           LiDAR (lidar-select.js). -->
+      <div id="beamSelectHome">
+        <div class="beam-select" id="beamSelect" hidden>
+
+          <div class="beam-select-controls">
+            <div class="range-switch" role="group" aria-label="Preset beam ranges">
+              <button type="button" id="presetAbsBtn" title="A narrow cone straight ahead">ABS (front)</button>
+              <button type="button" id="presetLeftBtn" title="A narrow cone to the left">Left wall</button>
+              <button type="button" id="presetRightBtn" title="A narrow cone to the right">Right wall</button>
+            </div>
+            <button class="check-btn" id="presetClearBtn" type="button">Clear</button>
+          </div>
+
+          <div class="beam-select-controls">
+            <label>Start index <input id="rangeStart" type="number" min="0" step="1"></label>
+            <label>End index <input id="rangeEnd" type="number" min="0" step="1"></label>
+            <button class="check-btn" id="rangeApplyBtn" type="button">Apply</button>
+          </div>
+
+          <div class="beam-hint" id="beamHint"></div>
+
+          <div class="beam-readout" id="beamReadout" hidden>
+            <div>
+              <span class="k">Indexes in ranges[]</span>
+              <span class="v" id="selIdxRange"></span>
+              <span class="n" id="selCount"></span>
+            </div>
+            <div>
+              <span class="k">Angles</span>
+              <span class="v" id="selAngleRange"></span>
+              <span class="n" id="selAngleWidth"></span>
+            </div>
+            <div>
+              <span class="k">Nearest</span>
+              <span class="v" id="selMin"></span>
+            </div>
+            <div>
+              <span class="k">Farthest</span>
+              <span class="v" id="selMax"></span>
+            </div>
+            <div>
+              <span class="k">Average</span>
+              <span class="v" id="selAvg"></span>
+            </div>
+          </div>
+
         </div>
       </div>
 
       <div class="stream-box radar-box">
         <canvas id="radarCanvas" width="480" height="480"></canvas>
+        <button class="radar-center" id="radarCenterBtn" type="button" disabled
+                title="Put the car back in the middle (keeps the zoom)">◎ Center</button>
       </div>
 
       <div class="lidar-legend" data-view="lines" aria-label="Colour key">
@@ -354,7 +417,9 @@
 
       <div class="lidar-howto">
         The car is in the middle, facing up — this is a top-down map of
-        what is around it. Scroll the map to zoom, double-click to reset.
+        what is around it. Drag to look around, scroll to zoom,
+        double-click to reset. Point at the outline or a dot to see its
+        index and distance.
       </div>
 
       <!-- closest return in each direction, with the trend over ~1 s -->
@@ -388,69 +453,6 @@
         </div>
       </details>
 
-      <div class="card-hint">
-        <button class="link-btn" id="lidarAdvancedToggle">show test controls</button>
-      </div>
-
-      <div id="lidarAdvanced" hidden>
-
-        <div class="preset-row">
-          <button class="check-btn" id="presetAbsBtn">ABS (front)</button>
-          <button class="check-btn" id="presetLeftBtn">Left wall</button>
-          <button class="check-btn" id="presetRightBtn">Right wall</button>
-          <button class="check-btn" id="presetClearBtn">Clear</button>
-        </div>
-
-        <div class="preset-row">
-          <label>start idx
-            <input id="rangeStart" type="number" min="0" step="1">
-          </label>
-          <label>end idx
-            <input id="rangeEnd" type="number" min="0" step="1">
-          </label>
-          <button class="check-btn" id="rangeApplyBtn">Apply</button>
-        </div>
-
-        <div class="card-hint">
-          Drag across the plot above to select a wedge of beams, or
-          type the start/end index directly and hit Apply — so you
-          know which <span class="mono">ranges[]</span> indices your
-          own test code should read.
-        </div>
-
-        <div class="readout-grid">
-          <div>
-            <span class="k">Index range</span>
-            <span class="v" id="selIdxRange">—</span>
-          </div>
-
-          <div>
-            <span class="k">Angle range</span>
-            <span class="v" id="selAngleRange">—</span>
-          </div>
-
-          <div>
-            <span class="k">Selected points</span>
-            <span class="v" id="selCount">—</span>
-          </div>
-
-          <div>
-            <span class="k">Selected nearest</span>
-            <span class="v" id="selMin">—</span>
-          </div>
-
-          <div>
-            <span class="k">Selected farthest</span>
-            <span class="v" id="selMax">—</span>
-          </div>
-
-          <div>
-            <span class="k">Selected average</span>
-            <span class="v" id="selAvg">—</span>
-          </div>
-        </div>
-
-      </div>
     </div>
 
   </section>
@@ -532,6 +534,10 @@
           <h2>
             <span>Camera</span>
             <span class="cam-tools">
+              <button class="link-btn" type="button" data-viewer-open="camera"
+                      title="Camera full screen, with battery and speed on top">⤢ Full screen</button>
+              <button class="link-btn" type="button" data-viewer-open="split"
+                      title="Camera and LiDAR side by side, full screen">◫ Split</button>
               <button class="link-btn" id="driveCamConnect" type="button">reconnect</button>
               <span class="size-switch" role="group" aria-label="Camera size">
                 <button type="button" data-cam-size="small">Small</button>
@@ -595,6 +601,9 @@
               <button type="button" id="driveZoomOut" title="Zoom out">−</button>
               <button type="button" id="driveZoomAuto" title="Automatic range">Auto</button>
             </div>
+
+            <button class="radar-center" id="driveCenterBtn" type="button" disabled
+                title="Put the car back in the middle (keeps the zoom)">◎ Center</button>
           </div>
 
           <div class="lidar-legend" data-view="lines" aria-label="Colour key">
@@ -971,7 +980,7 @@
   <div class="footer-group">
     <span>
       Robot:
-      <strong>F1-WSU-2</strong>
+      <strong id="robotLabel">unknown</strong>
     </span>
 
     <span>
@@ -982,6 +991,93 @@
   </div>
 
 </footer>
+
+<!-- FULL SCREEN VIEWER: camera, LiDAR or both side by side, with the
+     numbers you need at a glance on top. The page's one camera stream
+     is borrowed from its card while this is open (viewer.js). -->
+<div class="viewer" id="viewer" data-mode="camera" hidden>
+
+  <div class="viewer-stage">
+    <div class="viewer-cam" id="viewerCam"></div>
+    <div class="viewer-radar">
+
+      <!-- the LiDAR's own controls ride with its panel, so in split
+           view they sit over the half they control -->
+      <div class="viewer-radar-tools">
+        <div class="range-switch view-switch" role="group" aria-label="LiDAR view">
+          <button type="button" data-lidar-view="lines">Lines</button>
+          <button type="button" data-lidar-view="detailed">Detailed</button>
+        </div>
+        <button type="button" class="select-toggle" data-beam-select aria-pressed="false"
+                title="Pick a range of beams by index">⌖ Select beams</button>
+        <span class="viewer-range-label">Range (m)</span>
+        <div class="range-switch" role="group" aria-label="LiDAR plot range" data-range-for="viewer">
+          <button type="button" data-lidar-range="auto">Auto</button>
+          <button type="button" data-lidar-range="0.5">0.5</button>
+          <button type="button" data-lidar-range="1">1</button>
+          <button type="button" data-lidar-range="2">2</button>
+          <button type="button" data-lidar-range="4">4</button>
+          <button type="button" data-lidar-range="8">8</button>
+          <button type="button" data-lidar-range="15">15</button>
+        </div>
+      </div>
+
+      <div class="viewer-radar-plot">
+        <div class="viewer-radar-box">
+          <canvas id="viewerRadar" width="480" height="480"
+                  aria-label="LiDAR map: drag to look around, scroll to zoom, double-click to reset"></canvas>
+          <button class="radar-center" id="viewerCenterBtn" type="button" disabled
+                  title="Put the car back in the middle (keeps the zoom)">◎ Center</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="viewer-top">
+    <div class="viewer-status">
+      <span class="viewer-health" id="viewerHealth" data-health="unknown">UNKNOWN</span>
+      <span class="viewer-fact"><span class="hud-k">Subsystems</span><span id="viewerSubsystems"></span></span>
+      <span class="viewer-fact"><span class="hud-k">Control</span><span id="viewerControl"></span></span>
+      <span class="viewer-fact"><span class="hud-k">Nodes</span><span id="viewerNodes"></span></span>
+      <span class="viewer-fact"><span class="hud-k">Connected</span><span id="viewerClients"></span></span>
+      <span class="viewer-fact"><span class="hud-k">Controller</span><span id="viewerPad"></span></span>
+    </div>
+
+    <div class="viewer-tools">
+      <div class="range-switch" role="group" aria-label="What to show">
+        <button type="button" data-viewer-mode="camera">Camera</button>
+        <button type="button" data-viewer-mode="split">Split</button>
+        <button type="button" data-viewer-mode="lidar">LiDAR</button>
+      </div>
+      <!-- the page's own E-STOP is hidden while this covers the screen -->
+      <button class="estop-btn" id="viewerEstop" type="button">🛑 E-STOP</button>
+      <button class="top-btn" id="viewerClose" type="button" title="Exit full screen (Esc)">✕ Exit</button>
+    </div>
+  </div>
+
+  <div class="viewer-alert" id="viewerAlert" hidden></div>
+
+  <!-- the beam select panel sits here while selecting; bottom right is
+       the LiDAR's blind spot, so it hides no returns -->
+  <div class="viewer-select viewer-lidar-only" id="viewerSelectSlot"></div>
+
+  <div class="viewer-bottom">
+    <div class="viewer-big">
+      <span class="hud-k">Battery</span>
+      <span class="hud-v" id="viewerBattery"></span>
+      <span class="viewer-sub" id="viewerBatteryNote"></span>
+    </div>
+    <div class="viewer-big">
+      <span class="hud-k">Speed</span>
+      <span class="hud-v" id="viewerSpeed"></span>
+      <span class="viewer-sub" id="viewerSpeedNote"></span>
+    </div>
+    <!-- CPU, GPU, RAM and temperatures, as the Overview tiles grade them -->
+    <div class="viewer-sys" id="viewerSys"></div>
+    <span class="drive-state" id="viewerDrive" hidden></span>
+  </div>
+
+</div>
 
 <script>
   /* Phones/tablets: the tab bar lives in the sticky top bar. Wider
@@ -1026,6 +1122,7 @@
 <script src="js/lidar-select.js"></script>
 <script src="js/estop.js"></script>
 <script src="js/drive.js"></script>
+<script src="js/viewer.js"></script>
 <script src="js/main.js"></script>
 
 </body>

@@ -118,6 +118,88 @@ function gradeFromLevel(level) {
   return "unknown";
 }
 
+/* Shared by the Network tile and the footer, so they always agree.
+   Wi-Fi, the lidar, and Bluetooth. The other interfaces the probe
+   reports (can0, docker0, l4tbr0, usb0/1) are switched off on these
+   cars by design, so showing them only ever painted a healthy car red.
+   The System tab still lists every interface. */
+function networkRows(values) {
+
+  const signal =
+    numberOr(values["wifi signal"]);
+
+  const linkUp = pattern => {
+    const key = Object.keys(values)
+      .find(k => pattern.test(k) && /carrier=/.test(values[k]));
+    return key ? /carrier=1/.test(values[key]) : null;
+  };
+
+  const wifiUp = linkUp(/^(wl|wlan)/);
+  const lidarCable = linkUp(/^(en|eth)/);
+  const lidarKey =
+    Object.keys(values).find(key => key.indexOf("lidar ") === 0);
+  const bluetooth = values["bluetooth"];
+
+  const rows = [];
+
+  if (wifiUp !== null) {
+    rows.push({
+      label: "Wi-Fi",
+      value:
+        !wifiUp ? "down" : Number.isFinite(signal) ? signal + " dBm" : "up",
+      pct:
+        !wifiUp ? 0 : Number.isFinite(signal) ? (signal + 90) / 60 * 100 : 100,
+      grade: wifiUp ? "ok" : "bad",
+      hint: "The robot's Wi-Fi link, which carries this page."
+    });
+  }
+
+  if (lidarCable !== null || lidarKey) {
+    const answering = lidarKey && !/NO REPLY/.test(values[lidarKey]);
+    rows.push({
+      label: "Lidar",
+      value:
+        lidarCable === false ? "unplugged"
+        : answering ? "answering"
+        : lidarKey ? "no reply"
+        : "cable in",
+      pct: answering ? 100 : 0,
+      grade:
+        lidarCable === false || (lidarKey && !answering) ? "bad"
+        : answering ? "ok"
+        : "unknown",
+      hint:
+        "The Hokuyo lidar, on its own Ethernet cable" +
+        (lidarKey ? " at " + lidarKey.slice(6) : "") + ". " +
+        "Unplugged: no cable link. No reply: the cable is in but the " +
+        "lidar does not answer a ping (check its power)."
+    });
+  }
+
+  if (bluetooth) {
+    rows.push({
+      label: "Bluetooth",
+      value: bluetooth,
+      pct: bluetooth === "on" ? 100 : 0,
+      grade:
+        bluetooth === "on" ? "ok" : bluetooth === "unknown" ? "unknown" : "warn",
+      hint:
+        "The Jetson's Bluetooth radio. It has to be on for the PS4 " +
+        "controller to connect."
+    });
+  }
+
+  return rows;
+}
+
+/* Shared by the single big bar and each multi-row tile's mini bar. */
+function clampPct(pct) {
+
+  return pct === null || !Number.isFinite(pct)
+    ? 0
+    : Math.max(0, Math.min(100, pct));
+}
+
 const numberOr = (
   raw,
   fallback = NaN
@@ -203,7 +285,9 @@ function getSpeedMetric() {
       pct: null,
 
       note:
-        "waiting for /odom",
+        odomWaitingForSteer()
+          ? "starts after the first steering command"
+          : "waiting for /odom",
 
       grade: "unknown"
     };
@@ -626,14 +710,60 @@ function metricTiles() {
     const values =
       (thermal && thermal.values) || {};
 
-    const junction =
-      numberOr(
-        values["tj-thermal"]
-      );
+    /* Junction (tj-thermal) is the hottest of the Jetson chip's sensors,
+       and its fan and slowdown follow it. CPU and GPU get their own rows so
+       you can see which part is working; the SoC zones only go in the
+       junction row's hover text. The VESC's FETs are separate hardware on
+       the motor side. */
+    const zone = key => numberOr(values[key]);
+    const fmt = t => (Number.isFinite(t) ? t.toFixed(1) + " °C" : "n/a");
 
-    const gpuTemp =
-      numberOr(
-        values["gpu-thermal"]
+    const jetsonRow = (key, label, hint) => {
+      const t = zone(key);
+      return Number.isFinite(t)
+        ? {
+            label,
+            value: fmt(t),
+            pct: clampPct((t - 40) / (85 - 40) * 100),
+            grade: gradeValue(t, 70, 85),
+            hint
+          }
+        : null;
+    };
+
+    const fet = vesc && Number.isFinite(vesc.tempFet) ? vesc.tempFet : NaN;
+
+    const rows = [
+      jetsonRow("tj-thermal", "Junction",
+        "Hottest point on the Jetson chip (the robot's computer). The fan " +
+        "and the chip's own slowdown follow this number.\n" +
+        "SoC " + ["soc0", "soc1", "soc2"]
+          .map(z => fmt(zone(z + "-thermal")))
+          .join(" / ")),
+      jetsonRow("cpu-thermal", "CPU",
+        "The Jetson's processor cores, which run ROS and every node."),
+      jetsonRow("gpu-thermal", "GPU",
+        "The Jetson's graphics processor, used by vision and machine " +
+        "learning code."),
+      Number.isFinite(fet)
+        ? {
+            label: "FET (VESC)",
+            value: fmt(fet),
+            pct: clampPct((fet - 20) / (90 - 20) * 100),
+            grade: gradeValue(fet, FET_WARN, FET_ERR),
+            hint:
+              "Power transistors in the motor controller (VESC) - the parts " +
+              "that switch battery current into the motor. They heat up " +
+              "under hard driving, and the VESC cuts motor power if they " +
+              "overheat."
+          }
+        : null
+    ].filter(Boolean);
+    const GRADE_RANK = { bad: 3, warn: 2, ok: 1, unknown: 0 };
+    const worst =
+      rows.reduce(
+        (w, r) => (GRADE_RANK[r.grade] > GRADE_RANK[w] ? r.grade : w),
+        "unknown"
       );
 
     tiles.push({
@@ -642,64 +772,20 @@ function metricTiles() {
 
       label: "Temperature",
 
-      sub:
-        "chip core",
+      sub: rows.length ? "hover for details" : "",
 
-      value:
-        Number.isFinite(
-          junction
-        )
-          ? junction.toFixed(1) +
-            " °C"
-          : "—",
-
-      pct:
-        Number.isFinite(
-          junction
-        )
-          ? Math.max(
-              0,
-              Math.min(
-                100,
-                (
-                  junction -
-                  40
-                ) /
-                45 *
-                100
-              )
-            )
+      rows:
+        rows.length
+          ? rows
           : null,
 
       note:
-        Number.isFinite(
-          gpuTemp
-        )
-          ? "GPU " +
-            gpuTemp.toFixed(1) +
-            " °C"
-          : (
-              thermal
-                ? thermal.message
-                : "waiting for system_diagnostics"
-            ),
+        rows.length
+          ? null
+          : (thermal ? thermal.message : "waiting for system_diagnostics"),
 
       grade:
-        thermal
-          ? (
-              Number.isFinite(
-                junction
-              )
-                ? gradeValue(
-                    junction,
-                    70,
-                    85
-                  )
-                : gradeFromLevel(
-                    thermal.level
-                  )
-            )
-          : "unknown"
+        rows.length ? worst : thermal ? gradeFromLevel(thermal.level) : "unknown"
     });
   }
 
@@ -712,110 +798,14 @@ function metricTiles() {
     const values =
       (network && network.values) || {};
 
-    const up =
-      Object.keys(values)
-        .filter(
-          key =>
-            /carrier=1/.test(
-              values[key]
-            )
-        )
-        .length;
+    const rows = networkRows(values);
 
-    const signal =
-      numberOr(
-        values["wifi signal"]
+    const GRADE_RANK = { bad: 3, warn: 2, ok: 1, unknown: 0 };
+    const worst =
+      rows.reduce(
+        (w, r) => (GRADE_RANK[r.grade] > GRADE_RANK[w] ? r.grade : w),
+        "unknown"
       );
-
-    /* every interface the probe reported, e.g. eth0, wlan0 */
-    const ifaces =
-      Object.keys(values)
-        .filter(
-          key =>
-            /carrier=/.test(
-              values[key]
-            )
-        );
-
-    const upNames =
-      ifaces
-        .filter(
-          key =>
-            /carrier=1/.test(
-              values[key]
-            )
-        )
-        .map(
-          key =>
-            describeInterface(key).label
-        );
-
-    /* only Wi-Fi / wired being down is worth a warning */
-    const downNames =
-      ifaces
-        .filter(
-          key =>
-            !/carrier=1/.test(
-              values[key]
-            ) &&
-            describeInterface(key).main
-        )
-        .map(
-          key =>
-            describeInterface(key).label
-        );
-
-    const lidarKey =
-      Object.keys(values)
-        .find(
-          key =>
-            key.indexOf("lidar ") === 0
-        );
-
-    /* Plain-English note: signal quality, what is disconnected,
-       and whether the lidar answers. */
-    const noteParts = [];
-
-    if (Number.isFinite(signal)) {
-
-      noteParts.push(
-        "Wi-Fi signal is " +
-        (
-          signal >= -60
-            ? "strong"
-            : signal >= -70
-            ? "fair"
-            : "weak"
-        )
-      );
-    }
-
-    if (upNames.length) {
-
-      noteParts.push(
-        "Connected: " +
-        upNames.join(", ")
-      );
-    }
-
-    if (downNames.length) {
-
-      noteParts.push(
-        "Not connected: " +
-        downNames.join(", ")
-      );
-    }
-
-    if (lidarKey) {
-
-      noteParts.push(
-        /NO REPLY/.test(
-          values[lidarKey]
-        )
-          ? "Lidar not answering"
-          : "Lidar answering"
-      );
-    }
 
     tiles.push({
 
@@ -823,61 +813,24 @@ function metricTiles() {
 
       label: "Network",
 
-      sub:
-        network && ifaces.length
-          ? up + " of " +
-            ifaces.length +
-            " connected"
-          : "",
+      sub: rows.length ? "hover for details" : "",
 
-      value:
-        network
-          ? (
-              Number.isFinite(
-                signal
-              )
-                ? signal +
-                  " dBm"
-                : up === ifaces.length &&
-                  ifaces.length
-                ? "All connected"
-                : up +
-                  " connected"
-            )
-          : "—",
-
-      pct:
-        Number.isFinite(
-          signal
-        )
-          ? Math.max(
-              0,
-              Math.min(
-                100,
-                (
-                  signal +
-                  90
-                ) /
-                60 *
-                100
-              )
-            )
+      rows:
+        rows.length
+          ? rows
           : null,
 
       note:
-        network
-          ? (
-              noteParts.join(" · ") ||
-              network.message
-            )
-          : "waiting for system_diagnostics",
+        rows.length
+          ? null
+          : (network ? network.message : "waiting for system_diagnostics"),
 
       grade:
-        network
-          ? gradeFromLevel(
-              network.level
-            )
-          : "unknown"
+        rows.length
+          ? worst
+          : network
+            ? gradeFromLevel(network.level)
+            : "unknown"
     });
   }
 
@@ -964,23 +917,83 @@ function sparkline(id) {
   `;
 }
 
+/* A tile with tile.rows set (Temperature, Network) renders as a vertical
+   list of small graded rows instead of one big number + bar. No
+   sparkline/history for these - there's no single value to trend. */
+function rowsBody(tile) {
+
+  return `
+    <div class="metric-rows">
+      ${tile.rows
+        .map(
+          row => `
+            <div class="metric-row"${row.hint ? ` title="${escapeHtml(row.hint)}"` : ""}>
+              <span class="row-label">${escapeHtml(row.label)}</span>
+              <div class="row-bar">
+                <i class="g-${row.grade}" style="width:${clampPct(row.pct)}%"></i>
+              </div>
+              <span class="row-value g-${row.grade}">${escapeHtml(row.value)}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function singleBody(tile, now) {
+
+  sampleMetric(tile.id, tile.pct, now);
+
+  const value =
+    String(
+      tile.value ?? ""
+    );
+
+  return `
+    <div class="value${
+      value.length > 7
+        ? " small"
+        : ""
+    }">
+
+      ${escapeHtml(
+        value
+      )}
+
+    </div>
+
+    ${sparkline(tile.id)}
+
+    <div class="bar">
+      <i style="width:${clampPct(tile.pct)}%"></i>
+    </div>
+
+    <div class="note">
+      ${
+        Array.isArray(tile.note)
+          ? tile.note
+              .map(
+                item =>
+                  `<span class="note-item g-${item.grade}">${escapeHtml(item.text)}</span>`
+              )
+              .join(" · ")
+          : escapeHtml(tile.note || "")
+      }
+    </div>
+  `;
+}
+
 function renderMetrics() {
 
   const now = performance.now();
 
   $("metricTiles").innerHTML =
     metricTiles()
-      .map(tile => {
-
-        sampleMetric(tile.id, tile.pct, now);
-
-        const value =
-          String(
-            tile.value
-          );
-
-        return `
-          <div class="metric g-${tile.grade}">
+      .map(tile => `
+          <div class="metric g-${tile.grade}${
+            Array.isArray(tile.rows) ? " metric-multi" : ""
+          }">
 
             <div class="label">
 
@@ -998,48 +1011,14 @@ function renderMetrics() {
 
             </div>
 
-            <div class="value${
-              value.length > 7
-                ? " small"
-                : ""
-            }">
-
-              ${escapeHtml(
-                value
-              )}
-
-            </div>
-
-            ${sparkline(tile.id)}
-
-            <div class="bar">
-
-              <i style="width:${
-                tile.pct === null ||
-                !Number.isFinite(
-                  tile.pct
-                )
-                  ? 0
-                  : Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        tile.pct
-                      )
-                    )
-              }%"></i>
-
-            </div>
-
-            <div class="note">
-              ${escapeHtml(
-                tile.note || ""
-              )}
-            </div>
+            ${
+              Array.isArray(tile.rows)
+                ? rowsBody(tile)
+                : singleBody(tile, now)
+            }
 
           </div>
-        `;
-      })
+        `)
       .join("");
 }
 
@@ -1349,10 +1328,14 @@ function renderLidar() {
    selector (lidar-select.js) when selLo/selHi are set.
 ========================================================== */
 
-const LIDAR_RANGES = [2, 4, 8, 15];
+const LIDAR_RANGES = [0.5, 1, 2, 4, 8, 15];
 
 /* ring spacing per range step */
-const RING_STEP = { 2: 0.5, 4: 1, 8: 2, 15: 5 };
+const RING_STEP = { 0.5: 0.1, 1: 0.2, 2: 0.5, 4: 1, 8: 2, 15: 5 };
+
+/* Auto never picks the close-up steps: they are for looking at
+   something on purpose, not for a car parked near a wall. */
+const AUTO_MIN_RANGE = 2;
 
 /* Auto range: zoom OUT quickly (so walls are never cut off), zoom
    IN only once the smaller step has fitted for a while. */
@@ -1403,27 +1386,31 @@ const radarScaleState = newRadarScale();
 
 function renderRadar() {
   drawScanCanvas($("radarCanvas"), radarScaleState, selLo, selHi);
-  renderRangeButtons();
+  renderRangeButtons("overview", radarScaleState);
 }
 
-function renderRangeButtons() {
+/* Each group of range buttons drives the plot its data-range-for names
+   (the Overview card or the full screen viewer). */
+function renderRangeButtons(plot, state) {
 
-  document.querySelectorAll("[data-lidar-range]").forEach(button => {
+  document.querySelectorAll(
+    `[data-range-for="${plot}"] [data-lidar-range]`
+  ).forEach(button => {
 
     const value = button.dataset.lidarRange;
 
     const active =
       value === "auto"
-        ? radarScaleState.mode === "auto"
-        : radarScaleState.mode === "fixed" &&
-          radarScaleState.range === Number(value);
+        ? state.mode === "auto"
+        : state.mode === "fixed" &&
+          state.range === Number(value);
 
     button.setAttribute("aria-pressed", String(active));
 
     if (value === "auto") {
       button.textContent =
-        radarScaleState.mode === "auto" && lidarView !== "lines"
-          ? `Auto (${radarScaleState.range} m)`
+        state.mode === "auto" && lidarView !== "lines"
+          ? `Auto (${state.range} m)`
           : "Auto";
     }
   });
@@ -1435,7 +1422,7 @@ function renderRangeButtons() {
 function zoomRadar(state, direction) {
 
   const index = LIDAR_RANGES.indexOf(state.range);
-  const from = index < 0 ? 1 : index;
+  const from = index < 0 ? LIDAR_RANGES.indexOf(4) : index;
   const next = Math.max(0, Math.min(LIDAR_RANGES.length - 1, from + direction));
 
   state.mode = "fixed";
@@ -1466,13 +1453,175 @@ function attachRadarZoom(canvas, state, onChange) {
 
     zoomRadar(state, pending < 0 ? -1 : 1);
     pending = 0;
+    zoomTowardCursor(canvas, state, event);
     onChange();
   }, { passive: false });
 
   canvas.addEventListener("dblclick", () => {
     state.mode = "auto";
+    state.panX = 0;
+    state.panY = 0;
     onChange();
   });
+}
+
+/* Keep the spot under the mouse under the mouse through a zoom step,
+   like a map, so scrolling over something zooms in on it. */
+function zoomTowardCursor(canvas, state, event) {
+
+  if (!state.ppm || !state.plotRadius) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = (event.clientX - rect.left) * canvas.width / rect.width;
+  const y = (event.clientY - rect.top) * canvas.height / rect.height;
+
+  /* the spot, in metres from the car along the screen axes */
+  const spotX = (x - state.originX) / state.ppm;
+  const spotY = (y - state.originY) / state.ppm;
+
+  const ppm = state.plotRadius / state.range;
+
+  state.panX = (x - canvas.width / 2) / ppm - spotX;
+  state.panY = (y - canvas.height / 2) / ppm - spotY;
+}
+
+/* Drag to look around; hover shows the beam under the mouse (both
+   views). A press that barely moves is a click, handed to onPick (the
+   beam picker) with its click count, so picking and panning never need
+   a mode switch. onHover sees every hover move; cursor() picks the
+   idle cursor. */
+function attachRadarPointer(canvas, state, onChange, options = {}) {
+
+  const { onPick, onHover, cursor = () => "grab" } = options;
+  const CLICK_SLOP = 5;     // CSS px a click may wander
+
+  let press = null;
+  let last = null;
+  let panning = false;
+  let wasPan = false;
+
+  const toCanvas = event => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * canvas.width / rect.width,
+      y: (event.clientY - rect.top) * canvas.height / rect.height,
+      cssPerPx: rect.width / canvas.width
+    };
+  };
+
+  canvas.addEventListener("pointerdown", event => {
+
+    if (event.button !== 0) return;
+
+    press = last = toCanvas(event);
+    panning = false;
+    canvas.setPointerCapture(event.pointerId);
+  });
+
+  canvas.addEventListener("pointermove", event => {
+
+    const at = toCanvas(event);
+
+    if (press) {
+
+      if (!panning &&
+          Math.hypot(at.x - press.x, at.y - press.y) * at.cssPerPx > CLICK_SLOP) {
+        panning = true;
+        canvas.style.cursor = "grabbing";
+      }
+
+      if (panning && state.ppm) {
+        state.panX = (state.panX || 0) + (at.x - last.x) / state.ppm;
+        state.panY = (state.panY || 0) + (at.y - last.y) / state.ppm;
+        state.hover = null;
+      }
+
+      last = at;
+
+    } else {
+
+      state.hover = event.pointerType === "mouse" ? at : null;
+      canvas.style.cursor = cursor();
+
+      if (onHover) onHover(at);
+    }
+
+    onChange();
+  });
+
+  canvas.addEventListener("pointerup", () => {
+    wasPan = panning;
+    press = null;
+    panning = false;
+    canvas.style.cursor = cursor();
+  });
+
+  /* click, not pointerup: only click carries the click count */
+  canvas.addEventListener("click", event => {
+    if (wasPan || !onPick) return;
+    onPick(toCanvas(event), event.detail);
+    onChange();
+  });
+
+  canvas.addEventListener("pointercancel", () => {
+    press = null;
+    panning = false;
+  });
+
+  canvas.addEventListener("pointerleave", () => {
+    if (press) return;
+    state.hover = null;
+    onChange();
+  });
+}
+
+/* A plot's Center button: the car back in the middle, zoom kept.
+   panOrigin greys it out while the car already is. */
+function attachRadarCenter(button, state, onChange) {
+
+  state.centerButton = button;
+
+  button.onclick = () => {
+    state.panX = 0;
+    state.panY = 0;
+    onChange();
+  };
+}
+
+/* The farthest real return in the scan. */
+function farthestReturn(ranges, g) {
+
+  let far = 0;
+
+  for (const value of ranges) {
+    if (isValidRange(value, g.rangeMin, g.rangeMax) && value > far) far = value;
+  }
+
+  return far;
+}
+
+/* Where the car sits on the plot. The pan is clamped to the farthest
+   return (never less than the range), so anything the LiDAR sees can be
+   dragged to the middle but the view cannot wander off into nothing.
+   The result is kept on the state for the pointer code, the zoom and
+   the index selector, which map the mouse back to a beam. */
+function panOrigin(state, w, h, pxPerMeter, scale, farthest = 0) {
+
+  const limit = Math.max(scale, farthest);
+
+  state.panX = Math.max(-limit, Math.min(limit, state.panX || 0));
+  state.panY = Math.max(-limit, Math.min(limit, state.panY || 0));
+
+  if (state.centerButton) {
+    state.centerButton.disabled = !state.panX && !state.panY;
+  }
+
+  state.ppm = pxPerMeter;
+  state.plotRadius = pxPerMeter * scale;   // px to the outer ring, at any range
+  state.originX = w / 2 + state.panX * pxPerMeter;
+  state.originY = h / 2 + state.panY * pxPerMeter;
+
+  return { originX: state.originX, originY: state.originY };
 }
 
 /* 95th percentile, not the maximum: one stray long return should
@@ -1485,13 +1634,13 @@ function wantedRange(ranges, g) {
     if (isValidRange(value, g.rangeMin, g.rangeMax)) valid.push(value);
   }
 
-  if (!valid.length) return LIDAR_RANGES[1];
+  if (!valid.length) return 4;
 
   valid.sort((a, b) => a - b);
 
   const p95 = valid[Math.floor(valid.length * 0.95)];
 
-  return LIDAR_RANGES.find(step => step >= p95 * 1.1) ||
+  return LIDAR_RANGES.find(step => step >= AUTO_MIN_RANGE && step >= p95 * 1.1) ||
     LIDAR_RANGES[LIDAR_RANGES.length - 1];
 }
 
@@ -1580,21 +1729,26 @@ function drawScanCanvas(canvas, scaleState, selLo, selHi) {
   updateScale(scaleState, ranges, g, now);
 
   const scale = scaleState.range;
-  const originX = w / 2;
-  const originY = h / 2;
   const margin = font * 2.4;
   const pxPerMeter = (Math.min(w, h) / 2 - margin) / scale;
+  const { originX, originY } =
+    panOrigin(scaleState, w, h, pxPerMeter, scale, farthestReturn(ranges, g));
   const P = (angle, range) =>
     polarToCanvas(angle, range, pxPerMeter, originX, originY);
+
+  /* How far out to draw: the zoom range, plus however far the view has
+     been dragged - so dragging toward something far away brings it
+     into view instead of an empty plot. Undragged, it is the range. */
+  const reach = scale + Math.hypot(scaleState.panX, scaleState.panY);
 
   /* stale: keep the last picture, dimmed, so you can still see
      what it last saw */
   ctx.globalAlpha = live ? 1 : 0.35;
 
-  drawBlindSpot(ctx, g, scale, P);
+  drawBlindSpot(ctx, g, reach, P);
   drawDangerZones(ctx, originX, originY, pxPerMeter);
-  drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font);
-  drawFreeSpace(ctx, ranges, g, scale, P, originX, originY);
+  drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font, reach);
+  drawFreeSpace(ctx, ranges, g, reach, P, originX, originY);
 
   const hasSelection =
     selLo !== null &&
@@ -1603,36 +1757,38 @@ function drawScanCanvas(canvas, scaleState, selLo, selHi) {
     selLo < ranges.length;
 
   if (hasSelection) {
-    drawSelectionWedge(ctx, ranges, g, scale, P, originX, originY, selLo, selHi);
+    drawSelectionWedge(ctx, ranges, g, reach, P, originX, originY, selLo, selHi);
   }
 
   const ghost = live ? ghostScan() : null;
 
   if (ghost) {
-    drawDots(ctx, ghost.ranges, g, scale, P, () => LIDAR_COLOR.ghost, 2.4 * RU);
+    drawDots(ctx, ghost.ranges, g, reach, P, () => LIDAR_COLOR.ghost, 2.4 * RU);
   }
 
   drawDots(
-    ctx, ranges, g, scale, P,
+    ctx, ranges, g, reach, P,
     value => LIDAR_COLOR[bandOf(value)],
     3.4 * RU
   );
 
   if (ghost) {
-    drawMovedCloser(ctx, ranges, ghost.ranges, g, scale, P);
+    drawMovedCloser(ctx, ranges, ghost.ranges, g, reach, P);
   }
 
   if (hasSelection) {
-    drawSelectedBeams(ctx, ranges, g, scale, P, selLo, selHi);
+    drawSelectedBeams(ctx, ranges, g, reach, P, selLo, selHi);
   }
 
-  drawRingLabels(ctx, scale, P, font);
+  drawRingLabels(ctx, scale, P, font, reach);
   drawZoneLabels(ctx, P, Math.round(font * 0.9));
-  drawNearest(ctx, ranges, g, scale, P, originX, originY, font * 1.15);
+  drawNearest(ctx, ranges, g, reach, P, originX, originY, font * 1.15);
   drawCar(ctx, originX, originY, pxPerMeter);
   drawDirections(ctx, originX, originY, scale, pxPerMeter, font, w, h);
 
   ctx.globalAlpha = 1;
+
+  drawHoverReadout(ctx, ranges, g, reach, P, scaleState.hover, font);
 
   if (!live) {
     drawBanner(ctx, w, `SCAN STALE · last ${age.toFixed(1)} s ago`, font);
@@ -1738,10 +1894,11 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
     scale = scaleState.classic;
   }
 
-  const originX = w / 2;
-  const originY = h / 2;
   const margin = 28 * k;
   const pxPerMeter = (Math.min(w, h) / 2 - margin) / scale;
+  const g = scanGeometry(lastScan);
+  const { originX, originY } =
+    panOrigin(scaleState, w, h, pxPerMeter, scale, farthestReturn(ranges, g));
   const P = (angle, range) =>
     polarToCanvas(angle, range, pxPerMeter, originX, originY);
 
@@ -1774,10 +1931,12 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
     ctx.stroke();
 
     const top = P(0, ringRange);
-    /* whole metres as before, but one decimal on small ranges so
-       two rings never both read "1m" */
+    /* whole metres as before, but decimals on small ranges so two
+       rings never read the same (rings are a third of the range) */
     const ringText =
-      scale < 4.5 && Math.abs(ringRange - Math.round(ringRange)) > 0.05
+      scale < 1.5
+        ? ringRange.toFixed(2)
+        : scale < 4.5 && Math.abs(ringRange - Math.round(ringRange)) > 0.05
         ? ringRange.toFixed(1)
         : ringRange.toFixed(0);
 
@@ -1871,9 +2030,76 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
   const labelFont = Math.round(Math.max(12, Math.min(15, w / RU / 32)) * RU);
 
   drawZoneLabels(ctx, P, labelFont);
+
+  /* the outline is drawn to its full length, so every point on it can
+     be pointed at */
+  drawHoverReadout(ctx, ranges, g, Infinity, P, scaleState.hover, labelFont);
 }
 
 /* ---------- plot layers ---------- */
+
+/* The beam under the mouse: its /scan index and distance, the two
+   numbers a student's own code reads. Only beams drawn on the plot
+   count, and only within ~14 px of the pointer. */
+function drawHoverReadout(ctx, ranges, g, scale, P, hover, font) {
+
+  if (!hover) return;
+
+  let best = -1;
+  let bestDist = (14 * RU) ** 2;
+
+  for (let i = 0; i < ranges.length; i++) {
+
+    const value = ranges[i];
+
+    if (!isValidRange(value, g.rangeMin, g.rangeMax) || value > scale) continue;
+
+    const p = P(g.angleMin + i * g.angleInc, value);
+    const dist = (p.x - hover.x) ** 2 + (p.y - hover.y) ** 2;
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+
+  if (best < 0) return;
+
+  const angle = g.angleMin + best * g.angleInc;
+  const p = P(angle, ranges[best]);
+  const deg = Math.round(angle * 180 / Math.PI);   // REP-103: + is left
+
+  const text =
+    `index ${best} · ${ranges[best].toFixed(2)} m · ` +
+    (deg === 0 ? "ahead" : `${Math.abs(deg)}° ${deg > 0 ? "left" : "right"}`);
+
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2 * RU;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 7 * RU, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.font = `bold ${font}px sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  const pad = 7 * RU;
+  const boxW = ctx.measureText(text).width + pad * 2;
+  const boxH = font * 1.7;
+
+  /* above-right of the point, kept inside the plot */
+  const x = Math.max(4 * RU, Math.min(p.x + 12 * RU, ctx.canvas.width - boxW - 4 * RU));
+  const y = Math.max(4 * RU, p.y - boxH - 10 * RU);
+
+  ctx.fillStyle = "rgba(11, 13, 16, 0.92)";
+  ctx.fillRect(x, y, boxW, boxH);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.lineWidth = 1 * RU;
+  ctx.strokeRect(x, y, boxW, boxH);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, x + pad, y + boxH / 2);
+}
 
 function drawCentreText(ctx, w, h, text, font) {
   ctx.fillStyle = "#8a93a1";
@@ -1917,13 +2143,13 @@ function drawBlindSpot(ctx, g, scale, P) {
   ctx.fill();
 }
 
-function drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font) {
+function drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font, reach = scale) {
 
   const step = RING_STEP[scale] || scale / 4;
 
   ctx.lineWidth = RU;
 
-  for (let r = step; r <= scale + 1e-6; r += step) {
+  for (let r = step; r <= reach + 1e-6; r += step) {
 
     const whole = Math.abs(r - Math.round(r)) < 1e-6;
 
@@ -1936,9 +2162,9 @@ function drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font) {
   /* crosshair: ahead / sides */
   ctx.strokeStyle = LIDAR_COLOR.ring;
   ctx.beginPath();
-  const ahead = P(0, scale);
-  const left = P(Math.PI / 2, scale);
-  const right = P(-Math.PI / 2, scale);
+  const ahead = P(0, reach);
+  const left = P(Math.PI / 2, reach);
+  const right = P(-Math.PI / 2, reach);
   ctx.moveTo(originX, originY);
   ctx.lineTo(ahead.x, ahead.y);
   ctx.moveTo(left.x, left.y);
@@ -1950,7 +2176,7 @@ function drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font) {
   ctx.setLineDash([4 * RU, 4 * RU]);
   ctx.beginPath();
   [g.angleMin, g.angleMax].forEach(angle => {
-    const p = P(angle, scale);
+    const p = P(angle, reach);
     ctx.moveTo(originX, originY);
     ctx.lineTo(p.x, p.y);
   });
@@ -1961,7 +2187,7 @@ function drawRings(ctx, g, scale, P, originX, originY, pxPerMeter, font) {
 /* Ring distances on the front-right diagonal, clear of the FRONT
    label, each on a dark backing. Drawn after the points so a wall
    never covers its own distance. */
-function drawRingLabels(ctx, scale, P, font) {
+function drawRingLabels(ctx, scale, P, font, reach = scale) {
 
   const step = RING_STEP[scale] || scale / 4;
 
@@ -1969,7 +2195,7 @@ function drawRingLabels(ctx, scale, P, font) {
   ctx.textAlign = "left";
   ctx.textBaseline = "bottom";
 
-  for (let r = step; r <= scale + 1e-6; r += step) {
+  for (let r = step; r <= reach + 1e-6; r += step) {
 
     const whole = Math.abs(r - Math.round(r)) < 1e-6;
     const at = P(-Math.PI / 5, r);

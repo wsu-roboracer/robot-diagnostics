@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # MJPEG proxy in front of the GStreamer tcpserversink started by
-# start_diagnostics.sh. Browsers can't speak the raw multipart TCP
-# stream directly; this just relays it as a proper HTTP response.
+# start_diagnostics.sh or bringup_launch.py. Browsers can't speak the raw
+# multipart TCP stream directly; this just relays it as a proper HTTP response.
 import socket
 from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -59,7 +59,7 @@ class CameraHandler(BaseHTTPRequestHandler):
         print(f"[HTTP] {args[0]}")
 
 
-if __name__ == "__main__":
+def main():
     server = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), CameraHandler)
     print(f"Camera HTTP server running on port {HTTP_PORT}")
     print(f"Open: http://<robot-ip>:{HTTP_PORT}/camera.mjpg")
@@ -68,3 +68,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nStopping camera server...")
         server.server_close()
+
+
+if __name__ == "__main__":
+    main()

@@ -18,6 +18,7 @@ polling endpoint.
 Read-only. No sudo. Safe to run alongside bringup.
 """
 
+import getpass
 import glob
 import grp
 import os
@@ -187,6 +188,16 @@ def parse_pgrep(out, own_pid):
 JOY_DEADMEN = (4, 5)               # L1 manual, R1 autonomous - joy_teleop.yaml
 JOY_FRESH_S = 1.0
 PAD_NAME_RE = re.compile(r"controller|dualshock|dualsense|gamepad", re.IGNORECASE)
+
+
+def bt_power(show_out):
+    """Bluetooth adapter state from `bluetoothctl show`. Empty output means the
+    tool failed or timed out, which is not the same as the radio being off."""
+    if "Powered: yes" in show_out:
+        return "on"
+    if "Powered: no" in show_out:
+        return "off"
+    return "no adapter" if "No default controller" in show_out else "unknown"
 
 
 def deadman_held(buttons, age_s):
@@ -436,10 +447,15 @@ class SystemDiagnostics(Node):
         return response
 
     def emergency_release(self, _request, response):
-        """Let the drive chain run again. The page only offers this when the
-        mux says nobody is holding a deadman, so it resumes to idle."""
+        """Let the drive chain run again. Refused while L1/R1 is held, here as
+        well as on the page: a second tab or a direct service call skips the
+        page's check, and the car would resume straight into a live command."""
         if not self.estop_active:
             response.success, response.message = True, "emergency stop was not active"
+            return response
+        if deadman_held(self.joy_buttons, time.time() - self.joy_at):
+            response.success = False
+            response.message = "someone is holding L1/R1 - let go first"
             return response
         resumed, gone = [], []
         for pid in self.estop_pids:
@@ -687,6 +703,8 @@ class SystemDiagnostics(Node):
                 pad["battery_source"] = entry
                 break
         out["pad"] = pad
+        # An adapter switched off is the one reason a pad cannot pair at all.
+        out["bt_power"] = bt_power(run(["bluetoothctl", "show"], timeout=5))
 
         # Camera, S-14. Presence and link speed, independent of whether the ROS
         # node is running - which is the whole point, since it is not in bringup.
@@ -730,6 +748,8 @@ class SystemDiagnostics(Node):
                          else "NO REPLY"))
             if not lidar["reachable"]:
                 lvl, msg = ERROR, f"lidar unreachable at {LIDAR_IP}"
+        if self._slow_get("bt_power"):
+            vals.append(("bluetooth", self._slow_get("bt_power")))
         if not up:
             lvl, msg = ERROR, "no interface has carrier"
         return status("system: Network", lvl, msg, vals)
@@ -795,13 +815,19 @@ class SystemDiagnostics(Node):
                       cam.get("serial", ""))
 
     def clock(self):
+        # getpass.getuser() reads LOGNAME/USER first, falling back to the pwd
+        # database - unlike os.getlogin() it works fine with no controlling
+        # tty, which matters since this runs as a background ROS node.
+        robot = getpass.getuser()
         c = self._slow_get("clock")
         if c is None:
-            return status("system: Clock", STALE, "not probed yet", [])
+            return status("system: Clock", STALE, "not probed yet",
+                          [("Robot", robot)])
         synced = c.get("NTPSynchronized", "no") == "yes"
         return status("system: Clock", OK if synced else WARN,
                       "NTP synchronised" if synced else "clock NOT synchronised",
-                      [("NTPSynchronized", c.get("NTPSynchronized", "?")),
+                      [("Robot", robot),
+                       ("NTPSynchronized", c.get("NTPSynchronized", "?")),
                        ("Timezone", c.get("Timezone", "?")),
                        ("NTP", c.get("NTP", "?"))])
 
@@ -899,6 +925,10 @@ def self_test():
     assert connected_pads(None, info.get) == []
     held = [0, 0, 0, 0, 1, 0]
     assert deadman_held(held, 0.1) and deadman_held([0] * 5 + [1], 0.1)
+    assert bt_power("Controller AA (public)\n\tPowered: yes\n") == "on"
+    assert bt_power("\tPowered: no\n") == "off"
+    assert bt_power("No default controller available\n") == "no adapter"
+    assert bt_power("") == "unknown", "a failed bluetoothctl must not read as off"
     assert not deadman_held(held, 2.0), "stale /joy must not block"
     assert not deadman_held([0] * 13, 0.1) and not deadman_held(None, 0.0)
     assert not deadman_held([0, 0], 0.1), "short button arrays must not crash"

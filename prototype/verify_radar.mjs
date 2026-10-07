@@ -73,6 +73,61 @@ env.rangeTrend(0.80, 1.00) === 'closer' || fail.push('20 cm closer should read c
 env.rangeTrend(1.30, 1.00) === 'farther' || fail.push('30 cm farther should read farther');
 env.rangeTrend(1.00, NaN) === 'steady' || fail.push('missing history should read steady');
 
+// Drag-to-pan: the car moves with the drag but never leaves the plot,
+// and a beam drawn at the panned origin maps back to its own angle -
+// what the hover readout and the index selector both rely on.
+{
+  const fnSrc = name => {
+    const at = src.indexOf(`function ${name}(`);
+    return src.slice(at, src.indexOf('\n}\n', at) + 2);
+  };
+  const pan = new Function(
+    `${fnSrc('panOrigin')}\n${fnSrc('canvasOffsetToAngle')}\n` +
+    'return { panOrigin, canvasOffsetToAngle };')();
+
+  const state = {};
+  let o = pan.panOrigin(state, 400, 400, 50, 4);
+  (o.originX === 200 && o.originY === 200) || fail.push('no pan should centre the car: ' + JSON.stringify(o));
+
+  state.panX = 1;
+  o = pan.panOrigin(state, 400, 400, 50, 4);
+  o.originX === 250 || fail.push('1 m pan at 50 px/m should move the car 50 px: ' + o.originX);
+
+  state.panX = 10; state.panY = -10;
+  o = pan.panOrigin(state, 400, 400, 50, 4);
+  (o.originX === 400 && o.originY === 0 && state.panX === 4) ||
+    fail.push('pan past the range should stop with the car at the edge: ' + JSON.stringify(o));
+
+  // a far return raises the limit, so a far object can be brought to the middle
+  state.panX = 9;
+  pan.panOrigin(state, 400, 400, 50, 4, 12);
+  state.panX === 9 || fail.push('a 12 m return should let the view pan 9 m: ' + state.panX);
+
+  // zooming keeps the spot under the mouse under the mouse
+  const zoom = new Function(`${fnSrc('zoomTowardCursor')}\nreturn zoomTowardCursor;`)();
+  const canvas = { width: 400, height: 400,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }) };
+  const z = { panX: 0.5, panY: -1 };
+  pan.panOrigin(z, 400, 400, 40, 4, 10);       // plot radius 160 px
+  const mouse = { clientX: 310, clientY: 90 };
+  const spot = [(310 - z.originX) / z.ppm, (90 - z.originY) / z.ppm];
+  z.range = 2;                                   // one step in
+  zoom(canvas, z, mouse);
+  const after = pan.panOrigin(z, 400, 400, 80, 2, 10);
+  (Math.abs(after.originX + spot[0] * 80 - 310) < 1e-9 &&
+   Math.abs(after.originY + spot[1] * 80 - 90) < 1e-9) ||
+    fail.push('zoom moved the spot under the mouse: ' + JSON.stringify(after));
+
+  state.panX = 1.3; state.panY = -0.7;
+  o = pan.panOrigin(state, 400, 400, 50, 4);
+  for (const angle of [-2.0, -0.5, 0, 0.8, 2.2]) {
+    const p = env.polarToCanvas(angle, 2.5, 50, o.originX, o.originY);
+    const back = pan.canvasOffsetToAngle(p.x - o.originX, p.y - o.originY);
+    Math.abs(back - angle) < 1e-9 ||
+      fail.push(`beam at ${angle} rad maps back to ${back} after a pan`);
+  }
+}
+
 if (fail.length) {
   console.error('FAIL:\n  ' + fail.join('\n  '));
   process.exit(1);

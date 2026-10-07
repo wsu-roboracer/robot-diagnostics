@@ -4,20 +4,37 @@
    LIDAR INDEX SELECTOR
 
    Sprint 3: test-specific presets and a way to pick exactly
-   which /scan indices a student's own test code should read,
-   folded into the existing LiDAR card behind a "show test
-   controls" toggle rather than a separate page — the plain
-   Points/Nearest/Farthest/FOV view stays the default.
+   which /scan indices a student's own test code should read.
+   "Select beams" (in the LiDAR toolbar and the full screen viewer)
+   opens one panel, which moves into the viewer while that shows
+   the LiDAR. Dragging the map always pans; clicking picks: one
+   click for the start beam, a second for the end, with the
+   selection following the mouse in between. Esc cancels.
 ========================================================== */
 
-let lidarAdvanced = false;
+let beamSelecting = false;
+let pickStart = null;     // first click of a pick, until the second
 
-function renderLidarAdvancedToggle() {
+function renderBeamSelect() {
 
-  $("lidarAdvanced").hidden = !lidarAdvanced;
+  const inViewer =
+    typeof viewerMode !== "undefined" && viewerMode && viewerMode !== "camera";
 
-  $("lidarAdvancedToggle").textContent =
-    lidarAdvanced ? "hide test controls" : "show test controls";
+  $(inViewer ? "viewerSelectSlot" : "beamSelectHome")
+    .appendChild($("beamSelect"));
+
+  $("beamSelect").hidden = !beamSelecting;
+
+  document.querySelectorAll("[data-beam-select]").forEach(button =>
+    button.setAttribute("aria-pressed", String(beamSelecting))
+  );
+}
+
+function toggleBeamSelect() {
+  beamSelecting = !beamSelecting;
+  pickStart = null;
+  renderBeamSelect();
+  renderSelectionReadout();
 }
 
 /* ---- selection geometry ----
@@ -71,8 +88,6 @@ const PRESET_HALF_WIDTH_DEG = 7; // narrow cone; widen in your own code
 
 let selLo = null;
 let selHi = null;
-let selDragging = false;
-let selDragAnchor = null;
 
 function setSelection(lo, hi) {
 
@@ -91,33 +106,78 @@ function setSelection(lo, hi) {
 function clearSelection() {
   selLo = null;
   selHi = null;
+  pickStart = null;
   $("rangeStart").value = "";
   $("rangeEnd").value = "";
+  renderSelectionReadout();
 }
 
-function indexFromCanvasEvent(event) {
+/* The beam in the direction of a point on a plot (canvas pixels),
+   measured from wherever that plot has the car - it may be panned. */
+function beamIndexAt(state, at) {
 
-  if (!lastScan) return null;
+  if (!lastScan || !Number.isFinite(state.originX)) return null;
 
-  const canvas = $("radarCanvas");
-  const rect = canvas.getBoundingClientRect();
+  const angle = canvasOffsetToAngle(at.x - state.originX, at.y - state.originY);
 
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
+  return angleToIndex(
+    angle,
+    Number(lastScan.angle_min),
+    Number(lastScan.angle_increment),
+    (lastScan.ranges || []).length);
+}
 
-  const x = (event.clientX - rect.left) * scaleX;
-  const y = (event.clientY - rect.top) * scaleY;
+/* Click handlers for a plot: the first click starts a pick, the
+   mouse drags the far end around, the second click ends it. A
+   double-click (which recenters the map) undoes its first click's
+   pick, so recentering never leaves a stray one-beam selection. */
+function beamPicker(state) {
 
-  const originX = canvas.width / 2;
-  const originY = canvas.height / 2;
+  let undo = null;
 
-  const angle = canvasOffsetToAngle(x - originX, y - originY);
+  return {
+    onPick: (at, clicks) => {
 
-  const angleMin = Number(lastScan.angle_min);
-  const angleInc = Number(lastScan.angle_increment);
-  const len = (lastScan.ranges || []).length;
+      if (!beamSelecting) return;
 
-  return angleToIndex(angle, angleMin, angleInc, len);
+      if (clicks >= 2) {
+        if (undo) [selLo, selHi, pickStart] = undo;
+        undo = null;
+        if (selLo === null) clearSelection();
+        else setSelection(selLo, selHi);
+        renderSelectionReadout();
+        return;
+      }
+
+      const idx = beamIndexAt(state, at);
+      if (idx === null) return;
+
+      undo = [selLo, selHi, pickStart];
+
+      if (pickStart === null) {
+        pickStart = idx;
+        setSelection(idx, idx);
+      } else {
+        setSelection(pickStart, idx);
+        pickStart = null;
+      }
+
+      renderSelectionReadout();
+    },
+
+    onHover: at => {
+
+      if (!beamSelecting || pickStart === null) return;
+
+      const idx = beamIndexAt(state, at);
+      if (idx === null) return;
+
+      setSelection(pickStart, idx);
+      renderSelectionReadout();
+    },
+
+    cursor: () => (beamSelecting ? "crosshair" : "grab")
+  };
 }
 
 function presetCentered(centerDeg) {
@@ -139,16 +199,18 @@ function presetCentered(centerDeg) {
 
 function renderSelectionReadout() {
 
-  if (!lastScan || selLo === null || selHi === null) {
+  const picked = Boolean(lastScan) && selLo !== null && selHi !== null;
 
-    $("selIdxRange").textContent = "—";
-    $("selAngleRange").textContent = "—";
-    $("selCount").textContent = "—";
-    $("selMin").textContent = "—";
-    $("selMax").textContent = "—";
-    $("selAvg").textContent = "—";
-    return;
-  }
+  $("beamHint").textContent =
+    pickStart !== null
+      ? `Start: index ${pickStart}. Click the beam to end at (Esc to cancel).`
+      : picked
+      ? "Click two beams on the map to pick new indexes. Drag to look around."
+      : "Click the beam to start at, then the beam to end at, and their ranges[] indexes show here. Drag to look around.";
+
+  $("beamReadout").hidden = !picked;
+
+  if (!picked) return;
 
   const angleMin = Number(lastScan.angle_min);
   const angleInc = Number(lastScan.angle_increment);
@@ -159,14 +221,39 @@ function renderSelectionReadout() {
   const startDeg = (angleMin + selLo * angleInc) * 180 / Math.PI;
   const endDeg = (angleMin + selHi * angleInc) * 180 / Math.PI;
 
-  $("selIdxRange").textContent = `${selLo} – ${selHi}`;
+  $("selIdxRange").textContent = `${selLo} → ${selHi}`;
+  /* Directions in words, measured from straight ahead. The note
+     repeats them in radians, as /scan has them (angle_min +
+     i * angle_increment; REP-103: + is to the left). */
+  const side = deg =>
+    Math.abs(deg) < 0.05
+      ? "straight ahead"
+      : `${Math.abs(deg).toFixed(1)}° ${deg > 0 ? "left" : "right"}`;
+
+  const rad = i => {
+    const a = angleMin + i * angleInc;
+    return (Math.abs(a) < 5e-4 ? 0 : a).toFixed(3);
+  };
+
   $("selAngleRange").textContent =
-    `${startDeg.toFixed(1)}° – ${endDeg.toFixed(1)}°`;
+    selLo === selHi ? side(startDeg) : `${side(startDeg)} → ${side(endDeg)}`;
+  $("selAngleWidth").textContent =
+    `${(endDeg - startDeg).toFixed(1)}° wide · ` +
+    `/scan angle ${rad(selLo)} → ${rad(selHi)} rad`;
 
   const stats = selectionStats(ranges, rangeMin, rangeMax, selLo, selHi);
 
-  $("selCount").textContent = `${stats.count} of ${selHi - selLo + 1}`;
+  const beams = selHi - selLo + 1;
+
+  $("selCount").textContent =
+    `${beams} beam${beams === 1 ? "" : "s"}, ${stats.count} with a return`;
   $("selMin").textContent = stats.min === null ? "no return" : stats.min.toFixed(2) + " m";
   $("selMax").textContent = stats.max === null ? "no return" : stats.max.toFixed(2) + " m";
   $("selAvg").textContent = stats.avg === null ? "no return" : stats.avg.toFixed(2) + " m";
 }
+
+/* Esc abandons a half-made pick. Not stopPropagation: Esc is also
+   the Drive tab's stop key. */
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && pickStart !== null) clearSelection();
+});

@@ -71,7 +71,15 @@ const EXPECTED_NODES = [
   "/vesc_driver_node",
   "/urg_node",
   "/ackermann_mux",
-  "/static_baselink_to_laser"
+  "/static_baselink_to_laser",
+  /* As of the f1tenth_stack integration (2026-10-05) these four come up
+     with every bringup too, not just when start_diagnostics.sh was run
+     separately - and the dashboard itself is useless without them, so
+     they're as "expected" as the drive-stack nodes above. */
+  "/system_diagnostics",
+  "/rosbridge_websocket",
+  "/rosapi",
+  "/rosapi_params"
 ];
 
 /* Topic classes. A single liveness rule flags ~16 of 23 topics
