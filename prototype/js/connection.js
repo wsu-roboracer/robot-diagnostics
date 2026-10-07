@@ -451,6 +451,24 @@ function rangeTrend(now, before, deadBand = 0.1) {
    SUBSCRIPTIONS
 ========================================================== */
 
+/* /diagnostics interleaves one array per publisher (system_diagnostics,
+   ackermann_mux, urg_node), each at 1 Hz. Throttled with queue_length 1,
+   rosbridge keeps only the newest message in each window, and because the
+   publishers' timers hold a fixed phase the same one can lose every time
+   for a whole run - on #6 it was system_diagnostics, so every system tile
+   sat at "waiting". It is a few small messages a second: take them all. */
+function subscribeTopic(name, throttle) {
+
+  const all = name === "/diagnostics";
+
+  send({
+    op: "subscribe",
+    topic: name,
+    throttle_rate: all ? 0 : throttle,
+    queue_length: all ? 10 : 1
+  });
+}
+
 function subscribeFixed() {
 
   send({
@@ -502,12 +520,7 @@ function toggleTopic(name) {
       topic: name
     });
 
-    send({
-      op: "subscribe",
-      topic: name,
-      throttle_rate: LIVENESS_THROTTLE,
-      queue_length: 1
-    });
+    subscribeTopic(name, LIVENESS_THROTTLE);
 
   } else {
 
@@ -518,12 +531,7 @@ function toggleTopic(name) {
       topic: name
     });
 
-    send({
-      op: "subscribe",
-      topic: name,
-      throttle_rate: DETAIL_THROTTLE,
-      queue_length: 1
-    });
+    subscribeTopic(name, DETAIL_THROTTLE);
   }
 
   const row = rowEls.get(name);

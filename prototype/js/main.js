@@ -52,6 +52,7 @@ function render() {
   renderBattery();
   renderUptime();
   renderNetwork();
+  renderRobotLabel();
   renderSystemList();
 
   renderCounts();
@@ -67,6 +68,7 @@ function render() {
   /* drive */
 
   renderDrive();
+  renderViewer();
 }
 
 /* ==========================================================
@@ -233,43 +235,16 @@ $("topicProblems").addEventListener("change", renderTopicTable);
 
 $("joyBtn").onclick = runJoyCheck;
 
-$("lidarAdvancedToggle").onclick = () => {
-
-  lidarAdvanced = !lidarAdvanced;
-
-  renderLidarAdvancedToggle();
-};
-
-// Selecting is only meaningful with the test controls open — gating
-// on lidarAdvanced keeps a stray drag on the basic view from
-// silently painting a highlight nobody asked for.
-$("radarCanvas").addEventListener("mousedown", event => {
-
-  if (!lidarAdvanced) return;
-
-  const idx = indexFromCanvasEvent(event);
-  if (idx === null) return;
-
-  selDragging = true;
-  selDragAnchor = idx;
-  setSelection(idx, idx);
+document.querySelectorAll("[data-beam-select]").forEach(button => {
+  button.onclick = toggleBeamSelect;
 });
 
-window.addEventListener("mousemove", event => {
-
-  if (!selDragging) return;
-
-  const idx = indexFromCanvasEvent(event);
-  if (idx === null) return;
-
-  setSelection(selDragAnchor, idx);
-});
-
-window.addEventListener("mouseup", () => {
-  selDragging = false;
-});
+renderBeamSelect();
+renderSelectionReadout();
 
 attachRadarZoom($("radarCanvas"), radarScaleState, renderRadar);
+attachRadarPointer($("radarCanvas"), radarScaleState, renderRadar, beamPicker(radarScaleState));
+attachRadarCenter($("radarCenterBtn"), radarScaleState, renderRadar);
 
 /* Simple / Lines: one choice for both plots, kept per browser */
 document.querySelectorAll("[data-lidar-view]").forEach(button => {
@@ -280,27 +255,40 @@ document.querySelectorAll("[data-lidar-view]").forEach(button => {
 
     renderRadar();
     redrawDriveRadar();
+    redrawViewerRadar();
   };
 });
 
 setLidarView(lidarView);
 
-/* LiDAR plot range: Auto steps on its own, a number pins it */
-document.querySelectorAll("[data-lidar-range]").forEach(button => {
+/* LiDAR plot range: Auto steps on its own, a number pins it. Each
+   group drives its own plot; the pan is kept in metres, so a step
+   zooms around whatever is in the middle of the view. */
+const RANGE_PLOTS = {
+  overview: [radarScaleState, renderRadar],
+  viewer: [viewerRadarScale, redrawViewerRadar]
+};
 
-  button.onclick = () => {
+document.querySelectorAll("[data-range-for]").forEach(group => {
 
-    const value = button.dataset.lidarRange;
+  const [state, redraw] = RANGE_PLOTS[group.dataset.rangeFor];
 
-    if (value === "auto") {
-      radarScaleState.mode = "auto";
-    } else {
-      radarScaleState.mode = "fixed";
-      radarScaleState.range = Number(value);
-    }
+  group.querySelectorAll("[data-lidar-range]").forEach(button => {
 
-    renderRadar();
-  };
+    button.onclick = () => {
+
+      const value = button.dataset.lidarRange;
+
+      if (value === "auto") {
+        state.mode = "auto";
+      } else {
+        state.mode = "fixed";
+        state.range = Number(value);
+      }
+
+      redraw();
+    };
+  });
 });
 
 $("presetAbsBtn").onclick = () => presetCentered(0);

@@ -303,6 +303,65 @@ input {
   transition: width .3s ease, background .3s ease;
 }
 
+/* Multi-row tiles (Temperature, Network): one small graded row per
+   reading instead of a single big number, so e.g. CPU/GPU/FET each get
+   their own bar and colour rather than being crammed into one number
+   with the rest as plain text underneath. */
+/* One grid for all rows, so every bar in a tile starts and ends at the
+   same x whatever the label or value width. */
+.metric-rows {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px 8px;
+}
+
+.metric-row {
+  display: contents;
+}
+
+.metric-row[title] { cursor: help; }
+
+.metric-row .row-label {
+  flex: 0 0 auto;
+  min-width: 64px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.metric-row .row-bar {
+  flex: 1 1 auto;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.metric-row .row-bar > i {
+  display: block;
+  height: 100%;
+  transition: width .3s ease, background .3s ease;
+}
+
+.metric-row .row-bar > i.g-ok      { background: var(--healthy); }
+.metric-row .row-bar > i.g-warn    { background: var(--degraded); }
+.metric-row .row-bar > i.g-bad     { background: var(--failed); }
+.metric-row .row-bar > i.g-unknown { background: var(--unknown); }
+
+.metric-row .row-value {
+  flex: 0 0 auto;
+  min-width: 48px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-row .row-value.g-ok      { color: var(--healthy); }
+.metric-row .row-value.g-warn    { color: var(--warn-ink); }
+.metric-row .row-value.g-bad     { color: var(--failed); }
+.metric-row .row-value.g-unknown { color: var(--unknown); }
+
 .metric.g-ok       { border-left-color: var(--healthy); }
 .metric.g-warn     { border-left-color: var(--degraded); }
 .metric.g-bad      { border-left-color: var(--failed); }
@@ -316,6 +375,11 @@ input {
 .metric.g-ok      .bar > i { background: var(--healthy); }
 .metric.g-warn    .bar > i { background: var(--degraded); }
 .metric.g-bad     .bar > i { background: var(--failed); }
+
+.note .note-item.g-ok      { color: var(--healthy); }
+.note .note-item.g-warn    { color: var(--warn-ink); }
+.note .note-item.g-bad     { color: var(--failed); }
+.note .note-item.g-unknown { color: var(--unknown); }
 
 /* ----------------------------------------------------------
    HARDWARE STRIP
@@ -458,6 +522,38 @@ input {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* Center: bottom left of every plot - behind the car, the LiDAR's
+   blind spot - so it never covers a return. Matches the Drive tab's
+   zoom controls in the opposite corner. */
+.radar-box,
+.viewer-radar-box {
+  position: relative;
+}
+
+.radar-center {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(11, 13, 16, 0.75);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.radar-center:hover:not(:disabled) {
+  background: rgba(45, 50, 58, 0.92);
+}
+
+.radar-center:disabled {
+  opacity: .4;
+  cursor: default;
 }
 
 .stream-message {
@@ -2788,11 +2884,12 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   margin: -4px 0 10px;
 }
 
-.lidar-toolbar .view-switch {
+.lidar-toolbar .select-toggle {
   margin-right: auto;
 }
 
@@ -3614,4 +3711,451 @@ html {
   .topbar-toggle {
     height: 44px;
   }
+}
+
+/* Drive tab vitals: Temperature carries the Overview's mini bars */
+.vital-rows {
+  grid-column: 2 / -1;
+}
+
+.vital-rows .metric-rows {
+  margin-top: 6px;
+}
+
+/* ==========================================================
+   FULL SCREEN VIEWER (viewer.js) - always dark, it sits on video
+========================================================== */
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  color: #fff;
+}
+
+.viewer[hidden] {
+  display: none;
+}
+
+body:has(.viewer:not([hidden])) {
+  overflow: hidden;
+}
+
+.viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.viewer-cam,
+.viewer-radar {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.viewer[data-mode="camera"] .viewer-radar,
+.viewer[data-mode="lidar"] .viewer-cam,
+.viewer[data-mode="camera"] .viewer-lidar-only {
+  display: none;
+}
+
+.viewer[data-mode="split"] .viewer-cam {
+  border-right: 1px solid #262a30;
+}
+
+/* the borrowed camera box fills its half */
+.viewer-cam .stream-box {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  max-height: none;
+  border-radius: 0;
+  background: #000;
+}
+
+/* below the top bar: the LiDAR's own toolbar, then the plot, kept
+   square and clear of the bottom bar */
+.viewer-radar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 76px 12px 96px;
+}
+
+.viewer-radar-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+}
+
+.viewer-range-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .7);
+}
+
+.viewer-radar-plot {
+  flex: 1 1 0;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-radar-box {
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+}
+
+.viewer-radar-box canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+.viewer-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 16px 28px;
+  background: linear-gradient(rgba(0, 0, 0, .78), rgba(0, 0, 0, 0));
+}
+
+.viewer-status,
+.viewer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+
+.viewer-tools {
+  gap: 8px 10px;
+}
+
+.viewer-health {
+  padding: 5px 12px;
+  border-radius: 99px;
+  background: var(--unknown);
+  color: #000;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.viewer-health[data-health="healthy"]  { background: var(--healthy); }
+.viewer-health[data-health="degraded"] { background: var(--degraded); }
+.viewer-health[data-health="failed"]   { background: var(--failed); color: #fff; }
+
+.viewer-fact {
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* graded values anywhere on the viewer: battery, controller, the
+   computer's numbers */
+.viewer [data-tone="ok"]   { color: var(--healthy); }
+.viewer [data-tone="warn"] { color: var(--degraded); }
+.viewer [data-tone="bad"]  { color: var(--failed); }
+
+.viewer .range-switch {
+  border-color: rgba(255, 255, 255, .35);
+}
+
+.viewer .range-switch button {
+  background: rgba(0, 0, 0, .55);
+  color: #d6dae0;
+}
+
+.viewer .range-switch button + button {
+  border-left-color: rgba(255, 255, 255, .35);
+}
+
+.viewer .range-switch button[aria-pressed="true"] {
+  background: #fff;
+  color: #000;
+}
+
+.viewer-alert {
+  position: absolute;
+  top: 78px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: var(--failed);
+  color: #fff;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+}
+
+.viewer-alert[hidden] {
+  display: none;
+}
+
+.viewer-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 28px;
+  padding: 28px 20px 16px;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .78));
+  pointer-events: none;
+}
+
+.viewer-big .hud-v {
+  font-size: 30px;
+}
+
+.viewer-sys {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.viewer-small-v {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-temps {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 1px 14px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.viewer-temps b {
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-sub {
+  display: block;
+  font-size: 12px;
+  opacity: .8;
+}
+
+#viewerDrive {
+  margin-left: auto;
+}
+
+/* side by side, the numbers stay over the camera half (wrapping if
+   they must) and leave the plot's half clear */
+@media (min-aspect-ratio: 1/1) {
+  .viewer[data-mode="split"] .viewer-bottom {
+    right: 50%;
+  }
+}
+
+/* portrait: split stacks the camera over the plot */
+@media (max-aspect-ratio: 1/1) {
+
+  .viewer-stage {
+    flex-direction: column;
+  }
+
+  .viewer[data-mode="split"] .viewer-cam {
+    border-right: 0;
+    border-bottom: 1px solid #262a30;
+  }
+}
+
+/* ==========================================================
+   BEAM SELECT (lidar-select.js) - pick which ranges[] indices a
+   test reads; the same panel moves into the full screen viewer
+========================================================== */
+
+.select-toggle {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text-2);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.select-toggle[aria-pressed="true"] {
+  background: var(--link);
+  border-color: var(--link);
+  color: #fff;
+}
+
+.beam-select {
+  container-type: inline-size;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.beam-select[hidden],
+.beam-readout[hidden] {
+  display: none;
+}
+
+.beam-select-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.beam-select-controls + .beam-select-controls {
+  margin-top: 8px;
+}
+
+.beam-select-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.beam-select-controls input {
+  width: 70px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.beam-select-controls .check-btn {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.beam-hint {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* beams and angles on the first row, the three distances under them */
+.beam-readout {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin-top: 10px;
+}
+
+.beam-readout > div {
+  grid-column: span 2;
+  min-width: 0;
+}
+
+.beam-readout > div:nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
+/* narrow (the viewer's card, phones): indexes and angles each get a
+   whole row, so "98.3° right → 101.7° left" never breaks in two */
+@container (max-width: 520px) {
+  .beam-readout > div:nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+}
+
+.beam-readout .k {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.beam-readout .v {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.beam-readout .n {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* in the viewer: a dark card over the LiDAR's blind spot, above the
+   bottom bar's fade */
+.viewer-select {
+  position: absolute;
+  z-index: 1;
+  right: 16px;
+  bottom: 16px;
+  width: min(420px, calc(100% - 32px));
+}
+
+.viewer .select-toggle {
+  border-color: rgba(255, 255, 255, .35);
+  background: rgba(0, 0, 0, .55);
+  color: #d6dae0;
+}
+
+.viewer .select-toggle[aria-pressed="true"] {
+  border-color: var(--link);
+  background: var(--link);
+  color: #fff;
+}
+
+.viewer .beam-select {
+  margin: 0;
+  border-color: rgba(255, 255, 255, .18);
+  background: rgba(11, 13, 16, .9);
+  color: #fff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+}
+
+.viewer .beam-select-controls label,
+.viewer .beam-hint,
+.viewer .beam-readout .k,
+.viewer .beam-readout .n {
+  color: rgba(255, 255, 255, .7);
+}
+
+.viewer .beam-select-controls input,
+.viewer .beam-select .check-btn {
+  border-color: rgba(255, 255, 255, .3);
+  background: rgba(0, 0, 0, .5);
+  color: #fff;
 }

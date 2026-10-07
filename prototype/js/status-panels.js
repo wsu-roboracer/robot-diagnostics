@@ -175,8 +175,35 @@ function renderNetwork() {
     return;
   }
 
+  /* Same rows as the Network tile, not the node's "N links up", which
+     counted interfaces rather than saying which ones. */
+  const rows =
+    networkRows(network.values || {});
+
   $("networkFooter").textContent =
-    network.message || "connected";
+    rows.length
+      ? rows.map(row => row.label + " " + row.value).join(" · ")
+      : network.message || "connected";
+}
+
+/* ==========================================================
+   ROBOT LABEL FOOTER
+   Pulled from system_diagnostics' Clock status, which stamps the OS
+   username (e.g. f1-wsu-6) onto every /diagnostics tick - not hardcoded,
+   so copying this dashboard onto another robot doesn't silently keep
+   showing the wrong one (it did, for a while - see git history).
+========================================================== */
+
+function renderRobotLabel() {
+
+  const clock =
+    diag["system: Clock"];
+
+  const robot =
+    clock && clock.values && clock.values["Robot"];
+
+  $("robotLabel").textContent =
+    robot || "unknown";
 }
 
 /* ==========================================================

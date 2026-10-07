@@ -60,12 +60,7 @@ async function scan() {
 
           subscribed.add(name);
 
-          send({
-            op: "subscribe",
-            topic: name,
-            throttle_rate: LIVENESS_THROTTLE,
-            queue_length: 1
-          });
+          subscribeTopic(name, LIVENESS_THROTTLE);
         }
       });
 

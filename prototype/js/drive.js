@@ -352,17 +352,22 @@ function driveVitals() {
     });
   }
 
-  /* link — a frozen page looks exactly like a healthy one */
+  /* link: a frozen page looks exactly like a healthy one. Shown only
+     when it lags - a steady "0.0 s" row was noise, and a lag is the
+     moment it matters, since a page driving the car would be sending
+     into a dead connection. */
 
   const open = socketOpen();
   const quiet = lastAnything ? (now - lastAnything) / 1000 : null;
 
-  rows.push({
-    label: "Link",
-    value: !open ? "offline" : quiet === null ? "waiting" : quiet.toFixed(1) + " s",
-    note: open ? "since last message" : "not connected",
-    tone: !open ? "bad" : quiet === null || quiet > 1 ? "warn" : "ok"
-  });
+  if (!open || quiet === null || quiet > 1) {
+    rows.push({
+      label: "Link",
+      value: !open ? "offline" : quiet === null ? "waiting" : quiet.toFixed(1) + " s",
+      note: open ? "since the last message from the robot" : "not connected",
+      tone: !open ? "bad" : "warn"
+    });
+  }
 
   /* nearest obstacle */
 
@@ -390,17 +395,22 @@ function driveVitals() {
     tiles[tile.id] = tile;
   });
 
-  [["speed", "Speed"], ["temp", "Temperature"], ["cpu", "CPU"]]
+  [["speed", "Speed"], ["temp", "Temperature"], ["cpu", "CPU"], ["gpu", "GPU"]]
     .forEach(([id, label]) => {
 
       const tile = tiles[id];
 
       if (!tile) return;
 
+      /* Multi-row tiles (Temperature) bring their bars along, the same
+         mini bars as the Overview; the rows are the value. */
+      const multi = Array.isArray(tile.rows);
+
       rows.push({
         label,
-        value: String(tile.value),
-        note: tile.note || "",
+        value: multi ? "" : String(tile.value ?? ""),
+        note: multi ? "" : (typeof tile.note === "string" ? tile.note : ""),
+        rows: multi ? tile.rows : null,
         tone: GRADE_TONE[tile.grade] || ""
       });
     });
@@ -432,7 +442,9 @@ function renderDrive() {
         <span class="dot ${row.tone}"></span>
         <span class="vital-label">${escapeHtml(row.label)}</span>
         <span class="vital-value">${escapeHtml(row.value)}</span>
-        <span class="vital-note">${escapeHtml(row.note)}</span>
+        ${row.rows
+          ? `<div class="vital-rows">${rowsBody(row)}</div>`
+          : `<span class="vital-note">${escapeHtml(row.note)}</span>`}
       </li>
     `).join("");
 
@@ -629,6 +641,22 @@ function drivePublishers() {
 /* One answer to "who has the car right now?", most urgent first,
    plus the extras that matter: whether there is a physical backup
    stop, and warnings only when something is actually going on. */
+/* Is a controller attached? true / false, or null with no
+   system_diagnostics. Read from /dev/input/js*, which the robot lists
+   every second and which vanishes the moment the pad disconnects -
+   not the Bluetooth link, which is probed every 10 s and kept saying
+   "connected" for that long after a disconnect. */
+function padLinkState() {
+
+  const pad = diag["system: Gamepad"];
+
+  if (!pad) return null;
+
+  const js = (pad.values || {})["js devices"];
+
+  return Boolean(js) && js !== "none";
+}
+
 function controlState() {
 
   const connected = socketOpen();
@@ -695,14 +723,10 @@ function controlState() {
 
   /* ---- the backup stop ---- */
 
-  const pad = diag["system: Gamepad"];
-  const padValues = (pad && pad.values) || {};
-  const padLinked =
-    padValues["bluetooth"] === "connected" ||
-    (padValues["js devices"] && padValues["js devices"] !== "none");
+  const padLinked = padLinkState();
 
   const chips = [
-    !pad
+    padLinked === null
       ? { tone: "", text: "🎮 Controller: unknown",
           title: "Needs system_diagnostics.py running on the robot" }
       : padLinked
@@ -731,7 +755,7 @@ function controlState() {
       text: `${clients} people connected — rosbridge serves ${CLIENT_LIMIT}, so some dashboards get no data.` });
   }
 
-  return { hero, chips, alerts, padLinked: Boolean(pad) && padLinked };
+  return { hero, chips, alerts, padLinked: padLinked === true };
 }
 
 function renderControl() {
@@ -969,6 +993,8 @@ $("driveZoomOut").onclick = () => { zoomRadar(driveRadarScale, 1); redrawDriveRa
 $("driveZoomAuto").onclick = () => { driveRadarScale.mode = "auto"; redrawDriveRadar(); };
 
 attachRadarZoom($("driveRadar"), driveRadarScale, redrawDriveRadar);
+attachRadarPointer($("driveRadar"), driveRadarScale, redrawDriveRadar);
+attachRadarCenter($("driveCenterBtn"), driveRadarScale, redrawDriveRadar);
 
 /* Big view swaps the LiDAR into the camera's large slot and shrinks
    the camera; the controls never move. Kept per browser. */
