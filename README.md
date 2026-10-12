@@ -72,6 +72,10 @@ Possible approaches include:
 
 Architecture decisions will be documented in `docs/adr/`.
 
+## How It Works
+
+[docs/system-overview.md](docs/system-overview.md) explains how the dashboard works, how to run it on a robot or from `prototype/` for testing, and which file and setting to change for each check.
+
 ## Repository Structure
 
 ```text
