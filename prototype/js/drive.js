@@ -622,7 +622,9 @@ function foreignDriveActive() {
 
   const now = performance.now();
 
-  return now - topic.last < 1000 && topic.last - lastOwnSend > 400;
+  /* the robot's drive watchdog stopping the car is not someone driving */
+  return now - topic.last < 1000 && topic.last - lastOwnSend > 400 &&
+    topic.last - lastWatchdogStop > 50;
 }
 
 function drivePublishers() {
@@ -633,13 +635,11 @@ function drivePublishers() {
   return {
     /* every web dashboard publishes through the rosbridge node */
     web: names.some(name => /rosbridge/.test(name)),
-    autonomous: names.filter(name => !/rosbridge/.test(name))
+    /* system_diagnostics publishes /drive only for the watchdog's zeros */
+    autonomous: names.filter(name => !/rosbridge|system_diagnostics/.test(name))
   };
 }
 
-/* One answer to "who has the car right now?", most urgent first,
-   plus the extras that matter: whether there is a physical backup
-   stop, and warnings only when something is actually going on. */
 /* Is a controller attached? true / false, or null with no
    system_diagnostics. Read from /dev/input/js*, which the robot lists
    every second and which vanishes the moment the pad disconnects -
@@ -656,6 +656,9 @@ function padLinkState() {
   return Boolean(js) && js !== "none";
 }
 
+/* One answer to "who has the car right now?", most urgent first,
+   plus the extras that matter: whether there is a physical backup
+   stop, and warnings only when something is actually going on. */
 function controlState() {
 
   const connected = socketOpen();
@@ -723,9 +726,13 @@ function controlState() {
   /* ---- the backup stop ---- */
 
   const padLinked = padLinkState();
+  const pad = diag["system: Gamepad"];
 
   const chips = [
-    padLinked === null
+    padLinked && pad.level === 2
+      ? { tone: "bad", text: "Controller can't be read - no backup stop",
+          title: pad.message }
+      : padLinked === null
       ? { tone: "", text: "Controller: unknown",
           title: "Needs system_diagnostics.py running on the robot" }
       : padLinked

@@ -139,6 +139,9 @@ function onDiagnostics(message) {
    VESC
 ========================================================== */
 
+/* Recent battery readings, for the median in onVesc (BATT_WINDOW_MS). */
+const battSamples = [];
+
 function onVesc(message) {
 
   const state = message.state;
@@ -148,13 +151,29 @@ function onVesc(message) {
   const fault =
     Number(state.fault_code) || 0;
 
-  const voltage =
-    Number(state.voltage_input);
+  const now = performance.now();
+  const reading = Number(state.voltage_input);
+
+  if (Number.isFinite(reading)) battSamples.push({ at: now, v: reading });
+
+  while (battSamples.length && now - battSamples[0].at > BATT_WINDOW_MS) {
+    battSamples.shift();
+  }
+
+  const sorted = battSamples.map(s => s.v).sort((a, b) => a - b);
+
+  /* everything that shows or judges the battery reads this median */
+  const voltage = sorted.length ? sorted[Math.floor(sorted.length / 2)] : reading;
 
   vesc = {
     voltage,
+    voltageNow: reading,
     fault,
-    tempFet: Number(state.temp_fet),
+    /* Exactly 0.0 is the unassigned default on cars whose vesc_driver
+       lacks the temperature patch, never a reading: a constant is not
+       a reading. Treated as missing, with fetMissing saying why. */
+    tempFet: Number(state.temp_fet) === 0 ? NaN : Number(state.temp_fet),
+    fetMissing: Number(state.temp_fet) === 0,
     tempMotor: Number(state.temp_motor)
   };
 }
@@ -280,7 +299,12 @@ function classifyTopic(topic) {
   }
 
   if (topic.last === null) {
-    return "SILENT";
+
+    /* vesc_to_odom publishes /odom and /tf from one callback that
+       returns early until the first servo command (health.js) */
+    return spec.waitsForSteer && odomWaitingForSteer()
+      ? "IDLE"
+      : "SILENT";
   }
 
   if (!fresh) {
@@ -312,7 +336,9 @@ function topicReason(topic, state) {
         : "publishing";
 
     case "IDLE":
-      return "no input right now, normal at rest";
+      return spec.waitsForSteer
+        ? "starts after the first steering command, normal at rest"
+        : "no input right now, normal at rest";
 
     case "INPUT":
       return "subscribed by the stack, nothing publishes it";
