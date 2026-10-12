@@ -143,14 +143,40 @@ function networkRows(values) {
   const rows = [];
 
   if (wifiUp !== null) {
+
+    /* signal, loss and round trip to the gateway, each graded on its own
+       (#6), the row takes the worst; a value not measured yet is left out */
+    const loss = numberOr(values["wifi loss %"]);
+    const rtt = numberOr(values["wifi rtt ms"]);
+
+    const grades = [
+      Number.isFinite(signal)
+        ? signal < WIFI_SIGNAL_ERR ? "bad" : signal < WIFI_SIGNAL_WARN ? "warn" : "ok"
+        : null,
+      Number.isFinite(loss) ? gradeValue(loss, WIFI_LOSS_WARN, WIFI_LOSS_ERR) : null,
+      Number.isFinite(rtt) ? gradeValue(rtt, WIFI_RTT_WARN, WIFI_RTT_ERR) : null
+    ].filter(Boolean);
+
+    const parts = [
+      Number.isFinite(signal) ? signal + " dBm" : "",
+      Number.isFinite(loss) ? loss + "% loss" : "",
+      Number.isFinite(rtt) ? Math.round(rtt) + " ms" : ""
+    ].filter(Boolean);
+
     rows.push({
       label: "Wi-Fi",
-      value:
-        !wifiUp ? "down" : Number.isFinite(signal) ? signal + " dBm" : "up",
+      value: !wifiUp ? "down" : parts.length ? parts.join(" · ") : "up",
       pct:
         !wifiUp ? 0 : Number.isFinite(signal) ? (signal + 90) / 60 * 100 : 100,
-      grade: wifiUp ? "ok" : "bad",
-      hint: "The robot's Wi-Fi link, which carries this page."
+      grade: !wifiUp
+        ? "bad"
+        : grades.includes("bad") ? "bad" : grades.includes("warn") ? "warn" : "ok",
+      hint:
+        "The robot's Wi-Fi link, which carries this page. Signal: " +
+        `${WIFI_SIGNAL_WARN} dBm or better is good, below ${WIFI_SIGNAL_ERR} is bad. ` +
+        `Packet loss and round trip are to the router: under ${WIFI_LOSS_WARN}% and ` +
+        `${WIFI_RTT_WARN} ms is good, ${WIFI_LOSS_ERR}% or more, or over ` +
+        `${WIFI_RTT_ERR} ms, is bad.`
     });
   }
 
@@ -505,12 +531,11 @@ function metricTiles() {
               " (1 min)"
             : "",
 
+        /* graded on the robot by load average (signed off in #6),
+           so the numbers live in one place: cpu() in
+           system_diagnostics.py */
         grade:
-          gradeValue(
-            usage,
-            80,
-            95
-          )
+          gradeFromLevel(cpu.level)
       });
 
     } else if (
@@ -547,11 +572,7 @@ function metricTiles() {
           "% of cores",
 
         grade:
-          gradeValue(
-            ratio,
-            100,
-            200
-          )
+          gradeFromLevel(cpu.level)
       });
 
     } else {
@@ -633,13 +654,8 @@ function metricTiles() {
                 : "waiting for system_diagnostics"
             ),
 
-      grade:
-        gradeValue(
-          available,
-          20,
-          10,
-          false
-        )
+      /* graded on the robot: MEM_WARN / MEM_ERR */
+      grade: memory ? gradeFromLevel(memory.level) : "unknown"
     });
   }
 
@@ -690,13 +706,10 @@ function metricTiles() {
               .filter(Boolean).join(" · ")
           : gpu.message,
 
+      /* graded on the robot: GPU_WARN, sustained (#6) */
       grade:
         gpu
-          ? gradeValue(
-              usage,
-              85,
-              97
-            )
+          ? gradeFromLevel(gpu.level)
           : "unknown"
     });
   }
@@ -756,6 +769,16 @@ function metricTiles() {
               "that switch battery current into the motor. They heat up " +
               "under hard driving, and the VESC cuts motor power if they " +
               "overheat."
+          }
+        : vesc && vesc.fetMissing
+        ? {
+            label: "FET (VESC)",
+            value: "no reading",
+            pct: 0,
+            grade: "unknown",
+            hint:
+              "This car's VESC driver does not report the FET temperature; it " +
+              "needs the two-line temperature patch in vesc_driver.cpp."
           }
         : null
     ].filter(Boolean);

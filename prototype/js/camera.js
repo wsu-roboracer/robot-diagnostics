@@ -136,6 +136,47 @@ function setCameraStatus(text, color) {
   $("camTag").style.color = color;
 }
 
+/* ==========================================================
+   FRAME RATE
+
+   camera_http counts the frames it relays and reports them at /stats
+   on the same host and port as the stream. Read every 2 s while the
+   stream is showing; an older camera_http without /stats just leaves
+   this null.
+========================================================== */
+
+let cameraStats = null;
+
+async function pollCameraStats() {
+
+  const image = $("cameraImage");
+
+  if (image.hidden || !image.src) {
+    cameraStats = null;
+    return;
+  }
+
+  try {
+    const response = await fetch(new URL(image.src).origin + "/stats", { cache: "no-store" });
+    cameraStats = { ...(await response.json()), at: Date.now() };
+  } catch (error) {
+    cameraStats = null;
+    return;
+  }
+
+  const { fps, last_frame_s: age } = cameraStats;
+
+  if (age !== null && age > CAMERA_NO_FRAME_S) {
+    setCameraStatus("NO FRAMES", "var(--bad-ink)");
+  } else if (fps !== null) {
+    setCameraStatus(
+      `LIVE · ${Math.round(fps)} fps`,
+      fps < CAMERA_MIN_FPS ? "var(--warn-ink)" : "var(--healthy)");
+  }
+}
+
+setInterval(pollCameraStats, 2000);
+
 function connectCamera(url, auto = false) {
 
   const image = $("cameraImage");

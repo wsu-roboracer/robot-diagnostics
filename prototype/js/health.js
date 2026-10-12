@@ -126,7 +126,9 @@ function subsystemData() {
       else {
 
         vescDetail =
-          "VESC responding normally";
+          vesc.fetMissing
+            ? "VESC responding normally (no FET temperature: this car's vesc_driver needs the temperature patch)"
+            : "VESC responding normally";
       }
     }
   }
@@ -183,37 +185,70 @@ function subsystemData() {
       "/urg_node is not running";
   }
 
+  /* The lidar takes one network connection at a time. A urg_node left
+     over from an earlier run keeps it, so the new driver gets nothing
+     while the lidar still answers ping (spike notes, 2026-09-21). */
+  else if (scanTopic && scanTopic.pubs > 1) {
+
+    lidarHealth = "failed";
+    lidarDetail =
+      `${scanTopic.pubs} lidar drivers are publishing /scan - one is left over ` +
+      "from an earlier run. Stop bringup, run pkill -f urg_node_driver, then " +
+      "start bringup again";
+  }
+
   else if (scanTopic) {
 
     const state =
       classifyTopic(scanTopic);
 
-    if (state === "OK") {
+    /* urg_node grades its own rate against sensors.yaml (40 Hz within
+       5%) and reports it on /diagnostics */
+    const rate = diag["urg_node: Laser Scan topic status"];
+    const rateFresh = rate && Date.now() - rate.receivedAt < 5000;
+    const hz = rateFresh ? numberOr(rate.values["Actual frequency (Hz)"]) : NaN;
+    const lo = rateFresh ? numberOr(rate.values["Minimum acceptable frequency (Hz)"]) : NaN;
+    const hi = rateFresh ? numberOr(rate.values["Maximum acceptable frequency (Hz)"]) : NaN;
 
-      lidarHealth = "healthy";
-      lidarDetail =
-        "Laser scan data publishing";
-    }
+    const network = diag["system: Network"];
+    const pingKey = network &&
+      Object.keys(network.values).find(key => key.indexOf("lidar ") === 0);
+    const answersPing = pingKey && !/NO REPLY/.test(network.values[pingKey]);
 
-    else if (
-      state === "STALE" ||
-      state === "SILENT"
-    ) {
+    if (state === "OK" && Number.isFinite(hz) && (hz < lo || hz > hi)) {
 
       lidarHealth = "degraded";
       lidarDetail =
-        "LiDAR data is stale";
+        `Scanning at ${hz.toFixed(1)} Hz, expected ${lo.toFixed(0)} to ${hi.toFixed(0)} Hz`;
     }
 
-    else if (
-      state === "MISSING" ||
-      state === "NODE_DOWN" ||
-      state === "NOT_ADVERTISED"
-    ) {
+    else if (state === "OK") {
+
+      lidarHealth = "healthy";
+      lidarDetail =
+        Number.isFinite(hz)
+          ? `Laser scan publishing at ${hz.toFixed(1)} Hz`
+          : "Laser scan data publishing";
+    }
+
+    /* #6: a sensor whose data stopped is red, not yellow - the car
+       is driving blind */
+    else {
 
       lidarHealth = "failed";
       lidarDetail =
-        "LiDAR topic unavailable";
+        state === "SILENT"
+          ? "LiDAR is running but has sent no scans"
+          : state === "STALE"
+          ? "LiDAR stopped sending scans"
+          : "LiDAR topic unavailable";
+
+      if (answersPing) {
+        lidarDetail +=
+          ". The lidar answers ping, so the driver cannot connect to it - an " +
+          "old urg_node may hold its only connection. Stop bringup, run " +
+          "pkill -f urg_node_driver, then start bringup again";
+      }
     }
   }
 
@@ -237,9 +272,10 @@ function subsystemData() {
 
   else if (odomWaitingForSteer()) {
 
-    odomHealth = "unknown";
+    /* normal at rest, like no controller connected */
+    odomHealth = "healthy";
     odomDetail =
-      "Waiting for the first steering command - odometry starts once the car is steered";
+      "Idle - odometry starts after the first steering command";
   }
 
   else if (odomTopic) {
@@ -259,9 +295,11 @@ function subsystemData() {
       state === "SILENT"
     ) {
 
-      odomHealth = "degraded";
+      odomHealth = "failed";
       odomDetail =
-        "Odometry data is stale";
+        state === "SILENT"
+          ? "Odometry is running but has sent nothing"
+          : "Odometry stopped sending";
     }
 
     else if (
@@ -293,6 +331,23 @@ function subsystemData() {
       "Camera diagnostic received";
   }
 
+  /* frame rate from camera_http, while the stream is showing (#6) */
+  if (cameraStats && Date.now() - cameraStats.at < 5000) {
+
+    const { fps, last_frame_s: age } = cameraStats;
+
+    if (age !== null && age > CAMERA_NO_FRAME_S) {
+      cameraHealth = "failed";
+      cameraDetail = `No frames for ${Math.round(age)} s`;
+    } else if (fps !== null && fps < CAMERA_MIN_FPS &&
+               healthRank("degraded") > healthRank(cameraHealth)) {
+      cameraHealth = "degraded";
+      cameraDetail = `Streaming at ${fps.toFixed(0)} fps, expected about 30`;
+    } else if (fps !== null && cameraHealth === "healthy") {
+      cameraDetail += ` · ${fps.toFixed(0)} fps`;
+    }
+  }
+
   /* BATTERY */
 
   let batteryHealth = "unknown";
@@ -306,7 +361,7 @@ function subsystemData() {
       batteryHealth = "failed";
 
       batteryDetail =
-        `${vesc.voltage.toFixed(1)} V — stop driving`;
+        `${vesc.voltage.toFixed(1)} V - replace the pack soon`;
     }
 
     else if (
@@ -316,7 +371,7 @@ function subsystemData() {
       batteryHealth = "degraded";
 
       batteryDetail =
-        `${vesc.voltage.toFixed(1)} V — battery low`;
+        `${vesc.voltage.toFixed(1)} V - low, get a spare pack ready`;
     }
 
     else {
@@ -640,7 +695,7 @@ function renderOverall(data) {
     note.textContent =
       `${unknown} subsystem` +
       (unknown === 1 ? "" : "s") +
-      " not yet confirmed";
+      " not yet confirmed - " + names("unknown");
   }
 
   else {

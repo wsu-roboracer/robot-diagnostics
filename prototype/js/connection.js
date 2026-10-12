@@ -217,6 +217,14 @@ function handleMessage(message) {
 
   const topic = topics.get(topicName);
 
+  if (
+    topicName === "/drive" &&
+    message.msg && message.msg.header &&
+    message.msg.header.frame_id === DRIVE_WATCHDOG_FRAME
+  ) {
+    lastWatchdogStop = now;
+  }
+
   if (topic) {
 
     topic.count++;

@@ -18,6 +18,7 @@ polling endpoint.
 Read-only. No sudo. Safe to run alongside bringup.
 """
 
+import collections
 import getpass
 import glob
 import grp
@@ -36,6 +37,7 @@ try:
     from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
+    from ackermann_msgs.msg import AckermannDriveStamped
     from sensor_msgs.msg import Joy
     from std_msgs.msg import Float64
     from std_srvs.srv import Trigger
@@ -48,14 +50,16 @@ except ImportError:
 
 OK, WARN, ERROR, STALE = 0, 1, 2, 3
 
-# Thresholds. Values marked PROVISIONAL still need block F's 20-minute loaded
-# run; the measured idle floor is recorded next to each so the gap is visible.
-TJ_WARN, TJ_ERR = 70.0, 85.0        # PROVISIONAL. Measured idle: tj-thermal 51 C
-FET_WARN, FET_ERR = 65.0, 80.0      # PROVISIONAL. Measured idle: temp_fet 31.4 C,
-                                    # VESC's own OVER_TEMP_FET fault trips near 85 C
-MEM_WARN, MEM_ERR = 20.0, 10.0      # percent available. Measured idle: 63 %
+# Thresholds signed off with the professor in issue #6; the basis for each is
+# in docs/instructor-interview.md. Measured idle values are noted so a change
+# can be checked against them. The VESC FET range is judged in the page
+# (FET_WARN / FET_ERR in the page's config.js), the CPU range inside cpu().
+TJ_WARN, TJ_ERR = 70.0, 85.0        # board temperature, C. Idle about 50 C; the board
+                                    # throttles at 70 and 99 C and shuts down at 104.5 C
+MEM_WARN, MEM_ERR = 20.0, 10.0      # percent available. Idle: 63 to 80 %
 DISK_WARN, DISK_ERR = 85.0, 95.0    # percent used. Measured: 4 % on a 915 GB NVMe
-GPU_WARN, GPU_ERR = 85.0, 97.0      # percent busy. PROVISIONAL, no loaded run yet
+GPU_WARN = 95.0                     # percent busy, held for GPU_SUSTAIN_S seconds. No
+GPU_SUSTAIN_S = 5                   # red from load alone: a busy GPU is a heavy job
 LIDAR_IP = "192.168.0.10"
 
 SLOW_PERIOD = 10.0                  # seconds between expensive probes
@@ -200,6 +204,43 @@ def bt_power(show_out):
     return "no adapter" if "No default controller" in show_out else "unknown"
 
 
+def parse_wifi(iw_link, ping_out):
+    """Wi-Fi quality (#6) from `iw dev <wl> link` and a short ping to the
+    gateway: signal in dBm, packet loss in %, average round trip in ms. A value
+    that could not be read is left out, never guessed."""
+    out = {}
+    m = re.search(r"signal:\s*(-?\d+)\s*dBm", iw_link or "")
+    if m:
+        out["signal"] = int(m.group(1))
+    m = re.search(r"([\d.]+)% packet loss", ping_out or "")
+    if m:
+        out["loss"] = float(m.group(1))
+    m = re.search(r"= [\d.]+/([\d.]+)/", ping_out or "")
+    if m:
+        out["rtt"] = float(m.group(1))
+    return out
+
+
+# ---------- drive watchdog ----------
+#
+# The page drives through /drive at 20 Hz. If its Wi-Fi drops mid-drive,
+# nothing reaches the car, and ackermann_mux sends no zero of its own when an
+# input goes quiet, so the motor would hold its last command until the VESC's
+# own timeout. When /drive was commanding motion and then goes quiet, this sends
+# zero speed on /drive. A live publisher can never be cut off by it: the mux
+# already ignores an input that has been quiet for 0.2 s (mux.yaml).
+
+DRIVE_QUIET_S = 0.3
+DRIVE_STOP_COUNT = 5                # zeros sent, one per watchdog tick (20 Hz)
+DRIVE_WATCHDOG_FRAME = "drive_watchdog"   # header.frame_id, so the page and
+                                          # this node can tell the zeros apart
+
+
+def drive_went_quiet(moving, last_at, now, quiet_s=DRIVE_QUIET_S):
+    """True when /drive was commanding motion and has been silent too long."""
+    return moving and now - last_at > quiet_s
+
+
 def deadman_held(buttons, age_s):
     """True if a fresh /joy message has L1 or R1 down. Silent /joy = no pad."""
     if buttons is None or age_s > JOY_FRESH_S:
@@ -315,6 +356,11 @@ class SystemDiagnostics(Node):
         self.ncores = os.cpu_count() or 1
         self.gpu_load_path, self.gpu_freq_path = find_gpu_files()
         self._cpu_prev = None
+        self._gpu_recent = collections.deque(maxlen=GPU_SUSTAIN_S)
+        self.joy_enum = next((p for p in (
+            os.path.join(prefix, "lib", "joy", "joy_enumerate_devices")
+            for prefix in os.environ.get("AMENT_PREFIX_PATH", "").split(":") if prefix)
+            if os.access(p, os.X_OK)), None)
 
         # Filled by the background thread. Until it has run once these report
         # STALE rather than a fabricated OK - an unmeasured subsystem is
@@ -355,6 +401,17 @@ class SystemDiagnostics(Node):
         self.create_subscription(Joy, "/joy", self.on_joy, 10)
         self.create_service(Trigger, "~/controller_disconnect", self.controller_disconnect,
                             callback_group=MutuallyExclusiveCallbackGroup())
+
+        # Drive watchdog: zero speed when /drive goes quiet mid-drive.
+        self.drive_moving = False
+        self.drive_speed = 0.0
+        self.drive_at = 0.0
+        self.drive_zeros_left = 0
+        self.drive_stopped = None       # (wall time, speed) of the last stop
+        self.drive_pub = self.create_publisher(AckermannDriveStamped, "/drive", 10)
+        self.create_subscription(AckermannDriveStamped, "/drive", self.on_drive, 10,
+                                 callback_group=estop_group)
+        self.create_timer(1.0 / 20, self.drive_watchdog, callback_group=estop_group)
 
         self.get_logger().info(
             f"publishing system diagnostics on /diagnostics ({self.ncores} cores); "
@@ -481,6 +538,42 @@ class SystemDiagnostics(Node):
             m.data = 0.0
             self.motor_pub.publish(m)
 
+    # ---------- drive watchdog ----------
+
+    def on_drive(self, msg):
+        if msg.header.frame_id == DRIVE_WATCHDOG_FRAME:
+            return                      # our own zeros coming back
+        self.drive_at = time.monotonic()
+        self.drive_speed = msg.drive.speed
+        self.drive_moving = abs(msg.drive.speed) > 1e-3
+        self.drive_zeros_left = 0
+
+    def drive_watchdog(self):
+        if self.drive_zeros_left:
+            self.drive_zeros_left -= 1
+        elif drive_went_quiet(self.drive_moving, self.drive_at, time.monotonic()):
+            self.drive_moving = False
+            self.drive_zeros_left = DRIVE_STOP_COUNT - 1
+            self.drive_stopped = (time.time(), self.drive_speed)
+            self.get_logger().warn(
+                f"drive watchdog: /drive went quiet at {self.drive_speed:.2f} m/s, "
+                "sending zero speed")
+        else:
+            return
+        zero = AckermannDriveStamped()
+        zero.header.stamp = self.get_clock().now().to_msg()
+        zero.header.frame_id = DRIVE_WATCHDOG_FRAME
+        self.drive_pub.publish(zero)
+
+    def drive_status(self):
+        vals = [("stops after", f"{DRIVE_QUIET_S:.1f} s of silence while moving")]
+        if self.drive_stopped and time.time() - self.drive_stopped[0] < 60:
+            at = time.strftime("%H:%M:%S", time.localtime(self.drive_stopped[0]))
+            return status("system: Drive watchdog", WARN,
+                          f"stopped the car at {at}: /drive went quiet at "
+                          f"{self.drive_stopped[1]:.2f} m/s", vals)
+        return status("system: Drive watchdog", OK, "watching /drive", vals)
+
     def estop_status(self):
         if not self.estop_active:
             return status("system: E-stop", OK, "released", [("active", "no")])
@@ -562,8 +655,12 @@ class SystemDiagnostics(Node):
         if hz and hz.isdigit() and not any(k == "freq" for k, _ in vals):
             vals.append(("freq", f"{int(hz) / 1e6:.0f} MHz"))
         vals += [("usage %", f"{pct:.1f}"), ("source", source)]
-        lvl = ERROR if pct >= GPU_ERR else WARN if pct >= GPU_WARN else OK
-        return status("system: GPU", lvl, f"{pct:.0f}% busy", vals)
+        # one sample per tick (1 Hz): yellow only once it has stayed high
+        self._gpu_recent.append(pct)
+        held = (len(self._gpu_recent) == self._gpu_recent.maxlen
+                and min(self._gpu_recent) >= GPU_WARN)
+        return status("system: GPU", WARN if held else OK,
+                      f"{pct:.0f}% busy" + (f" for {GPU_SUSTAIN_S} s" if held else ""), vals)
 
     def memory(self):
         info = {}
@@ -669,8 +766,23 @@ class SystemDiagnostics(Node):
                        "operstate": read(f"/sys/class/net/{n}/operstate", "?")}
         out["nets"] = nets
 
+        # Wi-Fi quality (#6). Ping the gateway, not the internet: the robot
+        # needs no internet, so an outside outage must not read as a robot
+        # fault. A short burst with a hard timeout, so it never stalls the loop.
+        wl = next((n for n in nets if n.startswith("wl")), None)
+        if wl:
+            gw = re.search(r"default via (\S+)", run(["ip", "route", "show", "default"], timeout=3))
+            ping_gw = run(["ping", "-c", "5", "-i", "0.2", "-W", "1", gw.group(1)],
+                          timeout=5) if gw else ""
+            out["wifi"] = parse_wifi(run(["iw", "dev", wl, "link"], timeout=3), ping_gw)
+            if gw:
+                out["wifi"]["gateway"] = gw.group(1)
+
         # Gamepad, S-03 / S-18.
-        pad = {"js": sorted(p for p in os.listdir("/dev/input") if p.startswith("js"))}
+        # glob, not listdir: no /dev/input (a container, a board with no USB
+        # input) means no controller, not a failed probe that loses every
+        # slow reading after it
+        pad = {"js": sorted(os.path.basename(p) for p in glob.glob("/dev/input/js*"))}
         devices = run(["bluetoothctl", "devices"], timeout=5)
         for mac, name in re.findall(r"Device (\S+) (.+)", devices):
             info = run(["bluetoothctl", "info", mac], timeout=5)
@@ -702,6 +814,13 @@ class SystemDiagnostics(Node):
                 pad.setdefault("battery", cap)
                 pad["battery_source"] = entry
                 break
+        # A pad that is attached but that ROS cannot open (#6: red). Same check
+        # as the joystick check button, run directly rather than through
+        # `ros2 run`, and only while a pad is attached.
+        if pad["js"] and self.joy_enum:
+            rc, enum = probe([self.joy_enum], timeout=5)
+            if rc == 0 and enum.strip():
+                pad["readable"] = bool(parse_joy_devices(enum))
         out["pad"] = pad
         # An adapter switched off is the one reason a pad cannot pair at all.
         out["bt_power"] = bt_power(run(["bluetoothctl", "show"], timeout=5))
@@ -748,6 +867,11 @@ class SystemDiagnostics(Node):
                          else "NO REPLY"))
             if not lidar["reachable"]:
                 lvl, msg = ERROR, f"lidar unreachable at {LIDAR_IP}"
+        wifi = self._slow_get("wifi") or {}
+        for key, label in (("signal", "wifi signal"), ("loss", "wifi loss %"),
+                           ("rtt", "wifi rtt ms"), ("gateway", "wifi gateway")):
+            if key in wifi:
+                vals.append((label, str(wifi[key])))
         if self._slow_get("bt_power"):
             vals.append(("bluetooth", self._slow_get("bt_power")))
         if not up:
@@ -781,20 +905,26 @@ class SystemDiagnostics(Node):
             # power_supply entry appears even with the pad connected. Say so
             # rather than showing a blank field that looks like a bug.
             vals.append(("battery %", "not exposed by this driver"))
+        if js and pad.get("readable") is False:
+            return status("system: Gamepad", ERROR,
+                          "connected, but ROS cannot read it - add the user to the input group",
+                          vals)
         if pad["connected"] and js:
             return status("system: Gamepad", OK, "connected", vals)
         if js:
             # Also the normal state for the first few seconds after connecting,
             # while the bluetoothctl probe catches up.
             return status("system: Gamepad", WARN, "js device but no BT link", vals)
-        return status("system: Gamepad", WARN, "no controller connected", vals)
+        # #6: no controller is idle, not a fault. The Drive tab still warns
+        # that there is no backup stop.
+        return status("system: Gamepad", OK, "no controller connected", vals)
 
     def camera(self):
         cam = self._slow_get("camera")
         if cam is None:
             return status("system: Camera", STALE, "not probed yet", [])
         if not cam["present"]:
-            return status("system: Camera", WARN, "no Intel camera on USB",
+            return status("system: Camera", ERROR, "no Intel camera on USB",
                           [("vendor 8086", "not found")])
         speed = cam.get("speed", "?")
         # Deliberately labelled "usb serial": on this D435i the USB iSerial
@@ -836,7 +966,7 @@ class SystemDiagnostics(Node):
     def tick(self):
         msg = DiagnosticArray()
         msg.header.stamp = self.get_clock().now().to_msg()
-        for build in (self.estop_status, self.thermal, self.cpu, self.gpu,
+        for build in (self.estop_status, self.drive_status, self.thermal, self.cpu, self.gpu,
                       self.memory, self.storage, self.power, self.vesc_device,
                       self.network, self.gamepad, self.camera, self.clock):
             try:
@@ -929,6 +1059,14 @@ def self_test():
     assert bt_power("\tPowered: no\n") == "off"
     assert bt_power("No default controller available\n") == "no adapter"
     assert bt_power("") == "unknown", "a failed bluetoothctl must not read as off"
+
+    w = parse_wifi("Connected to aa:bb\n\tsignal: -42 dBm\n",
+                   "5 packets transmitted, 4 received, 20% packet loss, time 801ms\n"
+                   "rtt min/avg/max/mdev = 1.360/2.512/3.194/0.4 ms\n")
+    assert w == {"signal": -42, "loss": 20.0, "rtt": 2.512}, w
+    assert parse_wifi("Not connected.", "") == {}, "nothing read must stay empty"
+    assert drive_went_quiet(True, 10.0, 10.4) and not drive_went_quiet(True, 10.0, 10.2)
+    assert not drive_went_quiet(False, 10.0, 99.0), "stopped car: nothing to do"
     assert not deadman_held(held, 2.0), "stale /joy must not block"
     assert not deadman_held([0] * 13, 0.1) and not deadman_held(None, 0.0)
     assert not deadman_held([0, 0], 0.1), "short button arrays must not crash"

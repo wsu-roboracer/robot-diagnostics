@@ -101,9 +101,11 @@ function renderViewer() {
      there is none */
   const pad = padLinkState();
 
+  const unreadable = pad && diag["system: Gamepad"].level === 2;
+
   $("viewerPad").textContent =
-    pad === null ? "unknown" : pad ? "Connected" : "Not connected";
-  $("viewerPad").dataset.tone = pad === false ? "warn" : "";
+    pad === null ? "unknown" : unreadable ? "Can't be read" : pad ? "Connected" : "Not connected";
+  $("viewerPad").dataset.tone = unreadable ? "bad" : pad === false ? "warn" : "";
 
   /* battery and speed, graded as the Drive tab grades them */
 

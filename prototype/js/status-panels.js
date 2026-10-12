@@ -71,7 +71,7 @@ function renderBattery() {
       "var(--failed)";
 
     $("batteryNote").textContent =
-      "Critical — stop driving";
+      "Replace the pack soon";
   }
 
   else if (
@@ -82,13 +82,13 @@ function renderBattery() {
       "var(--warn-ink)";
 
     $("batteryNote").textContent =
-      "Low battery — swap soon";
+      "Low - get a spare pack ready";
   }
 
   else {
 
     $("batteryVoltage").style.color =
-      "var(--orange)";
+      "var(--healthy)";
 
     $("batteryNote").textContent =
       "3S LiPo voltage";
