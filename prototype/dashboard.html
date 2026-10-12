@@ -283,9 +283,9 @@
       <h2>
         <span>Camera</span>
         <span class="cam-tools">
-          <button class="link-btn" type="button" data-viewer-open="camera"
+          <button class="link-btn" type="button" data-cockpit-open="camera"
                   title="Camera full screen, with battery and speed on top"><i data-icon="maximize"></i> Full screen</button>
-          <button class="link-btn" type="button" data-viewer-open="split"
+          <button class="link-btn" type="button" data-cockpit-open="watch"
                   title="Camera and LiDAR side by side, full screen"><i data-icon="split"></i> Split</button>
           <span class="live-tag" id="camTag">no stream</span>
         </span>
@@ -492,7 +492,7 @@
 
     <!-- the way into drive mode (cockpit.js): the one thing on this
          tab meant to be found at a glance -->
-    <button class="drive-mode-hero" type="button" data-cockpit-open>
+    <button class="drive-mode-hero" type="button" data-cockpit-open="drive">
       <span class="dmh-icon"><i data-icon="gamepad"></i></span>
       <span class="dmh-text">
         <strong>Drive mode</strong>
@@ -597,9 +597,9 @@
           <h2>
             <span>Camera</span>
             <span class="cam-tools">
-              <button class="link-btn" type="button" data-viewer-open="camera"
+              <button class="link-btn" type="button" data-cockpit-open="camera"
                       title="Camera full screen, with battery and speed on top"><i data-icon="maximize"></i> Full screen</button>
-              <button class="link-btn" type="button" data-viewer-open="split"
+              <button class="link-btn" type="button" data-cockpit-open="watch"
                       title="Camera and LiDAR side by side, full screen"><i data-icon="split"></i> Split</button>
               <button class="link-btn" id="driveCamConnect" type="button"
                       title="Reconnect the camera stream"><i data-icon="refresh"></i> Reconnect</button>
@@ -1021,126 +1021,20 @@
 
 </footer>
 
-<!-- FULL SCREEN VIEWER: camera, LiDAR or both side by side, with the
-     numbers you need at a glance on top. The page's one camera stream
-     is borrowed from its card while this is open (viewer.js). -->
-<div class="viewer" id="viewer" data-mode="camera" hidden>
-
-  <div class="viewer-stage">
-    <div class="viewer-cam" id="viewerCam"></div>
-    <div class="viewer-radar">
-
-      <!-- the LiDAR's own controls ride with its panel, so in split
-           view they sit over the half they control -->
-      <div class="viewer-radar-tools">
-        <div class="range-switch view-switch" role="group" aria-label="LiDAR view">
-          <button type="button" data-lidar-view="lines">Lines</button>
-          <button type="button" data-lidar-view="detailed">Detailed</button>
-        </div>
-        <button type="button" class="select-toggle" data-beam-select aria-pressed="false"
-                title="Pick a range of beams by index"><i data-icon="crosshair"></i> Select beams</button>
-        <span class="viewer-range-label">Range (m)</span>
-        <div class="range-switch" role="group" aria-label="LiDAR plot range" data-range-for="viewer">
-          <button type="button" data-lidar-range="auto">Auto</button>
-          <button type="button" data-lidar-range="0.5">0.5</button>
-          <button type="button" data-lidar-range="1">1</button>
-          <button type="button" data-lidar-range="2">2</button>
-          <button type="button" data-lidar-range="4">4</button>
-          <button type="button" data-lidar-range="8">8</button>
-          <button type="button" data-lidar-range="15">15</button>
-        </div>
-      </div>
-
-      <div class="viewer-radar-plot">
-        <div class="viewer-radar-box">
-          <canvas id="viewerRadar" width="480" height="480"
-                  aria-label="LiDAR map: drag to look around, scroll to zoom, double-click to reset"></canvas>
-          <button class="radar-center" id="viewerCenterBtn" type="button" disabled
-                  title="Put the car back in the middle (keeps the zoom)"><i data-icon="locate"></i> Center</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="viewer-top">
-    <div class="viewer-status">
-      <span class="viewer-health" id="viewerHealth" data-health="unknown">UNKNOWN</span>
-      <span class="viewer-fact"><span class="hud-k">Subsystems</span><span id="viewerSubsystems"></span></span>
-      <span class="viewer-fact"><span class="hud-k">Control</span><span id="viewerControl"></span></span>
-      <span class="viewer-fact"><span class="hud-k">Nodes</span><span id="viewerNodes"></span></span>
-      <span class="viewer-fact"><span class="hud-k">Connected</span><span id="viewerClients"></span></span>
-      <span class="viewer-fact"><span class="hud-k">Controller</span><span id="viewerPad"></span></span>
-    </div>
-
-    <div class="viewer-tools">
-      <div class="range-switch" role="group" aria-label="What to show">
-        <button type="button" data-viewer-mode="camera">Camera</button>
-        <button type="button" data-viewer-mode="split">Split</button>
-        <button type="button" data-viewer-mode="lidar">LiDAR</button>
-      </div>
-      <!-- the page's own E-STOP is hidden while this covers the screen -->
-      <button class="estop-btn" id="viewerEstop" type="button"><i data-icon="stopSign"></i><span class="estop-long">Emergency stop</span><span class="estop-short">E-stop</span></button>
-      <button class="top-btn" id="viewerClose" type="button" title="Exit full screen (Esc)"><i data-icon="x"></i> Exit</button>
-    </div>
-  </div>
-
-  <div class="viewer-alert" id="viewerAlert" hidden></div>
-
-  <!-- the beam select panel sits here while selecting; bottom right is
-       the LiDAR's blind spot, so it hides no returns -->
-  <div class="viewer-select viewer-lidar-only" id="viewerSelectSlot"></div>
-
-  <div class="viewer-bottom">
-    <div class="viewer-big">
-      <span class="hud-k">Battery</span>
-      <span class="hud-v" id="viewerBattery"></span>
-      <span class="viewer-sub" id="viewerBatteryNote"></span>
-    </div>
-    <div class="viewer-big">
-      <span class="hud-k">Speed</span>
-      <span class="hud-v" id="viewerSpeed"></span>
-      <span class="viewer-sub" id="viewerSpeedNote"></span>
-    </div>
-    <!-- CPU, GPU, RAM and temperatures, as the Overview tiles grade them -->
-    <div class="viewer-sys" id="viewerSys"></div>
-    <span class="drive-state" id="viewerDrive" hidden></span>
-  </div>
-
-</div>
-
-<!-- DRIVE MODE: first person. The camera fills the screen, the LiDAR
-     warns from the edges, and the controls sit beside it (desktop) or
-     under your thumbs (phones, sideways). It drives through the same
-     controller as the Drive tab - same arming, dead-man and limits
-     (cockpit.js). -->
+<!-- FULL SCREEN (cockpit.js): camera, LiDAR and controls panes, any mix,
+     side by side, resized and reordered; ready-made layouts. The controls
+     drive through the same controller as the Drive tab - same arming,
+     dead-man and limits. Phones: one picture at a time, thumb sticks. -->
 <div class="cockpit" id="cockpit" hidden>
 
-  <div class="cockpit-view">
-
-    <div class="cockpit-cam" id="cockpitCam"></div>
-
-    <!-- parking-sensor glow: the edge nearest the obstacle lights up -->
-    <div class="cockpit-glow glow-front" id="glowFront"></div>
-    <div class="cockpit-glow glow-left" id="glowLeft"></div>
-    <div class="cockpit-glow glow-right" id="glowRight"></div>
-
-    <div class="cockpit-top">
-      <div class="cockpit-status">
-        <span class="drive-state" id="cockpitState">DISARMED</span>
-        <span class="viewer-health" id="cockpitHealth" data-health="unknown">UNKNOWN</span>
-        <span class="hud-chip" id="cockpitBattery"><i data-icon="battery"></i> --.- V</span>
-        <span class="hud-chip hud-fast" id="cockpitSpeedMode" hidden><i data-icon="alert"></i> HIGH SPEED</span>
-        <span class="hud-chip hud-fast" id="cockpitSteerMode" hidden><i data-icon="alert"></i> FULL STEERING</span>
-      </div>
-
-      <div class="cockpit-tools">
-        <!-- touch layout only: arming lives here, the panel is a drawer -->
-        <button class="top-btn cockpit-arm-quick" id="cockpitArmQuick" type="button">Arm</button>
-        <button class="top-btn cockpit-panel-toggle" id="cockpitPanelToggle" type="button"
-                aria-expanded="false" aria-controls="cockpitPanel"><i data-icon="sliders"></i> Controls</button>
-        <button class="estop-btn" id="cockpitEstop" type="button"><i data-icon="stopSign"></i><span class="estop-long">Emergency stop</span><span class="estop-short">E-stop</span></button>
-        <button class="top-btn" id="cockpitClose" type="button" title="Leave drive mode (Esc) - disarms"><i data-icon="x"></i> Exit</button>
-      </div>
+  <div class="cockpit-top">
+    <div class="cockpit-status">
+      <span class="drive-state" id="cockpitState">DISARMED</span>
+      <span class="viewer-health" id="cockpitHealth" data-health="unknown">UNKNOWN</span>
+      <span class="hud-chip" id="cockpitBattery"><i data-icon="battery"></i> --.- V</span>
+      <span class="hud-chip hud-fast" id="cockpitSpeedMode" hidden><i data-icon="alert"></i> HIGH SPEED</span>
+      <span class="hud-chip hud-fast" id="cockpitSteerMode" hidden><i data-icon="alert"></i> FULL STEERING</span>
+      <span class="hud-chip" id="cockpitPadChip"></span>
     </div>
 
     <div class="cockpit-msgs">
@@ -1152,25 +1046,164 @@
       <div class="cockpit-note" id="cockpitNote" role="status" hidden></div>
     </div>
 
-    <div class="cockpit-mini" data-movable="map">
-      <canvas id="cockpitRadar" width="240" height="240"
-              aria-label="LiDAR around the car, 4 m"></canvas>
-      <span class="cockpit-mini-label">LiDAR · 4 m</span>
+    <div class="cockpit-tools">
+      <!-- which panes show; on phones Camera and LiDAR take turns -->
+      <div class="range-switch pane-switch" role="group" aria-label="Panes">
+        <button type="button" data-pane-toggle="camera">Camera</button>
+        <button type="button" data-pane-toggle="lidar">LiDAR</button>
+        <button type="button" data-pane-toggle="controls">Controls</button>
+      </div>
+      <select class="layout-pick" id="cockpitLayout" aria-label="Layout"
+              title="Ready-made layouts. Each keeps your own sizes and order.">
+        <option value="camera">Camera</option>
+        <option value="watch">Watch</option>
+        <option value="drive">Drive</option>
+        <option value="drivelidar">Drive + LiDAR</option>
+        <option value="lidar">LiDAR</option>
+      </select>
+      <button class="top-btn layout-reset" id="cockpitLayoutReset" type="button"
+              title="Put this layout's panes, sizes and order back to the default">Reset</button>
+      <!-- touch layout only: arming lives here, the settings are a drawer -->
+      <button class="top-btn cockpit-arm-quick" id="cockpitArmQuick" type="button">Arm</button>
+      <button class="top-btn cockpit-panel-toggle" id="cockpitPanelToggle" type="button"
+              aria-expanded="false" aria-controls="cockpitPanel"><i data-icon="sliders"></i> Settings</button>
+      <button class="estop-btn" id="cockpitEstop" type="button"><i data-icon="stopSign"></i><span class="estop-long">Emergency stop</span><span class="estop-short">E-stop</span></button>
+      <button class="top-btn" id="cockpitClose" type="button" title="Leave full screen (Esc) - disarms"><i data-icon="x"></i> Exit</button>
     </div>
+  </div>
 
-    <div class="cockpit-hud">
-      <div>
-        <span class="hud-k">Command</span>
-        <span class="hud-v" id="cockpitCmd">0.00 m/s</span>
-      </div>
-      <div class="hud-steer">
-        <span class="hud-k">Steering <span id="cockpitSteer">0°</span></span>
-        <div class="steer-bar"><i id="cockpitSteerMark"></i></div>
-      </div>
-      <div>
-        <span class="hud-k">Measured</span>
-        <span class="hud-v" id="cockpitMeas">—</span>
-      </div>
+  <div class="cockpit-view">
+
+    <!-- the panes, side by side: shown, hidden, resized (drag a divider)
+         and reordered (drag a title onto another pane). On phones one
+         picture shows at a time and the controls are thumb sticks. -->
+    <div class="cockpit-panes" id="cockpitPanes">
+
+      <section class="pane" data-pane="camera">
+        <div class="pane-head" title="Drag onto another pane to swap places"><i data-icon="move"></i> Camera</div>
+        <div class="pane-body cockpit-cam" id="cockpitCam">
+          <!-- parking-sensor glow on the picture: the edge nearest the obstacle lights up -->
+          <div class="cockpit-glow glow-front" id="glowFront"></div>
+          <div class="cockpit-glow glow-left" id="glowLeft"></div>
+          <div class="cockpit-glow glow-right" id="glowRight"></div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="lidar">
+        <div class="pane-head" title="Drag onto another pane to swap places"><i data-icon="move"></i> LiDAR</div>
+        <div class="pane-body">
+          <div class="viewer-radar">
+
+            <!-- the LiDAR's own controls ride with its pane -->
+            <div class="viewer-radar-tools">
+              <div class="range-switch view-switch" role="group" aria-label="LiDAR view">
+                <button type="button" data-lidar-view="lines">Lines</button>
+                <button type="button" data-lidar-view="detailed">Detailed</button>
+              </div>
+              <button type="button" class="select-toggle" data-beam-select aria-pressed="false"
+                      title="Pick a range of beams by index"><i data-icon="crosshair"></i> Select beams</button>
+              <span class="viewer-range-label">Range (m)</span>
+              <div class="range-switch" role="group" aria-label="LiDAR plot range" data-range-for="pane">
+                <button type="button" data-lidar-range="auto">Auto</button>
+                <button type="button" data-lidar-range="0.5">0.5</button>
+                <button type="button" data-lidar-range="1">1</button>
+                <button type="button" data-lidar-range="2">2</button>
+                <button type="button" data-lidar-range="4">4</button>
+                <button type="button" data-lidar-range="8">8</button>
+                <button type="button" data-lidar-range="15">15</button>
+              </div>
+            </div>
+
+            <div class="viewer-radar-plot">
+              <div class="viewer-radar-box">
+                <canvas id="paneRadar" width="480" height="480"
+                        aria-label="LiDAR map: drag to look around, scroll to zoom, double-click to reset"></canvas>
+                <button class="radar-center" id="paneCenterBtn" type="button" disabled
+                        title="Put the car back in the middle (keeps the zoom)"><i data-icon="locate"></i> Center</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- the beam select panel sits here while selecting; bottom
+               right is the LiDAR's blind spot, so it hides no returns -->
+          <div class="viewer-select" id="paneSelectSlot"></div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="controls">
+        <div class="pane-head" title="Drag onto another pane to swap places"><i data-icon="move"></i> Controls</div>
+        <aside class="cockpit-panel pane-body" id="cockpitPanel">
+
+          <div class="cockpit-panel-head">
+            <h2>Controls</h2>
+            <button class="link-btn" id="cockpitPanelClose" type="button"
+                    title="Hide the controls for a clear view (Controls brings them back)">Hide</button>
+          </div>
+
+          <div class="arm-row">
+            <label class="arm-check">
+              <input type="checkbox" id="cockpitConfirm">
+              Area is clear / wheels are off the ground
+            </label>
+            <button class="arm-btn" id="cockpitArm" type="button" disabled>Arm</button>
+          </div>
+
+          <div class="cockpit-pad-wrap">
+            <div class="drive-pad" id="cockpitPad" aria-label="Drive pad: drag to drive">
+              <div class="pad-axis pad-axis-x"></div>
+              <div class="pad-axis pad-axis-y"></div>
+              <span class="pad-label pad-up">FORWARD</span>
+              <span class="pad-label pad-down">REVERSE</span>
+              <span class="pad-label pad-left">LEFT</span>
+              <span class="pad-label pad-right">RIGHT</span>
+              <div class="pad-knob" id="cockpitKnob"></div>
+            </div>
+
+            <button class="stop-btn" id="cockpitStop" type="button" title="Stop and disarm (Space)">STOP</button>
+          </div>
+
+          <!-- the edge glow is the loudest thing on screen; some drivers
+               would rather keep only the sentence and the map -->
+          <label class="cockpit-switch">
+            <span class="cockpit-switch-text">
+              <strong>Edge warning lights</strong>
+              <span>Screen edges glow when something is close</span>
+            </span>
+            <input type="checkbox" id="cockpitGlowToggle" role="switch" checked>
+          </label>
+
+          <button class="link-btn cockpit-arrange-btn" id="cockpitArrangeBtn" type="button"
+                  title="Drag the thumb sticks and STOP to where your thumbs reach">
+            <i data-icon="move"></i> Move sticks &amp; STOP
+          </button>
+
+          <details class="cockpit-more" id="cockpitMore">
+          <summary>Limits <span class="cockpit-more-sum" id="cockpitMoreSum"></span></summary>
+
+          <label class="slider-row">
+            <span>Max speed</span>
+            <input type="range" id="cockpitMaxSpeed" min="0.3" max="3" step="0.1" value="3">
+            <strong id="cockpitMaxSpeedValue">3.0 m/s</strong>
+          </label>
+
+          <label class="slider-row">
+            <span>Max steering</span>
+            <input type="range" id="cockpitMaxSteer" min="0.05" max="0.34" step="0.01" value="0.34">
+            <strong id="cockpitMaxSteerValue">19°</strong>
+          </label>
+
+          <div class="card-hint cockpit-keys">
+            Drag the pad, or hold
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows.
+            <kbd>Space</kbd> stops. Higher limits unlock on the Drive tab.
+          </div>
+
+          <button class="link-btn" id="cockpitCamConnect" type="button"><i data-icon="refresh"></i> Reconnect camera</button>
+          </details>
+
+        </aside>
+      </section>
+
     </div>
 
     <!-- touch layout: steer with the left thumb, throttle with the right -->
@@ -1190,90 +1223,40 @@
 
     <!-- arranging: what to do, and the way out -->
     <div class="cockpit-arrange-bar" id="cockpitArrangeBar" hidden>
-      <span><i data-icon="move"></i> Drag the LiDAR map and controls anywhere. Driving is off while you arrange.</span>
+      <span><i data-icon="move"></i> Drag the sticks and STOP anywhere. Driving is off while you arrange.</span>
       <button class="top-btn" id="cockpitArrangeReset" type="button">Reset</button>
       <button class="top-btn cockpit-arrange-done" id="cockpitArrangeDone" type="button">Done</button>
     </div>
 
   </div>
 
-  <aside class="cockpit-panel" id="cockpitPanel" data-movable="panel">
 
-    <div class="cockpit-panel-head">
-      <h2>Controls</h2>
-      <button class="link-btn" id="cockpitPanelClose" type="button"
-              title="Hide the controls for a clear view (Controls brings them back)">Hide</button>
+
+  <!-- the computer's numbers, and the command / steering readout -->
+  <div class="cockpit-bottom">
+    <div class="cockpit-sys" id="cockpitSys"></div>
+  <div class="cockpit-hud">
+    <div>
+      <span class="hud-k">Command</span>
+      <span class="hud-v" id="cockpitCmd">0.00 m/s</span>
     </div>
-
-    <div class="arm-row">
-      <label class="arm-check">
-        <input type="checkbox" id="cockpitConfirm">
-        Area is clear / wheels are off the ground
-      </label>
-      <button class="arm-btn" id="cockpitArm" type="button" disabled>Arm</button>
+    <div class="hud-steer">
+      <span class="hud-k">Steering <span id="cockpitSteer">0°</span></span>
+      <div class="steer-bar"><i id="cockpitSteerMark"></i></div>
     </div>
-
-    <div class="cockpit-pad-wrap">
-      <div class="drive-pad" id="cockpitPad" aria-label="Drive pad: drag to drive">
-        <div class="pad-axis pad-axis-x"></div>
-        <div class="pad-axis pad-axis-y"></div>
-        <span class="pad-label pad-up">FORWARD</span>
-        <span class="pad-label pad-down">REVERSE</span>
-        <span class="pad-label pad-left">LEFT</span>
-        <span class="pad-label pad-right">RIGHT</span>
-        <div class="pad-knob" id="cockpitKnob"></div>
-      </div>
-
-      <button class="stop-btn" id="cockpitStop" type="button" title="Stop and disarm (Space)">STOP</button>
+    <div>
+      <span class="hud-k">Measured</span>
+      <span class="hud-v" id="cockpitMeas">—</span>
     </div>
-
-    <!-- the edge glow is the loudest thing on screen; some drivers
-         would rather keep only the sentence and the map -->
-    <label class="cockpit-switch">
-      <span class="cockpit-switch-text">
-        <strong>Edge warning lights</strong>
-        <span>Screen edges glow when something is close</span>
-      </span>
-      <input type="checkbox" id="cockpitGlowToggle" role="switch" checked>
-    </label>
-
-    <button class="link-btn cockpit-arrange-btn" id="cockpitArrangeBtn" type="button"
-            title="Drag the LiDAR map and the controls to where you want them">
-      <i data-icon="move"></i> Move controls &amp; map
-    </button>
-
-    <details class="cockpit-more" id="cockpitMore">
-    <summary>Limits <span class="cockpit-more-sum" id="cockpitMoreSum"></span></summary>
-
-    <label class="slider-row">
-      <span>Max speed</span>
-      <input type="range" id="cockpitMaxSpeed" min="0.3" max="3" step="0.1" value="3">
-      <strong id="cockpitMaxSpeedValue">3.0 m/s</strong>
-    </label>
-
-    <label class="slider-row">
-      <span>Max steering</span>
-      <input type="range" id="cockpitMaxSteer" min="0.05" max="0.34" step="0.01" value="0.34">
-      <strong id="cockpitMaxSteerValue">19°</strong>
-    </label>
-
-    <div class="card-hint cockpit-keys">
-      Drag the pad, or hold
-      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows.
-      <kbd>Space</kbd> stops. Higher limits unlock on the Drive tab.
-    </div>
-
-    <button class="link-btn" id="cockpitCamConnect" type="button"><i data-icon="refresh"></i> Reconnect camera</button>
-    </details>
-
-  </aside>
+  </div>
+  </div>
 
   <!-- phones held upright: the game layout needs the phone sideways -->
   <div class="cockpit-rotate">
     <div class="cockpit-rotate-icon" aria-hidden="true"><i data-icon="phoneRotate"></i></div>
     <strong>Turn your phone sideways to drive</strong>
     <span>Drive mode uses the whole screen: steer with your left thumb, throttle with your right.</span>
-    <button class="top-btn" id="cockpitRotateClose" type="button"><i data-icon="x"></i> Exit drive mode</button>
+    <button class="top-btn" id="cockpitRotateClose" type="button"><i data-icon="x"></i> Exit full screen</button>
   </div>
 
 </div>
@@ -1323,7 +1306,6 @@
 <script src="js/lidar-select.js"></script>
 <script src="js/estop.js"></script>
 <script src="js/drive.js"></script>
-<script src="js/viewer.js"></script>
 <script src="js/cockpit.js"></script>
 <script src="js/main.js"></script>
 

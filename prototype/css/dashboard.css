@@ -2665,6 +2665,8 @@ kbd {
 .warn-btn {
   width: 100%;
   justify-content: center;
+  white-space: normal;    /* .top-btn is nowrap; a narrow card must wrap the label */
+  text-align: center;
   margin-top: 6px;
   border-color: color-mix(in srgb, var(--degraded) 70%, transparent);
   background: var(--degraded-soft);
@@ -3732,65 +3734,18 @@ html {
 }
 
 /* ==========================================================
-   FULL SCREEN VIEWER (viewer.js) - always dark, it sits on video
+   FULL SCREEN LIDAR PANE: the plot's toolbar, the plot, and the
+   beam select card (cockpit.js) - always dark, like the rest of
+   the full screen
 ========================================================== */
 
-.viewer {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: #000;
-  color: #fff;
-}
-
-.viewer[hidden] {
-  display: none;
-}
-
-body:has(.viewer:not([hidden])) {
-  overflow: hidden;
-}
-
-.viewer-stage {
-  position: absolute;
-  inset: 0;
-  display: flex;
-}
-
-.viewer-cam,
+/* the LiDAR's own toolbar, then the plot, kept square */
 .viewer-radar {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.viewer[data-mode="camera"] .viewer-radar,
-.viewer[data-mode="lidar"] .viewer-cam,
-.viewer[data-mode="camera"] .viewer-lidar-only {
-  display: none;
-}
-
-.viewer[data-mode="split"] .viewer-cam {
-  border-right: 1px solid #262a30;
-}
-
-/* the borrowed camera box fills its half */
-.viewer-cam .stream-box {
-  width: 100%;
   height: 100%;
-  aspect-ratio: auto;
-  max-height: none;
-  border-radius: 0;
-  background: #000;
-}
-
-/* below the top bar: the LiDAR's own toolbar, then the plot, kept
-   square and clear of the bottom bar */
-.viewer-radar {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 76px 12px 96px;
+  padding: 10px 12px;
 }
 
 .viewer-radar-tools {
@@ -3830,32 +3785,6 @@ body:has(.viewer:not([hidden])) {
   border-radius: 8px;
 }
 
-.viewer-top {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
-  padding: 12px 16px 28px;
-  background: linear-gradient(rgba(0, 0, 0, .78), rgba(0, 0, 0, 0));
-}
-
-.viewer-status,
-.viewer-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 18px;
-}
-
-.viewer-tools {
-  gap: 8px 10px;
-}
-
 .viewer-health {
   padding: 5px 12px;
   border-radius: 99px;
@@ -3870,77 +3799,36 @@ body:has(.viewer:not([hidden])) {
 .viewer-health[data-health="degraded"] { background: var(--degraded); }
 .viewer-health[data-health="failed"]   { background: var(--failed); color: #fff; }
 
-.viewer-fact {
-  font-size: 14px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-/* graded values anywhere on the viewer: battery, controller, the
+/* graded values anywhere in the full screen: controller, the
    computer's numbers */
-.viewer [data-tone="ok"]   { color: var(--healthy); }
-.viewer [data-tone="warn"] { color: var(--degraded); }
-.viewer [data-tone="bad"]  { color: var(--failed); }
+.cockpit [data-tone="ok"]   { color: var(--healthy); }
+.cockpit [data-tone="warn"] { color: var(--degraded); }
+.cockpit [data-tone="bad"]  { color: var(--failed); }
 
-.viewer .range-switch {
+.cockpit .range-switch {
   border-color: rgba(255, 255, 255, .35);
 }
 
-.viewer .range-switch button {
+.cockpit .range-switch button {
   background: rgba(0, 0, 0, .55);
   color: #d6dae0;
 }
 
-.viewer .range-switch button + button {
+.cockpit .range-switch button + button {
   border-left-color: rgba(255, 255, 255, .35);
 }
 
-.viewer .range-switch button[aria-pressed="true"] {
+.cockpit .range-switch button[aria-pressed="true"] {
   background: #fff;
   color: #000;
 }
 
-.viewer-alert {
-  position: absolute;
-  top: 78px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100% - 32px);
-  padding: 8px 16px;
-  border-radius: 9px;
-  background: var(--failed);
-  color: #fff;
-  font-weight: 800;
-  text-align: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
-}
-
-.viewer-alert[hidden] {
-  display: none;
-}
-
-.viewer-bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 28px;
-  padding: 28px 20px 16px;
-  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .78));
-  pointer-events: none;
-}
-
-.viewer-big .hud-v {
-  font-size: 30px;
-}
-
-.viewer-sys {
+.cockpit-sys {
   display: flex;
   align-items: flex-end;
   gap: 20px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .viewer-small-v {
@@ -3962,37 +3850,6 @@ body:has(.viewer:not([hidden])) {
 
 .viewer-temps b {
   font-variant-numeric: tabular-nums;
-}
-
-.viewer-sub {
-  display: block;
-  font-size: 12px;
-  opacity: .8;
-}
-
-#viewerDrive {
-  margin-left: auto;
-}
-
-/* side by side, the numbers stay over the camera half (wrapping if
-   they must) and leave the plot's half clear */
-@media (min-aspect-ratio: 1/1) {
-  .viewer[data-mode="split"] .viewer-bottom {
-    right: 50%;
-  }
-}
-
-/* portrait: split stacks the camera over the plot */
-@media (max-aspect-ratio: 1/1) {
-
-  .viewer-stage {
-    flex-direction: column;
-  }
-
-  .viewer[data-mode="split"] .viewer-cam {
-    border-right: 0;
-    border-bottom: 1px solid #262a30;
-  }
 }
 
 /* ==========================================================
@@ -4125,8 +3982,7 @@ body:has(.viewer:not([hidden])) {
   color: var(--muted);
 }
 
-/* in the viewer: a dark card over the LiDAR's blind spot, above the
-   bottom bar's fade */
+/* in the LiDAR pane: a dark card over the LiDAR's blind spot */
 .viewer-select {
   position: absolute;
   z-index: 1;
@@ -4135,19 +3991,19 @@ body:has(.viewer:not([hidden])) {
   width: min(420px, calc(100% - 32px));
 }
 
-.viewer .select-toggle {
+.cockpit .select-toggle {
   border-color: rgba(255, 255, 255, .35);
   background: rgba(0, 0, 0, .55);
   color: #d6dae0;
 }
 
-.viewer .select-toggle[aria-pressed="true"] {
+.cockpit .select-toggle[aria-pressed="true"] {
   border-color: var(--link);
   background: var(--link);
   color: #fff;
 }
 
-.viewer .beam-select {
+.cockpit .beam-select {
   margin: 0;
   border-color: rgba(255, 255, 255, .18);
   background: rgba(11, 13, 16, .9);
@@ -4155,15 +4011,15 @@ body:has(.viewer:not([hidden])) {
   box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
 }
 
-.viewer .beam-select-controls label,
-.viewer .beam-hint,
-.viewer .beam-readout .k,
-.viewer .beam-readout .n {
+.cockpit .beam-select-controls label,
+.cockpit .beam-hint,
+.cockpit .beam-readout .k,
+.cockpit .beam-readout .n {
   color: rgba(255, 255, 255, .7);
 }
 
-.viewer .beam-select-controls input,
-.viewer .beam-select .check-btn {
+.cockpit .beam-select-controls input,
+.cockpit .beam-select .check-btn {
   border-color: rgba(255, 255, 255, .3);
   background: rgba(0, 0, 0, .5);
   color: #fff;
@@ -4178,7 +4034,7 @@ body:has(.viewer:not([hidden])) {
 
 /* full screen there is no page to scroll, so a drag on the plot
    always pans it (the in-page plots keep normal page scrolling) */
-#viewerRadar {
+#paneRadar {
   touch-action: none;
 }
 
@@ -4259,93 +4115,6 @@ body:has(.viewer:not([hidden])) {
   .surround-card { order: 4; }
   .vitals-card   { order: 5; }
   .limits-card   { order: 6; }
-
-  /* FULL SCREEN VIEWER: top bar, picture, bottom bar stacked, so
-     nothing covers the camera or the plot's toolbar */
-  .viewer {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .viewer-stage {
-    position: relative;
-    inset: auto;
-    order: 2;
-    flex: 1 1 0;
-    min-height: 0;
-  }
-
-  .viewer-radar {
-    padding: 10px 12px;
-  }
-
-  .viewer-top {
-    position: static;
-    order: 0;
-    gap: 8px 12px;
-    padding: 10px 12px;
-    background: #000;
-    border-bottom: 1px solid #262a30;
-  }
-
-  .viewer-status,
-  .viewer-tools {
-    display: contents;
-  }
-
-  /* status pill, E-STOP and Exit on one row, then the facts, then
-     the mode switch across the width */
-  .viewer-health         { order: 1; }
-  #viewerEstop           { order: 2; margin-left: auto; min-height: 40px; }
-  #viewerClose           { order: 3; min-height: 40px; }
-  .viewer-fact           { order: 4; font-size: 13px; }
-  .viewer-tools > .range-switch {
-    order: 5;
-    flex: 1 1 100%;
-  }
-
-  .viewer-tools > .range-switch button {
-    flex: 1;
-    min-height: 38px;
-    font-size: 14px;
-  }
-
-  .viewer-alert {
-    position: static;
-    order: 1;
-    transform: none;
-    max-width: none;
-    margin: 8px 12px 0;
-  }
-
-  .viewer-select {
-    position: static;
-    order: 3;
-    width: auto;
-    margin: 0 12px 10px;
-  }
-
-  .viewer-select:not(:has(> .beam-select:not([hidden]))) {
-    display: none;
-  }
-
-  .viewer-bottom {
-    position: static;
-    order: 4;
-    gap: 10px 22px;
-    padding: 10px 16px 14px;
-    background: #000;
-    border-top: 1px solid #262a30;
-  }
-
-  .viewer-big .hud-v {
-    font-size: 24px;
-  }
-
-  .viewer-sys {
-    flex-wrap: wrap;
-    gap: 8px 18px;
-  }
 }
 
 /* small phones: the battery number and its gauge still share a row */
@@ -4435,8 +4204,8 @@ body:has(.viewer:not([hidden])) {
     color: var(--text);
   }
 
-  .viewer .range-switch button:hover:not([aria-pressed="true"]),
-  .viewer .select-toggle:hover:not([aria-pressed="true"]) {
+  .cockpit .range-switch button:hover:not([aria-pressed="true"]),
+  .cockpit .select-toggle:hover:not([aria-pressed="true"]) {
     background: rgba(255, 255, 255, .14);
     color: #fff;
   }
@@ -4673,6 +4442,7 @@ body:has(.cockpit:not([hidden])) {
 .cockpit-glow {
   --glow: transparent;
   position: absolute;
+  z-index: 1;
   pointer-events: none;
   opacity: 0;
   transition: opacity .2s ease;
@@ -4717,6 +4487,7 @@ body:has(.cockpit:not([hidden])) {
 
 .cockpit-top {
   position: absolute;
+  z-index: 2;              /* over the panes; on phones it floats on the picture */
   top: 0;
   left: 0;
   right: 0;
@@ -4794,35 +4565,6 @@ body:has(.cockpit:not([hidden])) {
   color: #e6e9ec;
 }
 
-/* small LiDAR map, bottom right, above the readout */
-.cockpit-mini {
-  position: absolute;
-  right: 16px;
-  bottom: 96px;
-  width: 200px;
-  pointer-events: none;
-}
-
-.cockpit-mini canvas {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, .18);
-  opacity: .92;
-}
-
-.cockpit-mini-label {
-  display: block;
-  margin-top: 4px;
-  text-align: right;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, .7);
-}
-
 /* command / steering / measured, like the Drive tab's camera HUD */
 .cockpit-hud {
   position: absolute;
@@ -4839,6 +4581,42 @@ body:has(.cockpit:not([hidden])) {
   background: rgba(0, 0, 0, .6);
   pointer-events: none;
 }
+
+/* ---------- panes (cockpit.js): shared ---------- */
+
+.cockpit-panes {
+  position: absolute;
+  inset: 0;
+}
+
+.pane[hidden] {
+  display: none;
+}
+
+.pane-body {
+  position: relative;
+  min-height: 0;
+}
+
+.layout-pick {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .55);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* several panes on at once still read as separate buttons */
+.cockpit .pane-switch button[aria-pressed="true"] + button[aria-pressed="true"] {
+  border-left-color: rgba(0, 0, 0, .25);
+}
+
+.cockpit #cockpitPadChip[data-tone="warn"] { color: var(--degraded); }
+.cockpit #cockpitPadChip[data-tone="bad"]  { color: var(--failed); }
 
 /* desktop: the touch-only bits hide */
 .stick,
@@ -5019,19 +4797,6 @@ body:has(.cockpit:not([hidden])) {
     font-size: 14px;
   }
 
-  /* top left: the throttle stick owns the right edge */
-  .cockpit-mini {
-    top: 64px;
-    bottom: auto;
-    right: auto;
-    left: max(12px, env(safe-area-inset-left));
-    width: 104px;
-  }
-
-  .cockpit-mini-label {
-    display: none;
-  }
-
   /* readout floats above STOP, between the sticks */
   .cockpit-hud {
     bottom: 92px;
@@ -5162,6 +4927,250 @@ body:has(.cockpit:not([hidden])) {
     color: rgba(255, 255, 255, .8);
     text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
     pointer-events: none;
+  }
+}
+
+/* ---------- desktop: a top bar, the panes side by side, the readout
+   along the bottom; nothing floats over the controls ---------- */
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+
+  .cockpit {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cockpit-top {
+    position: relative;
+    padding: 10px 16px;
+    background: #0b0d10;
+    border-bottom: 1px solid #262a30;
+  }
+
+  .cockpit-view {
+    position: relative;
+    inset: auto;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .cockpit-panes {
+    display: flex;
+  }
+
+  .pane {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 220px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pane[hidden] {
+    display: none;
+  }
+
+  .pane[data-pane="controls"] {
+    min-width: 290px;
+  }
+
+  .pane-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px;
+    background: #111418;
+    border-bottom: 1px solid #262a30;
+    color: rgba(255, 255, 255, .7);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .pane.moving .pane-head {
+    cursor: grabbing;
+    color: #fff;
+  }
+
+  .pane-body {
+    flex: 1 1 0;
+  }
+
+  /* where a dragged pane will land */
+  .pane.drop-target::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border: 2px dashed var(--orange);
+    background: rgba(255, 121, 0, .08);
+    pointer-events: none;
+  }
+
+  .pane-divider {
+    flex: none;
+    width: 6px;
+    background: #262a30;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .pane-divider:hover,
+  .pane-divider.dragging {
+    background: var(--orange);
+  }
+
+  .cockpit-cam {
+    position: relative;
+    inset: auto;
+  }
+
+  /* the warnings sit in the top bar's middle, clear of every pane */
+  .cockpit-msgs {
+    position: static;
+    transform: none;
+    width: auto;
+    flex: 1 1 300px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .cockpit-alert,
+  .cockpit-lidar,
+  .cockpit-note {
+    padding: 6px 12px;
+    box-shadow: none;
+  }
+
+  /* docked in its pane, not floating over the picture */
+  .cockpit-panel {
+    position: static;
+    display: flex;
+    width: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: #0b0d10;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  /* the pane's title says Controls, and the pane switch hides it;
+     arranging the sticks is a phone thing */
+  .cockpit .cockpit-panel-head,
+  .cockpit .cockpit-panel-toggle,
+  .cockpit .cockpit-arrange-btn {
+    display: none;
+  }
+
+  .cockpit-bottom {
+    display: grid;
+    grid-template-columns: 1fr minmax(280px, 560px) 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: #0b0d10;
+    border-top: 1px solid #262a30;
+  }
+
+  .cockpit-hud {
+    position: static;
+    grid-column: 2;
+    width: auto;
+    transform: none;
+  }
+}
+
+/* ---------- phones: one picture at a time, the thumb sticks and
+   STOP over it while the controls are on ---------- */
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  .pane {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+  }
+
+  .cockpit[data-picture="camera"] .pane[data-pane="camera"]:not([hidden]),
+  .cockpit[data-picture="lidar"] .pane[data-pane="lidar"]:not([hidden]) {
+    display: flex;
+  }
+
+  /* the drawer, sticks and STOP place themselves on the screen */
+  .pane[data-pane="controls"]:not([hidden]) {
+    display: contents;
+  }
+
+  .pane-body {
+    flex: 1 1 0;
+  }
+
+  /* the pane switch is enough here: one picture, controls on or off */
+  .pane-head,
+  .layout-pick,
+  .layout-reset,
+  .cockpit-sys {
+    display: none;
+  }
+
+  /* warnings get their own row under the buttons, so they can never
+     cover Emergency stop when the bar wraps */
+  .cockpit-msgs {
+    position: static;
+    order: 3;
+    flex: 1 1 100%;
+    width: auto;
+    transform: none;
+  }
+
+  .cockpit-bottom {
+    display: contents;
+  }
+
+  /* watching: the plot's toolbar under the top bar, which floats
+     over the picture here */
+  .viewer-radar {
+    padding-top: 64px;
+  }
+
+  /* driving: the whole height for the plot, car in the middle, the
+     toolbar out of the way (Auto range; drag still pans) */
+  .cockpit.has-controls .viewer-radar {
+    padding: 0;
+  }
+
+  .cockpit.has-controls .viewer-radar-tools {
+    display: none;
+  }
+
+  /* the plot already shows what is close; the sentence would cover it */
+  .cockpit[data-picture="lidar"] .cockpit-lidar {
+    display: none;
+  }
+
+  /* watching only: no sticks, no STOP, no arming */
+  .cockpit:not(.has-controls) .stick,
+  .cockpit:not(.has-controls) .cockpit-stop-touch,
+  .cockpit:not(.has-controls) .cockpit-arm-quick,
+  .cockpit:not(.has-controls) .cockpit-panel-toggle,
+  .cockpit:not(.has-controls) .cockpit-panel,
+  .cockpit:not(.has-controls) .cockpit-rotate {
+    display: none;
+  }
+
+  .cockpit:not(.has-controls) .cockpit-hud {
+    bottom: max(14px, env(safe-area-inset-bottom));
   }
 }
 
@@ -5667,11 +5676,8 @@ body:has(.cockpit:not([hidden])) {
 /* touch screens held sideways are wider than 800 px but still phones:
    the full-screen views use the short name there too */
 @media (pointer: coarse), (max-width: 900px) {
-  .cockpit .estop-long,
-  .viewer .estop-long  { display: none; }
-
-  .cockpit .estop-short,
-  .viewer .estop-short { display: inline; }
+  .cockpit .estop-long  { display: none; }
+  .cockpit .estop-short { display: inline; }
 }
 
 /* ==========================================================
@@ -5785,11 +5791,6 @@ body:has(.cockpit:not([hidden])) {
 .cockpit.arranging [data-movable].dragging {
   outline-style: solid;
   opacity: .85;
-}
-
-/* the map is see-through to clicks normally; it must catch a drag */
-.cockpit.arranging .cockpit-mini {
-  pointer-events: auto;
 }
 
 .cockpit.arranging .stick {

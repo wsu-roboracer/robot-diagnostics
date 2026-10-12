@@ -68,7 +68,6 @@ function render() {
   /* drive */
 
   renderDrive();
-  renderViewer();
   renderCockpit();
 }
 
@@ -256,7 +255,7 @@ document.querySelectorAll("[data-lidar-view]").forEach(button => {
 
     renderRadar();
     redrawDriveRadar();
-    redrawViewerRadar();
+    redrawPaneRadar();
   };
 });
 
@@ -267,7 +266,7 @@ setLidarView(lidarView);
    zooms around whatever is in the middle of the view. */
 const RANGE_PLOTS = {
   overview: [radarScaleState, renderRadar],
-  viewer: [viewerRadarScale, redrawViewerRadar]
+  pane: [paneRadarScale, redrawPaneRadar]
 };
 
 document.querySelectorAll("[data-range-for]").forEach(group => {
