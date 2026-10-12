@@ -490,18 +490,17 @@
       physical controller always overrides this page.
     </div>
 
-    <!-- the way into drive mode (cockpit.js): the one thing on this
-         tab meant to be found at a glance -->
-    <button class="drive-mode-hero" type="button" data-cockpit-open="drive">
-      <span class="dmh-icon"><i data-icon="gamepad"></i></span>
-      <span class="dmh-text">
-        <strong>Drive mode</strong>
-        <span>First person and full screen: the camera, on-screen controls and LiDAR alerts.</span>
-      </span>
-      <span class="dmh-go">Enter drive mode <i data-icon="arrowRight"></i></span>
-    </button>
+    <!-- The Drive tab IS the full screen view, embedded in the page:
+         the same panes, layouts, floating controls and warnings. Its
+         Full screen button makes it cover the whole screen (cockpit.js
+         moves #cockpit between here and the full screen). -->
+    <div class="drive-cockpit-slot" id="driveCockpitSlot"></div>
 
-    <section class="drive-grid" id="driveGrid" data-cam="small">
+    <!-- The driving logic's own controls (drive.js): arming, the pad,
+         limits, who's driving, vitals. Kept, hidden, as the one place
+         that state lives; the view above mirrors and forwards to them,
+         so every drive rule stays in one file. -->
+    <section class="drive-grid drive-source" id="driveGrid" data-cam="small" hidden>
 
       <div class="drive-col drive-left">
 
@@ -1035,13 +1034,18 @@
       <span class="hud-chip hud-fast" id="cockpitSpeedMode" hidden><i data-icon="alert"></i> HIGH SPEED</span>
       <span class="hud-chip hud-fast" id="cockpitSteerMode" hidden><i data-icon="alert"></i> FULL STEERING</span>
       <span class="hud-chip" id="cockpitPadChip"></span>
+      <!-- only while a controller is connected; its PS button reconnects it -->
+      <button class="top-btn cockpit-pad-off" id="cockpitPadDisconnect" type="button" hidden></button>
+      <span class="hud-chip who-chip" id="cockpitWho" data-tone=""></span>
+      <!-- armed with the controls closed: the keys still drive -->
+      <span class="hud-chip keys-chip" id="cockpitKeysChip" hidden><i data-icon="joystick"></i> Keys drive: W A S D / arrows · Space stops</span>
     </div>
 
     <div class="cockpit-msgs">
       <div class="cockpit-alert" id="cockpitAlert" role="alert" hidden></div>
 
-      <!-- the LiDAR in one sentence, only when something is close -->
-      <div class="cockpit-lidar tone-none" id="cockpitLidar" hidden></div>
+      <!-- who else could be driving, autonomous code, too many clients -->
+      <div class="cockpit-ctrl-alert" id="cockpitCtrlAlert" role="status" hidden></div>
 
       <div class="cockpit-note" id="cockpitNote" role="status" hidden></div>
     </div>
@@ -1053,26 +1057,187 @@
         <button type="button" data-pane-toggle="lidar">LiDAR</button>
         <button type="button" data-pane-toggle="controls">Controls</button>
       </div>
-      <select class="layout-pick" id="cockpitLayout" aria-label="Layout"
-              title="Ready-made layouts. Each keeps your own sizes and order.">
-        <option value="camera">Camera</option>
-        <option value="watch">Watch</option>
-        <option value="drive">Drive</option>
-        <option value="drivelidar">Drive + LiDAR</option>
-        <option value="lidar">LiDAR</option>
-      </select>
-      <button class="top-btn layout-reset" id="cockpitLayoutReset" type="button"
-              title="Put this layout's panes, sizes and order back to the default">Reset</button>
-      <!-- touch layout only: arming lives here, the settings are a drawer -->
+      <!-- phones: arming and the limits drawer live here -->
       <button class="top-btn cockpit-arm-quick" id="cockpitArmQuick" type="button">Arm</button>
       <button class="top-btn cockpit-panel-toggle" id="cockpitPanelToggle" type="button"
-              aria-expanded="false" aria-controls="cockpitPanel"><i data-icon="sliders"></i> Settings</button>
+              aria-expanded="false" aria-controls="cockpitPanel" title="Safety check and speed limits"><i data-icon="gauge"></i><span class="btn-lbl"> Limits</span></button>
+
+      <!-- every "how it looks" option, in one place -->
+      <button class="top-btn cockpit-settings-btn" id="cockpitSettingsBtn" type="button"
+              aria-expanded="false" aria-controls="cockpitSettings" title="Layout and display settings"><i data-icon="sliders"></i><span class="btn-lbl"> Settings</span></button>
+      <!-- on the Drive tab: make this view cover the whole screen -->
+      <button class="top-btn cockpit-full-btn" id="cockpitGoFull" type="button"
+              title="Full screen (Esc to leave)"><i data-icon="maximize"></i><span class="btn-lbl"> Full screen</span></button>
+      <button class="top-btn cockpit-exit-btn" id="cockpitClose" type="button" title="Leave full screen (Esc) - disarms"><i data-icon="x"></i> Exit</button>
+
+      <!-- one tap: tuck the bar away (the corner keeps E-stop and Show) -->
+      <button class="top-btn cockpit-icon-btn" id="cockpitBarHideBtn" type="button"
+              aria-label="Hide the top bar" title="Hide the top bar (Show in the corner brings it back)"><i data-icon="chevronUp"></i></button>
+
+      <!-- last, and set apart: always in the same corner -->
+      <span class="cockpit-sep" aria-hidden="true"></span>
       <button class="estop-btn" id="cockpitEstop" type="button"><i data-icon="stopSign"></i><span class="estop-long">Emergency stop</span><span class="estop-short">E-stop</span></button>
-      <button class="top-btn" id="cockpitClose" type="button" title="Leave full screen (Esc) - disarms"><i data-icon="x"></i> Exit</button>
     </div>
   </div>
 
+  <!-- while the bar is hidden: what must never be out of reach -->
+  <div class="cockpit-minibar" id="cockpitMinibar">
+    <div class="cockpit-mini-alert" id="cockpitMiniAlert" role="alert" hidden></div>
+    <!-- armed with the bar away: say so -->
+    <span class="drive-state" id="cockpitMiniState" hidden></span>
+    <button class="top-btn cockpit-mini-arm" id="cockpitMiniArm" type="button">Arm</button>
+    <button class="estop-btn" id="cockpitMiniEstop" type="button"></button>
+    <button class="top-btn" id="cockpitBarShow" type="button" title="Show the bar again"><i data-icon="chevronDown"></i> Show</button>
+  </div>
+
   <div class="cockpit-view">
+
+    <!-- SETTINGS: how the view looks, in one place (the controls card
+         keeps only what drives). A panel under the bar on desktops, a
+         drawer on phones. -->
+    <div class="cockpit-settings" id="cockpitSettings" role="dialog" aria-label="Settings" hidden>
+      <div class="cs-head">
+        <h2>Settings</h2>
+        <button class="pane-hide" id="cockpitSettingsClose" type="button" aria-label="Close settings"><i data-icon="x"></i></button>
+      </div>
+
+      <section class="cs-group">
+        <h3>Arrangement</h3>
+        <label class="cockpit-switch cockpit-lidar-float-switch">
+            <span class="cockpit-switch-text">
+              <strong>LiDAR over camera</strong>
+              <span>A small LiDAR window on the picture</span>
+            </span>
+            <input type="checkbox" id="lidarFloatToggle" role="switch">
+          </label>
+
+        <label class="cockpit-switch cs-desk-only">
+          <span class="cockpit-switch-text">
+            <strong>Dock the controls</strong>
+            <span>A column beside the pictures instead of a card over them</span>
+          </span>
+          <input type="checkbox" id="controlsDockToggle" role="switch">
+        </label>
+
+        <label class="cockpit-switch">
+          <span class="cockpit-switch-text">
+            <strong>Hide the top bar</strong>
+            <span>More picture. Emergency stop and Show stay in the corner.</span>
+          </span>
+          <input type="checkbox" id="barHiddenToggle" role="switch">
+        </label>
+
+        <label class="cockpit-switch cs-touch-only">
+          <span class="cockpit-switch-text">
+            <strong>Controls only</strong>
+            <span>Just the sticks and STOP on the picture. E-stop, Arm and Show stay in the corner.</span>
+          </span>
+          <input type="checkbox" id="controlsOnlyToggle" role="switch">
+        </label>
+      </section>
+
+      <section class="cs-group">
+        <h3>On the picture</h3>
+        <label class="cockpit-switch">
+            <span class="cockpit-switch-text">
+              <strong>Edge warning lights</strong>
+              <span>Screen edges glow when something is close</span>
+            </span>
+            <input type="checkbox" id="cockpitGlowToggle" role="switch" checked>
+          </label>
+
+        <label class="cockpit-switch">
+            <span class="cockpit-switch-text">
+              <strong>Close-object warning</strong>
+              <span>The "Very close" message on the picture. Drag it to move it.</span>
+            </span>
+            <input type="checkbox" id="cockpitWarnToggle" role="switch" checked>
+          </label>
+      </section>
+
+      <section class="cs-group">
+        <h3>LiDAR</h3>
+        <!-- the pane's own toolbar hides while it floats; these always work -->
+        <div class="cs-field">
+          <span>View</span>
+          <div class="range-switch view-switch" role="group" aria-label="LiDAR view">
+            <button type="button" data-lidar-view="lines">Lines</button>
+            <button type="button" data-lidar-view="detailed">Detailed</button>
+          </div>
+        </div>
+        <div class="cs-field">
+          <span>Range (m)</span>
+          <div class="range-switch" role="group" aria-label="LiDAR range" data-range-for="pane">
+            <button type="button" data-lidar-range="auto">Auto</button>
+            <button type="button" data-lidar-range="1">1</button>
+            <button type="button" data-lidar-range="2">2</button>
+            <button type="button" data-lidar-range="4">4</button>
+            <button type="button" data-lidar-range="8">8</button>
+            <button type="button" data-lidar-range="15">15</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="cs-group">
+        <h3>Readouts</h3>
+        <div class="cs-field">
+          <span>Speed in</span>
+          <div class="range-switch" role="group" aria-label="Speed units">
+            <button type="button" data-speed-unit="mps">m/s</button>
+            <button type="button" data-speed-unit="kmh">km/h</button>
+            <button type="button" data-speed-unit="mph">mph</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="cs-group">
+        <h3>Screen</h3>
+        <label class="cockpit-switch">
+          <span class="cockpit-switch-text">
+            <strong>Keep the screen awake</strong>
+            <span>No dimming or locking while this view is open</span>
+          </span>
+          <input type="checkbox" id="wakeToggle" role="switch" checked>
+        </label>
+
+        <label class="cockpit-switch cs-touch-only">
+          <span class="cockpit-switch-text">
+            <strong>Buzz when very close</strong>
+            <span>A short vibration the moment something is under 0.5 m, while armed</span>
+          </span>
+          <input type="checkbox" id="buzzToggle" role="switch" checked>
+        </label>
+      </section>
+
+      <section class="cs-group cs-desk-only">
+        <h3>Keyboard</h3>
+        <dl class="cs-keys">
+          <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows</dt><dd>Drive, while armed and held</dd>
+          <dt><kbd>Space</kbd></dt><dd>Stop and disarm</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close this panel, then leave full screen</dd>
+        </dl>
+      </section>
+
+      <section class="cs-group cs-touch-only">
+        <h3>Thumb sticks</h3>
+        <button class="link-btn cockpit-arrange-btn" id="cockpitArrangeBtn" type="button"
+                  title="Drag the thumb sticks and STOP to where your thumbs reach">
+            <i data-icon="move"></i> Move sticks &amp; STOP
+          </button>
+      </section>
+
+      <section class="cs-group">
+        <h3>Camera</h3>
+        <button class="link-btn" id="cockpitCamConnect" type="button"><i data-icon="refresh"></i> Reconnect camera</button>
+      </section>
+
+      <!-- every layout, position and switch above, back to the start -->
+      <button class="top-btn cs-reset" id="cockpitResetAll" type="button"
+              title="Layouts, positions and the switches above, back to their defaults (disarms)">
+        <i data-icon="refresh"></i> Reset all view settings
+      </button>
+    </div>
+
 
     <!-- the panes, side by side: shown, hidden, resized (drag a divider)
          and reordered (drag a title onto another pane). On phones one
@@ -1089,8 +1254,12 @@
         </div>
       </section>
 
-      <section class="pane" data-pane="lidar">
-        <div class="pane-head" title="Drag onto another pane to swap places"><i data-icon="move"></i> LiDAR</div>
+      <section class="pane" data-pane="lidar" data-float="lidar">
+        <div class="pane-head" title="Drag onto another pane to swap places"><i data-icon="move"></i> LiDAR
+          <!-- a small window over the camera instead of a pane beside it -->
+          <button class="pane-act" id="lidarFloatBtn" type="button"
+                  title="Float the LiDAR over the camera (drag to move, corner to resize)"><i data-icon="split"></i> Float</button>
+        </div>
         <div class="pane-body">
           <div class="viewer-radar">
 
@@ -1130,8 +1299,17 @@
         </div>
       </section>
 
-      <section class="pane" data-pane="controls">
-        <div class="pane-head" title="Drag onto another pane to swap places"><i data-icon="move"></i> Controls</div>
+      <!-- desktop: a frosted card floating over the picture - drag its
+           title bar to move it, x to hide it. Phones: the sticks, STOP
+           and the settings drawer. -->
+      <section class="pane" data-pane="controls" data-float="controls">
+        <div class="pane-head" title="Drag to move the controls"><i data-icon="move"></i> Controls
+          <!-- a column beside the pictures instead of a card over them -->
+          <button class="pane-act" id="controlsDockBtn" type="button"
+                  title="Dock the controls beside the pictures"><i data-icon="split"></i> Dock</button>
+          <button class="pane-hide" id="controlsHide" type="button"
+                  aria-label="Hide the controls" title="Hide the controls (stays armed: the keys still drive, Space stops)"><i data-icon="x"></i></button>
+        </div>
         <aside class="cockpit-panel pane-body" id="cockpitPanel">
 
           <div class="cockpit-panel-head">
@@ -1162,23 +1340,9 @@
             <button class="stop-btn" id="cockpitStop" type="button" title="Stop and disarm (Space)">STOP</button>
           </div>
 
-          <!-- the edge glow is the loudest thing on screen; some drivers
-               would rather keep only the sentence and the map -->
-          <label class="cockpit-switch">
-            <span class="cockpit-switch-text">
-              <strong>Edge warning lights</strong>
-              <span>Screen edges glow when something is close</span>
-            </span>
-            <input type="checkbox" id="cockpitGlowToggle" role="switch" checked>
-          </label>
-
-          <button class="link-btn cockpit-arrange-btn" id="cockpitArrangeBtn" type="button"
-                  title="Drag the thumb sticks and STOP to where your thumbs reach">
-            <i data-icon="move"></i> Move sticks &amp; STOP
-          </button>
-
-          <details class="cockpit-more" id="cockpitMore">
-          <summary>Limits <span class="cockpit-more-sum" id="cockpitMoreSum"></span></summary>
+          <!-- limits: always in view while driving -->
+          <div class="cockpit-limits" id="cockpitMore">
+          <div class="cockpit-limits-head">Limits <span class="cockpit-more-sum" id="cockpitMoreSum"></span></div>
 
           <label class="slider-row">
             <span>Max speed</span>
@@ -1195,15 +1359,25 @@
           <div class="card-hint cockpit-keys">
             Drag the pad, or hold
             <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows.
-            <kbd>Space</kbd> stops. Higher limits unlock on the Drive tab.
+            <kbd>Space</kbd> stops.
           </div>
 
-          <button class="link-btn" id="cockpitCamConnect" type="button"><i data-icon="refresh"></i> Reconnect camera</button>
-          </details>
+          <button class="top-btn warn-btn" id="cockpitSpeedUnlock" type="button"></button>
+          <button class="top-btn warn-btn" id="cockpitSteerUnlock" type="button"></button>
+          </div>
 
         </aside>
       </section>
 
+    </div>
+
+    <!-- the LiDAR in one sentence, only when something is close. It
+         floats on the picture: drag it anywhere, or hide it with its x
+         (Close-object warning in the controls brings it back). -->
+    <div class="cockpit-warn" id="cockpitWarn" data-float="warning" title="Drag to move this warning">
+      <div class="cockpit-lidar tone-none" id="cockpitLidar" hidden></div>
+      <button class="cockpit-warn-hide" id="cockpitWarnHide" type="button"
+              aria-label="Hide this warning" title="Hide (turn it back on in Settings)"><i data-icon="x"></i></button>
     </div>
 
     <!-- touch layout: steer with the left thumb, throttle with the right -->
@@ -1236,6 +1410,18 @@
   <div class="cockpit-bottom">
     <div class="cockpit-sys" id="cockpitSys"></div>
   <div class="cockpit-hud">
+    <!-- speedometer: measured speed as the arc, your command as the
+         orange tick, the scale up to your max-speed limit -->
+    <div class="speedo" id="cockpitSpeedo" aria-label="Speed">
+      <svg viewBox="0 0 120 68" aria-hidden="true">
+        <path class="speedo-track" d="M 10 62 A 50 50 0 0 1 110 62" pathLength="100"/>
+        <path class="speedo-fill" id="speedoFill" d="M 10 62 A 50 50 0 0 1 110 62" pathLength="100"/>
+        <line class="speedo-cmd" id="speedoCmd" x1="60" y1="8" x2="60" y2="20"/>
+      </svg>
+      <span class="speedo-v" id="speedoValue">0.0</span>
+      <span class="speedo-u" id="speedoUnit">m/s</span>
+      <span class="speedo-max" id="speedoMax">max 3.0</span>
+    </div>
     <div>
       <span class="hud-k">Command</span>
       <span class="hud-v" id="cockpitCmd">0.00 m/s</span>

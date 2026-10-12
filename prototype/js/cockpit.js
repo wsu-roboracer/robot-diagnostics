@@ -1,10 +1,14 @@
 "use strict";
 
-/* Full screen: camera, LiDAR and controls as panes, any mix of them,
-   side by side. Drag a divider to resize, drag a pane's title onto
+/* The driving view: camera, LiDAR and controls as panes, any mix of
+   them, side by side. It lives on the Drive tab, embedded in the page,
+   and its Full screen button makes the same view cover the screen
+   (the Overview's camera buttons open it full screen directly). Drag a divider to resize, drag a pane's title onto
    another to swap them; ready-made layouts each keep your own sizes.
-   On phones one picture shows at a time and the controls are thumb
-   sticks, held sideways like a game.
+   On desktops the controls float over the picture as a card you can
+   drag anywhere. On phones one picture shows at a time and the
+   controls are thumb sticks, held sideways like a game. The "Very
+   close" warning floats on the picture: drag it, or hide it.
 
    The controls are only another way to hold the Drive tab's
    controller: they write the same padHeld / padVec that the Drive
@@ -27,7 +31,8 @@ const COCKPIT_GLOW_SECTORS = {
 
 const paneRadarScale = newRadarScale();
 
-let cockpitOpen = false;
+let cockpitOpen = false;         // shown, on the Drive tab or full screen
+let cockpitFull = false;         // covering the whole screen
 let cockpitFullscreen = false;   // we put the page into fullscreen
 let cockpitNearBefore = false;   // for the one-shot buzz on phones
 let cockpitNoteText = "";
@@ -35,6 +40,7 @@ let cockpitNoteAt = 0;
 let cockpitFrame = 0;
 let cockpitLastDriveNote = "";
 let cockpitArranging = false;
+let cockpitHadControls = false;   // to say "still armed" once, when they close
 
 /* each input remembers the finger (pointer) holding it, so two thumbs
    can steer and throttle at once */
@@ -104,20 +110,55 @@ function useLayout(name, fresh = false) {
     order: saved && saved.order && PANES.every(id => saved.order.includes(id))
       ? saved.order : [...base.order],
     on: saved && Array.isArray(saved.on) && saved.on.length ? saved.on : [...base.on],
-    w: { ...base.w, ...(saved && saved.w) }
+    w: { ...base.w, ...(saved && saved.w) },
+    lidarFloat: Boolean(saved && saved.lidarFloat),
+    controlsDock: Boolean(saved && saved.controlsDock)
   };
 
   if (fresh) saveLayout();
 }
 
-function cockpitPaneShown(id) {
-  return cockpitOpen && layout.on.includes(id) &&
-    !(cockpitTouchLayout() && id !== "controls" && touchPicture() !== id);
+/* the Drive tab remembers its own layout; full screen from the
+   Overview's camera buttons does not change it */
+const TAB_LAYOUT_KEY = "cockpitTabLayout";
+
+function tabLayoutName() {
+  try {
+    return localStorage.getItem(TAB_LAYOUT_KEY) || "drive";
+  } catch (error) {
+    return "drive";
+  }
 }
 
-/* phones: one picture at a time, the first shown one in the order */
+function rememberTabLayout() {
+  try {
+    if (driveTabVisible()) localStorage.setItem(TAB_LAYOUT_KEY, layoutName);
+  } catch (error) {}
+}
+
+/* the LiDAR as a small window over the camera: needs both on */
+function lidarFloats() {
+  return Boolean(layout && layout.lidarFloat &&
+    layout.on.includes("lidar") && layout.on.includes("camera"));
+}
+
+/* phones drive full screen only: the sticks need the phone sideways */
+function controlsAllowed() {
+  return !cockpitTouchLayout() || cockpitFull;
+}
+
+function cockpitPaneShown(id) {
+  if (!cockpitOpen || !layout.on.includes(id)) return false;
+  if (id === "controls") return controlsAllowed();
+  if (id === "lidar" && lidarFloats()) return true;
+  return !(cockpitTouchLayout() && touchPicture() !== id);
+}
+
+/* phones: one picture at a time, the first shown one in the order
+   (a floating LiDAR rides on top of the camera instead) */
 function touchPicture() {
-  return layout.order.find(id => id !== "controls" && layout.on.includes(id)) || "camera";
+  return layout.order.find(id => id !== "controls" && layout.on.includes(id) &&
+    !(id === "lidar" && lidarFloats())) || "camera";
 }
 
 function setPane(id, on) {
@@ -126,8 +167,9 @@ function setPane(id, on) {
 
   if (on) {
 
-    /* phones: Camera and LiDAR take turns; the picked one goes first */
-    if (cockpitTouchLayout() && id !== "controls") {
+    /* phones: Camera and LiDAR take turns (unless the LiDAR floats
+       over the camera); the picked one goes first */
+    if (cockpitTouchLayout() && id !== "controls" && !layout.lidarFloat) {
       shown = shown.filter(pane => pane === "controls");
       layout.order = [id, ...layout.order.filter(pane => pane !== id)];
     }
@@ -139,6 +181,132 @@ function setPane(id, on) {
   }
 
   layout.on = shown;
+  saveLayout();
+
+  /* phones drive full screen, sideways: Controls on the Drive tab
+     takes you there */
+  if (on && id === "controls" && !controlsAllowed()) {
+    openCockpit();
+    return;
+  }
+
+  applyPanes();
+}
+
+function setControlsDock(on) {
+  layout.controlsDock = on;
+  saveLayout();
+  applyPanes();
+}
+
+/* ---------- settings: every "how it looks" option, in one panel ----------
+
+   Layout, arrangement, what shows on the picture, the thumb sticks
+   and the camera. A panel under the bar on desktops, a drawer on
+   phones (below the bar, which floats over the picture there). */
+
+function settingsOpen() {
+  return !$("cockpitSettings").hidden;
+}
+
+function setSettingsOpen(open) {
+
+  $("cockpitSettings").hidden = !open;
+  $("cockpitSettingsBtn").setAttribute("aria-expanded", String(open));
+  $("cockpitSettingsBtn").classList.toggle("active", open);
+
+  if (open) {
+    setCockpitPanel(false);          // one panel at a time
+    placeSettings();
+  }
+}
+
+/* phones: start under the bar (or the corner buttons) */
+function placeSettings() {
+
+  const view = document.querySelector(".cockpit-view").getBoundingClientRect();
+  const bar = $("cockpit").classList.contains("bar-hidden")
+    ? $("cockpitMinibar") : document.querySelector(".cockpit-top");
+  const below = Math.max(0, bar.getBoundingClientRect().bottom - view.top);
+
+  $("cockpitSettings").style.setProperty("--below-bar", below + "px");
+}
+
+/* ---------- hiding the top bar ----------
+
+   More picture: the bar tucks away and a corner cluster keeps what
+   must stay in reach - Emergency stop, the red alerts, Arm on phones,
+   and Show. On phones this is "Controls only": the readout, the
+   warning and a floating LiDAR go too, leaving the sticks and STOP.
+   Kept per browser, separately for desktop and touch. */
+
+const BAR_KEY = "cockpitBarHidden";
+
+function barHidden() {
+  try {
+    return (JSON.parse(localStorage.getItem(BAR_KEY) || "{}"))[cockpitLayoutName()] === true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function setBarHidden(on) {
+
+  try {
+    const all = JSON.parse(localStorage.getItem(BAR_KEY) || "{}");
+    all[cockpitLayoutName()] = on;
+    localStorage.setItem(BAR_KEY, JSON.stringify(all));
+  } catch (error) {}
+
+  applyBarHidden();
+}
+
+/* Phones: Controls only - the sticks and STOP, nothing else on the
+   picture. Implies the bar is hidden. */
+const FOCUS_KEY = "cockpitControlsOnly";
+
+function controlsOnly() {
+  try {
+    return cockpitTouchLayout() && localStorage.getItem(FOCUS_KEY) === "on";
+  } catch (error) {
+    return false;
+  }
+}
+
+function setControlsOnly(on) {
+  try {
+    localStorage.setItem(FOCUS_KEY, on ? "on" : "off");
+  } catch (error) {}
+  applyBarHidden();
+}
+
+function applyBarHidden() {
+
+  const focus = controlsOnly();
+
+  $("cockpit").classList.toggle("bar-hidden", barHidden() || focus);
+  $("cockpit").classList.toggle("focus", focus);
+  $("barHiddenToggle").checked = barHidden();
+  $("controlsOnlyToggle").checked = focus;
+
+  /* the picture changed size */
+  requestAnimationFrame(() => {
+    redrawPaneRadar();
+    placeFloats();
+  });
+}
+
+function setLidarFloat(on) {
+
+  layout.lidarFloat = on;
+
+  /* floating needs the camera to float over, and the LiDAR itself */
+  if (on) {
+    ["camera", "lidar"].forEach(id => {
+      if (!layout.on.includes(id)) layout.on.push(id);
+    });
+  }
+
   saveLayout();
   applyPanes();
 }
@@ -157,37 +325,57 @@ function applyPanes() {
 
   const cockpit = $("cockpit");
   const box = $("cockpitPanes");
-  const controls = layout.on.includes("controls");
+  const controls = layout.on.includes("controls") && controlsAllowed();
+  const lidarFloating = lidarFloats();
 
-  /* the controls you were using are about to vanish */
+  /* Controls closed: on phones the sticks and STOP go with them, so
+     disarm. On desktops the keys still drive (W A S D / arrows, Space
+     stops) as long as the Drive tab is underneath, so stay armed. */
   if (!controls) {
     releaseCockpitInputs();
-    if (driveArmed) disarmDrive("controls hidden");
+
+    const keysDrive = !cockpitTouchLayout() && driveTabVisible();
+
+    if (driveArmed && !keysDrive) {
+      disarmDrive("controls hidden");
+    } else if (driveArmed && cockpitHadControls) {
+      setCockpitNote("Still armed: drive with W A S D or the arrow keys. Space stops.");
+    }
+
     if (cockpitArranging) setArranging(false);
   }
+
+  cockpitHadControls = controls;
 
   /* the controls are the Drive tab's: show that tab underneath, so its
      rules (keys, limits, leaving the tab disarms) all hold */
   if (controls && !driveTabVisible()) showTab("drive");
 
   cockpit.classList.toggle("has-controls", controls);
+  cockpit.classList.toggle("lidar-float", lidarFloating);
   cockpit.dataset.picture = touchPicture();
 
-  /* side by side in the saved order, a divider between neighbours */
+  /* side by side in the saved order, a divider between neighbours.
+     On desktops the controls float over the pictures instead of
+     taking a column, so they get no divider. */
   box.querySelectorAll(".pane-divider").forEach(divider => divider.remove());
 
+  const floating = !cockpitTouchLayout();
   let previous = null;
 
   layout.order.forEach(id => {
 
     const pane = box.querySelector(`[data-pane="${id}"]`);
-    const on = layout.on.includes(id);
+    const on = layout.on.includes(id) && (id !== "controls" || controls);
+    const floats = (floating && id === "controls" && !layout.controlsDock) ||
+      (lidarFloating && id === "lidar");
 
     pane.hidden = !on;
+    pane.classList.toggle("floating", floats);
     pane.style.flexGrow = layout.w[id];
     box.appendChild(pane);
 
-    if (!on) return;
+    if (!on || floats) return;
 
     if (previous) {
       const divider = document.createElement("div");
@@ -209,7 +397,24 @@ function applyPanes() {
   document.querySelectorAll("[data-pane-toggle]").forEach(button =>
     button.setAttribute("aria-pressed", String(cockpitPaneShown(button.dataset.paneToggle))));
 
-  $("cockpitLayout").value = layoutName;
+  if ($("cockpitLayout")) $("cockpitLayout").value = layoutName;
+
+  $("lidarFloatBtn").innerHTML =
+    icon(lidarFloating ? "maximize" : "split") + (lidarFloating ? " Dock" : " Float");
+  $("lidarFloatBtn").title = lidarFloating
+    ? "Put the LiDAR back beside the camera"
+    : "Float the LiDAR over the camera (drag to move, corner to resize)";
+  $("lidarFloatToggle").checked = Boolean(layout.lidarFloat);
+
+  $("controlsDockToggle").checked = Boolean(layout.controlsDock);
+
+  $("controlsDockBtn").innerHTML =
+    icon(layout.controlsDock ? "maximize" : "split") + (layout.controlsDock ? " Float" : " Dock");
+  $("controlsDockBtn").title = layout.controlsDock
+    ? "Float the controls over the picture as a card you can move"
+    : "Dock the controls beside the pictures";
+
+  applyBarHidden();
 
   /* the beam select panel follows the LiDAR in and out */
   renderBeamSelect();
@@ -218,6 +423,7 @@ function applyPanes() {
   requestAnimationFrame(() => {
     redrawPaneRadar();
     applyCockpitLayout();
+    placeFloats();
   });
 }
 
@@ -270,6 +476,11 @@ function attachPaneMove(pane) {
   const head = pane.querySelector(".pane-head");
 
   head.addEventListener("pointerdown", event => {
+
+    /* the title's own buttons, and the floating controls card, which
+       moves freely instead of swapping (attachFloat) */
+    if (event.target.closest("button")) return;
+    if (pane.classList.contains("floating")) return;
 
     event.preventDefault();
     head.setPointerCapture(event.pointerId);
@@ -332,34 +543,86 @@ function redrawPaneRadar() {
   }
 }
 
-/* ---------- open / close ---------- */
+/* ---------- where the view is: the Drive tab, or full screen ----------
 
-function openCockpit(name) {
+   One #cockpit element. On the Drive tab it sits in the tab's slot,
+   part of the page; Full screen moves it to the end of <body> and
+   covers the screen. Leaving full screen puts it back on the Drive
+   tab, or hides it when another tab is showing. */
 
-  useLayout(name || layoutName);
+function showCockpit() {
 
-  if (cockpitOpen) {
-    applyPanes();
-    return;
-  }
+  if (cockpitOpen) return;
 
   cockpitOpen = true;
   $("cockpit").hidden = false;
-
   syncCockpitSettings();
 
   /* phones: the thumbs drive and the settings wait behind a button */
   setCockpitPanel(false);
+}
+
+function hideCockpit() {
+
+  if (!cockpitOpen) return;
+
+  releaseCockpitInputs();
+  setArranging(false);
+
+  if (driveArmed) disarmDrive("left the driving view");
+
+  cockpitOpen = false;
+  setSettingsOpen(false);
+  $("cockpit").hidden = true;
+  returnCamera();
+  renderBeamSelect();
+}
+
+/* the Drive tab was shown (main.js showTab) */
+function embedCockpit() {
+
+  if (cockpitFull) return;         // full screen stays full screen
+
+  $("driveCockpitSlot").appendChild($("cockpit"));
+  $("cockpit").classList.remove("full");
+
+  useLayout(tabLayoutName());
+  showCockpit();
+
+  applyPanes();
+  renderCockpit();
+  renderCockpitFast();
+}
+
+/* another tab was shown */
+function unembedCockpit() {
+  if (!cockpitFull) hideCockpit();
+}
+
+/* Full screen: from the Drive tab's button (same layout), or from the
+   Overview's camera buttons (a named layout). */
+function openCockpit(name) {
+
+  if (name) useLayout(name);
+  else if (!layout) useLayout(tabLayoutName());
 
   const cockpit = $("cockpit");
 
-  if (!document.fullscreenElement && cockpit.requestFullscreen) {
-    cockpit.requestFullscreen({ navigationUI: "hide" })
-      .then(() => {
-        cockpitFullscreen = true;
-        lockLandscape();
-      })
-      .catch(() => {});
+  if (!cockpitFull) {
+
+    cockpitFull = true;
+    document.body.appendChild(cockpit);
+    cockpit.classList.add("full");
+    showCockpit();
+
+    if (!document.fullscreenElement && cockpit.requestFullscreen) {
+      cockpit.requestFullscreen({ navigationUI: "hide" })
+        .then(() => {
+          cockpitFullscreen = true;
+          lockLandscape();
+        })
+        .catch(() => {});
+    }
   }
 
   applyPanes();
@@ -367,20 +630,19 @@ function openCockpit(name) {
   renderCockpitFast();
 }
 
+/* leave full screen: back to the Drive tab, or away */
 function closeCockpit() {
 
-  if (!cockpitOpen) return;
+  if (!cockpitFull) return;
 
   releaseCockpitInputs();
   setArranging(false);
 
-  /* the controls you were using are about to vanish */
-  if (driveArmed) disarmDrive("left drive mode");
+  /* the controls you were using are about to change size or vanish */
+  if (driveArmed) disarmDrive("left full screen");
 
-  cockpitOpen = false;
-  $("cockpit").hidden = true;
-  returnCamera();
-  renderBeamSelect();
+  cockpitFull = false;
+  $("cockpit").classList.remove("full");
 
   if (screen.orientation && screen.orientation.unlock) {
     try { screen.orientation.unlock(); } catch (error) {}
@@ -391,15 +653,23 @@ function closeCockpit() {
   }
 
   cockpitFullscreen = false;
+
+  if (driveTabVisible()) {
+    $("driveCockpitSlot").appendChild($("cockpit"));
+    useLayout(tabLayoutName());
+    applyPanes();
+  } else {
+    hideCockpit();
+  }
 }
 
 function setCockpitPanel(open) {
 
+  if (open && settingsOpen()) setSettingsOpen(false);
+
   $("cockpit").classList.toggle("panel-open", open);
   $("cockpitPanelToggle").setAttribute("aria-expanded", String(open));
 
-  /* the phone drawer has the room: limits shown, not folded */
-  if (open && cockpitTouchLayout()) $("cockpitMore").open = true;
 }
 
 /* ---------- inputs -> the Drive tab's controller ---------- */
@@ -470,6 +740,9 @@ function attachStick(element, state, axis) {
   const read = event => {
 
     const rect = element.getBoundingClientRect();
+
+    /* a stick that is not on screen has nowhere to be pushed */
+    if (!rect.width || !rect.height) return 0;
 
     const along = axis === "x"
       ? (event.clientX - rect.left) / rect.width
@@ -726,7 +999,8 @@ function renderCockpitLidar() {
   const veryClose =
     Boolean(near && near.nearest && bandOf(near.nearest.range) === "near");
 
-  if (veryClose && !cockpitNearBefore && driveArmed && navigator.vibrate) {
+  if (veryClose && !cockpitNearBefore && driveArmed && navigator.vibrate &&
+      $("buzzToggle").checked) {
     navigator.vibrate(180);
   }
 
@@ -741,9 +1015,14 @@ function renderCockpitLidarLine() {
   const tone = (source.className.match(/tone-(\w+)/) || [])[1] || "none";
   const line = $("cockpitLidar");
 
+  const wasHidden = line.hidden;
+
   line.hidden = tone === "far";
   line.className = "cockpit-lidar tone-" + tone;
   line.innerHTML = source.innerHTML;
+
+  /* its size changed: keep it where it was put, and on the picture */
+  if (wasHidden !== line.hidden || !line.hidden) placeFloat($("cockpitWarn"));
 }
 
 /* ---------- rendering ---------- */
@@ -752,15 +1031,16 @@ function renderCockpitArm() {
 
   const button = $("armBtn");
 
-  ["cockpitArm", "cockpitArmQuick"].forEach(id => {
+  ["cockpitArm", "cockpitArmQuick", "cockpitMiniArm"].forEach(id => {
     $(id).textContent = button.textContent;
     $(id).classList.toggle("armed", driveArmed);
   });
 
   $("cockpitArm").disabled = button.disabled;
 
-  /* the quick button explains instead of greying out */
+  /* the quick buttons explain instead of greying out */
   $("cockpitArmQuick").disabled = !driveArmed && !socketOpen();
+  $("cockpitMiniArm").disabled = $("cockpitArmQuick").disabled;
 
   $("cockpitPad").classList.toggle("ready", driveArmed);
   $("stickSteer").classList.toggle("ready", driveArmed);
@@ -781,7 +1061,6 @@ function renderCockpit() {
   $("cockpitSpeedMode").hidden = $("hudSpeedMode").hidden;
   $("cockpitSteerMode").hidden = $("hudSteerMode").hidden;
 
-  $("cockpitMeas").textContent = $("measSpeed").textContent;
 
   /* the physical controller is the backup stop; say plainly when
      there is none */
@@ -795,6 +1074,7 @@ function renderCockpit() {
   $("cockpitPadChip").dataset.tone = unreadable ? "bad" : pad === false ? "warn" : "";
 
   renderCockpitSys();
+  renderCockpitDriving();
 
   /* E-STOP mirrors the top bar's (label, busy, active) */
   const estop = $("estopBtn");
@@ -803,6 +1083,10 @@ function renderCockpit() {
   mine.innerHTML = estop.innerHTML;
   mine.className = estop.className;
   mine.disabled = estop.disabled;
+
+  $("cockpitMiniEstop").innerHTML = estop.innerHTML;
+  $("cockpitMiniEstop").className = estop.className;
+  $("cockpitMiniEstop").disabled = estop.disabled;
 
   const alerts = [];
 
@@ -819,10 +1103,58 @@ function renderCockpit() {
   $("cockpitAlert").hidden = !alerts.length;
   $("cockpitAlert").textContent = alerts.join(" · ");
 
+  /* the red alerts stay in view while the bar is hidden */
+  $("cockpitMiniAlert").hidden = !alerts.length;
+  $("cockpitMiniAlert").textContent = alerts.join(" · ");
+
   renderCockpitLidarLine();
   renderCockpitArm();
   syncCockpitSettings();
   redrawPaneRadar();
+}
+
+/* Who is driving, the controller's disconnect, the vitals and the
+   driving alerts, from the Drive tab's own panels (drive.js), and the
+   two unlock buttons, which open the Drive tab's warning dialogs. */
+let cockpitLastPadNote = "";
+
+function renderCockpitDriving() {
+
+  const tone = ($("controlHero").className.match(/tone-(\w+)/) || [])[1] || "none";
+
+  $("cockpitWho").innerHTML = $("controlIcon").innerHTML + " " + escapeHtml($("controlTitle").textContent);
+  $("cockpitWho").title = $("controlSub").textContent;
+  $("cockpitWho").dataset.tone = tone;
+
+  const source = $("padDisconnectBtn");
+  const mine = $("cockpitPadDisconnect");
+
+  mine.hidden = $("padDisconnectRow").hidden || source.hidden;
+
+  /* "Disconnect controller" already says one is connected */
+  $("cockpitPadChip").hidden = !mine.hidden;
+  mine.disabled = source.disabled;
+  mine.innerHTML = source.innerHTML;
+  mine.title = source.title;
+
+  /* the disconnect's result ("Disconnected. Press the PS button...") */
+  const padNote = $("padDisconnectNote").textContent;
+
+  if (padNote && padNote !== cockpitLastPadNote) setCockpitNote(padNote);
+  cockpitLastPadNote = padNote;
+
+  const alerts = [...$("controlAlerts").querySelectorAll("li")];
+
+  $("cockpitCtrlAlert").hidden = !alerts.length;
+  $("cockpitCtrlAlert").textContent = alerts.map(li => li.textContent).join(" · ");
+  $("cockpitCtrlAlert").dataset.tone = alerts.some(li => li.classList.contains("bad")) ? "bad" : "warn";
+
+  [["speedUnlockBtn", "cockpitSpeedUnlock"], ["steerUnlockBtn", "cockpitSteerUnlock"]]
+    .forEach(([from, to]) => {
+      $(to).innerHTML = $(from).innerHTML;
+      $(to).disabled = $(from).disabled;
+      $(to).classList.toggle("unlocked", $(from).classList.contains("unlocked"));
+    });
 }
 
 /* CPU, GPU, RAM and temperatures, as the Overview tiles grade them */
@@ -854,6 +1186,70 @@ function renderCockpitSys() {
       </div>` : "");
 }
 
+/* Speed units for the speedometer and the readout (the limits stay in
+   m/s, as the car's own settings are). Kept per browser. */
+const SPEED_UNITS = {
+  mps: { label: "m/s", factor: 1, digits: 2 },
+  kmh: { label: "km/h", factor: 3.6, digits: 1 },
+  mph: { label: "mph", factor: 2.23694, digits: 1 }
+};
+
+let speedUnit = "mps";
+
+try {
+  speedUnit = SPEED_UNITS[localStorage.getItem("cockpitUnits")] ? localStorage.getItem("cockpitUnits") : "mps";
+} catch (error) {}
+
+function setSpeedUnit(unit) {
+  speedUnit = SPEED_UNITS[unit] ? unit : "mps";
+  try {
+    localStorage.setItem("cockpitUnits", speedUnit);
+  } catch (error) {}
+  document.querySelectorAll("[data-speed-unit]").forEach(button =>
+    button.setAttribute("aria-pressed", String(button.dataset.speedUnit === speedUnit)));
+}
+
+function speedText(mps, digits = SPEED_UNITS[speedUnit].digits) {
+  const unit = SPEED_UNITS[speedUnit];
+  return (mps * unit.factor).toFixed(digits) + " " + unit.label;
+}
+
+/* Speedometer: measured speed as the arc (the command until /odom
+   reports), the command as a tick, scaled to the max-speed limit. */
+function renderSpeedo() {
+
+  const fresh = robotSpeedMps !== null && performance.now() - robotSpeedAt < 2000;
+  const shown = fresh ? robotSpeedMps : cmdSpeed;
+  const max = Math.max(limitSpeed(), 0.1);
+  const share = value => Math.min(1, Math.abs(value) / max);
+
+  $("speedoFill").style.strokeDasharray = `${share(shown) * 100} 100`;
+
+  /* the tick sits on the arc: left end is 0, right end is the limit */
+  const angle = Math.PI * (1 - share(cmdSpeed));
+  const point = r => [60 + Math.cos(angle) * r, 62 - Math.sin(angle) * r];
+  const [x1, y1] = point(41);
+  const [x2, y2] = point(59);
+
+  $("speedoCmd").setAttribute("x1", x1.toFixed(1));
+  $("speedoCmd").setAttribute("y1", y1.toFixed(1));
+  $("speedoCmd").setAttribute("x2", x2.toFixed(1));
+  $("speedoCmd").setAttribute("y2", y2.toFixed(1));
+
+  const unit = SPEED_UNITS[speedUnit];
+
+  $("speedoValue").textContent = (Math.abs(shown) * unit.factor).toFixed(1);
+  $("speedoUnit").textContent = unit.label + (shown < -0.05 ? " rev" : "");
+  $("speedoMax").textContent = (fresh ? "" : "cmd · ") + "max " + (max * unit.factor).toFixed(1);
+
+  /* the readout beside it, in the same units */
+  $("cockpitCmd").textContent = speedText(cmdSpeed);
+  $("cockpitMeas").textContent = fresh ? speedText(robotSpeedMps) : "—";
+
+  $("cockpitSpeedo").classList.toggle("reverse", shown < -0.05);
+  $("cockpitSpeedo").classList.toggle("fast", share(shown) > 0.85);
+}
+
 /* The live bits, 20 times a second while open. */
 function renderCockpitFast() {
 
@@ -864,7 +1260,6 @@ function renderCockpitFast() {
   $("cockpitState").textContent = state.textContent;
   $("cockpitState").className = state.className;
 
-  $("cockpitCmd").textContent = $("cmdSpeed").textContent;
   $("cockpitSteer").textContent = $("cmdSteer").textContent;
   $("cockpitSteerMark").style.left = $("steerMark").style.left;
 
@@ -876,6 +1271,14 @@ function renderCockpitFast() {
   placeCockpitKnobs();
   renderCockpitArm();
   renderCockpitNote();
+  renderSpeedo();
+
+  /* armed with the bar away, or the controls closed: say so */
+  $("cockpitMiniState").hidden = !driveArmed;
+  $("cockpitMiniState").textContent = state.textContent;
+  $("cockpitMiniState").className = state.className;
+  $("cockpitKeysChip").hidden =
+    !(driveArmed && !cockpitPaneShown("controls") && !cockpitTouchLayout());
 
   /* the glows at 10 Hz */
   if (cockpitFrame++ % 2 === 0) {
@@ -970,6 +1373,7 @@ function setArranging(on) {
   cockpitArranging = on;
 
   if (on) {
+    setSettingsOpen(false);
     releaseCockpitInputs();
     if (driveArmed) disarmDrive("arranging the screen");
 
@@ -1061,6 +1465,314 @@ $("cockpitArrangeReset").onclick = resetCockpitLayout;
 /* a resize or a rotation: same places, as a share of the new screen */
 window.addEventListener("resize", () => requestAnimationFrame(applyCockpitLayout));
 
+/* ---------- floating parts: the controls card and the warning ----------
+
+   Dragged anywhere on the picture and kept there, per browser, as a
+   share of the picture area so they survive a resize. Separate spots
+   for desktop and touch, like the sticks. Never over the top bar, so
+   Emergency stop and Exit stay reachable. */
+
+const FLOAT_KEY = "cockpitFloat";
+
+function floatSpots() {
+  try {
+    const all = JSON.parse(localStorage.getItem(FLOAT_KEY) || "{}");
+    return all[cockpitLayoutName()] || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveFloatSpot(name, spot) {
+  try {
+    const all = JSON.parse(localStorage.getItem(FLOAT_KEY) || "{}");
+    const mine = all[cockpitLayoutName()] || {};
+    if (spot) mine[name] = spot;
+    else delete mine[name];
+    all[cockpitLayoutName()] = mine;
+    localStorage.setItem(FLOAT_KEY, JSON.stringify(all));
+  } catch (error) {}
+}
+
+/* the area a floating part may use: the picture, below the top bar
+   (which floats over the picture on phones) */
+function floatArea(element) {
+
+  const parent = element.offsetParent || $("cockpit");
+  const box = parent.getBoundingClientRect();
+
+  /* below the buttons and the red alerts, which sit on their own row
+     under the buttons on phones - or, with the bar hidden, below the
+     corner buttons */
+  const hidden = $("cockpit").classList.contains("bar-hidden");
+  const bar = hidden
+    ? $("cockpitMinibar").getBoundingClientRect().bottom
+    : Math.max(
+        $("cockpitClose").getBoundingClientRect().bottom,
+        document.querySelector(".cockpit-msgs").getBoundingClientRect().bottom);
+
+  return { box, floor: Math.max(0, bar - box.top + 8) };
+}
+
+function setFloatPosition(element, left, top) {
+
+  const { box, floor } = floatArea(element);
+
+  left = Math.max(0, Math.min(box.width - element.offsetWidth, left));
+  top = Math.max(floor, Math.min(box.height - element.offsetHeight, top));
+
+  element.classList.add("floated");
+  element.style.left = left + "px";
+  element.style.top = top + "px";
+}
+
+function placeFloat(element) {
+
+  if (!cockpitOpen || element.hidden || !element.offsetParent) return;
+  if (element.classList.contains("dragging")) return;     // being moved
+
+  /* panes float only while floating: the controls card on desktops,
+     the LiDAR when it is set to float over the camera */
+  if (element.dataset.float !== "warning" && !element.classList.contains("floating")) {
+    element.classList.remove("floated");
+    element.style.left = element.style.top = "";
+    element.style.width = element.style.height = "";
+    return;
+  }
+
+  const spot = floatSpots()[element.dataset.float];
+  const { box, floor } = floatArea(element);
+
+  /* a resized LiDAR window keeps its size, within the picture */
+  if (element.dataset.float === "lidar" && spot && spot.w && !cockpitTouchLayout()) {
+    element.style.width = Math.min(spot.w, box.width - 24) + "px";
+    element.style.height = Math.min(spot.h, box.height - floor - 24) + "px";
+  }
+
+  if (spot) {
+    setFloatPosition(element, spot.x * box.width, spot.y * box.height);
+  } else if (element.dataset.float === "warning") {
+    /* default: top centre of the camera picture, under its title */
+    const cam = document.querySelector('[data-pane="camera"]');
+    const shown = cam && !cam.hidden && cam.offsetWidth ? cam.getBoundingClientRect() : box;
+    const head = cam && cam.querySelector(".pane-head");
+    const under = head && head.offsetHeight ? head.getBoundingClientRect().bottom - box.top + 10 : 0;
+
+    setFloatPosition(element,
+      shown.left - box.left + (shown.width - element.offsetWidth) / 2,
+      Math.max(floor + 4, under));
+  } else if (element.dataset.float === "lidar") {
+    /* default: top right of the camera picture, under its title */
+    const cam = document.querySelector('[data-pane="camera"]');
+    const head = cam && cam.querySelector(".pane-head");
+    const under = head && head.offsetHeight ? head.getBoundingClientRect().bottom - box.top + 10 : 0;
+
+    setFloatPosition(element, box.width - element.offsetWidth - 12, Math.max(floor + 4, under));
+  } else {
+    /* default: the stylesheet's corner */
+    element.classList.remove("floated");
+    element.style.left = element.style.top = "";
+  }
+}
+
+function placeFloats() {
+  $("cockpit").querySelectorAll("[data-float]").forEach(placeFloat);
+}
+
+function attachFloat(element, handle) {
+
+  let drag = null;
+
+  handle.addEventListener("pointerdown", event => {
+
+    if (event.target.closest("button")) return;
+    if (element.dataset.float !== "warning" && !element.classList.contains("floating")) return;
+
+    event.preventDefault();
+
+    const rect = element.getBoundingClientRect();
+
+    drag = { pointer: event.pointerId, dx: event.clientX - rect.left, dy: event.clientY - rect.top };
+
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch (error) {}
+
+    element.classList.add("dragging");
+  });
+
+  handle.addEventListener("pointermove", event => {
+
+    if (!drag || event.pointerId !== drag.pointer) return;
+
+    const { box } = floatArea(element);
+
+    setFloatPosition(element,
+      event.clientX - box.left - drag.dx,
+      event.clientY - box.top - drag.dy);
+  });
+
+  const drop = event => {
+
+    if (!drag || event.pointerId !== drag.pointer) return;
+
+    const { box } = floatArea(element);
+
+    const spot = floatSpots()[element.dataset.float] || {};
+
+    saveFloatSpot(element.dataset.float, {
+      ...spot,
+      x: parseFloat(element.style.left) / box.width,
+      y: parseFloat(element.style.top) / box.height
+    });
+
+    drag = null;
+    element.classList.remove("dragging");
+  };
+
+  handle.addEventListener("pointerup", drop);
+  handle.addEventListener("pointercancel", drop);
+}
+
+attachFloat($("cockpitWarn"), $("cockpitWarn"));
+attachFloat(document.querySelector('[data-pane="lidar"]'),
+            document.querySelector('[data-pane="lidar"] .pane-head'));
+
+/* the floating LiDAR is resized from its corner (CSS resize): redraw
+   the plot at the new size, and keep the size */
+new ResizeObserver(() => {
+
+  const pane = document.querySelector('[data-pane="lidar"]');
+
+  redrawPaneRadar();
+
+  if (!cockpitOpen || !pane.classList.contains("floating") || cockpitTouchLayout()) return;
+  if (!pane.style.width && !pane.style.height && !pane.dataset.resized) return;
+
+  const spot = floatSpots().lidar || {};
+
+  if (spot.w !== pane.offsetWidth || spot.h !== pane.offsetHeight) {
+    saveFloatSpot("lidar", { ...spot, w: pane.offsetWidth, h: pane.offsetHeight });
+  }
+}).observe(document.querySelector('[data-pane="lidar"]'));
+
+/* a drag on the resize corner sets an inline size; remember it */
+document.querySelector('[data-pane="lidar"]').addEventListener("pointerup", () => {
+  document.querySelector('[data-pane="lidar"]').dataset.resized = "1";
+});
+
+$("lidarFloatBtn").onclick = () => setLidarFloat(!lidarFloats());
+$("lidarFloatToggle").addEventListener("change", () =>
+  setLidarFloat($("lidarFloatToggle").checked));
+attachFloat(document.querySelector('[data-pane="controls"]'),
+            document.querySelector('[data-pane="controls"] .pane-head'));
+
+window.addEventListener("resize", () => requestAnimationFrame(placeFloats));
+
+$("controlsHide").onclick = () => setPane("controls", false);
+
+/* The close-object warning on or off, kept per browser. Off hides only
+   the sentence: the edge lights, the LiDAR pane and the red alerts
+   still show. */
+function setCockpitWarn(on) {
+
+  $("cockpitWarnToggle").checked = on;
+  $("cockpit").classList.toggle("no-warn", !on);
+
+  try {
+    localStorage.setItem("cockpitWarn", on ? "on" : "off");
+  } catch (error) {}
+
+  if (on) requestAnimationFrame(() => placeFloat($("cockpitWarn")));
+}
+
+$("cockpitWarnToggle").addEventListener("change", () =>
+  setCockpitWarn($("cockpitWarnToggle").checked));
+
+$("cockpitWarnHide").onclick = () => {
+  setCockpitWarn(false);
+  setCockpitNote("Close-object warning hidden. Turn it back on in Settings.");
+};
+
+let savedWarn = "on";
+
+try {
+  savedWarn = localStorage.getItem("cockpitWarn") || "on";
+} catch (error) {}
+
+setCockpitWarn(savedWarn !== "off");
+
+/* ---------- screen: keep it awake, buzz ----------
+
+   A phone that dims and locks mid-drive drops the controls (and the
+   page disarms). While the view is open, ask for a screen wake lock;
+   the browser drops it whenever the page is hidden, so ask again on
+   return. Browsers without it just carry on. */
+
+let wakeLock = null;
+
+async function updateWakeLock() {
+
+  const want = cockpitOpen && $("wakeToggle").checked && !document.hidden;
+
+  try {
+    if (want && !wakeLock && navigator.wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } else if (!want && wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch (error) {
+    wakeLock = null;
+  }
+}
+
+function rememberSwitch(id, key) {
+
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) $(id).checked = saved === "on";
+  } catch (error) {}
+
+  $(id).addEventListener("change", () => {
+    try {
+      localStorage.setItem(key, $(id).checked ? "on" : "off");
+    } catch (error) {}
+    updateWakeLock();
+  });
+}
+
+rememberSwitch("wakeToggle", "cockpitWake");
+rememberSwitch("buzzToggle", "cockpitBuzz");
+document.addEventListener("visibilitychange", updateWakeLock);
+setInterval(updateWakeLock, 2000);    // follows open / close / tab changes
+
+/* Every view setting back to its default: layouts, positions, the
+   switches. Reloads the page, so it disarms first. */
+const VIEW_KEYS = ["cockpitLayouts", "cockpitTabLayout", "cockpitBarHidden",
+  "cockpitControlsOnly", "cockpitGlow", "cockpitWarn", "cockpitLayout",
+  "cockpitFloat", "cockpitUnits", "cockpitWake", "cockpitBuzz"];
+
+$("cockpitResetAll").onclick = () => {
+
+  if (!confirm("Reset all view settings?\n\nLayouts, positions and switches go back " +
+               "to their defaults. The page reloads, so driving is disarmed.")) return;
+
+  if (driveArmed) disarmDrive("resetting the view");
+
+  try {
+    VIEW_KEYS.forEach(key => localStorage.removeItem(key));
+  } catch (error) {}
+
+  location.reload();
+};
+
+document.querySelectorAll("[data-speed-unit]").forEach(button => {
+  button.onclick = () => setSpeedUnit(button.dataset.speedUnit);
+});
+setSpeedUnit(speedUnit);
+
 /* ---------- wiring ---------- */
 
 attachStick($("stickSteer"), cockpitSteer, "x");
@@ -1076,15 +1788,10 @@ document.querySelectorAll("[data-pane-toggle]").forEach(button => {
     setPane(button.dataset.paneToggle, button.getAttribute("aria-pressed") !== "true");
 });
 
-$("cockpitLayout").onchange = () => {
-  useLayout($("cockpitLayout").value);
-  applyPanes();
-};
+/* (the layout picker left Settings; the Camera / LiDAR / Controls
+   switch and the Overview's camera buttons choose what shows) */
 
-$("cockpitLayoutReset").onclick = () => {
-  useLayout(layoutName, true);
-  applyPanes();
-};
+
 
 document.querySelectorAll("#cockpitPanes .pane").forEach(attachPaneMove);
 
@@ -1096,6 +1803,38 @@ attachRadarCenter($("paneCenterBtn"), paneRadarScale, redrawPaneRadar);
 window.matchMedia(COCKPIT_TOUCH_QUERY).addEventListener("change", applyPanes);
 
 $("cockpitClose").onclick = closeCockpit;
+$("cockpitGoFull").onclick = () => openCockpit();
+$("cockpitSettingsBtn").onclick = () => setSettingsOpen(!settingsOpen());
+$("cockpitSettingsClose").onclick = () => setSettingsOpen(false);
+
+/* a click anywhere else closes Settings */
+document.addEventListener("pointerdown", event => {
+  if (settingsOpen() &&
+      !event.target.closest("#cockpitSettings, #cockpitSettingsBtn")) {
+    setSettingsOpen(false);
+  }
+});
+$("barHiddenToggle").addEventListener("change", () => {
+  setBarHidden($("barHiddenToggle").checked);
+  setSettingsOpen(false);            // show the result
+});
+$("controlsDockToggle").addEventListener("change", () =>
+  setControlsDock($("controlsDockToggle").checked));
+$("cockpitBarShow").onclick = () => {
+  setBarHidden(false);
+  if (controlsOnly()) setControlsOnly(false);
+};
+$("cockpitBarHideBtn").onclick = () => setBarHidden(true);
+$("controlsOnlyToggle").addEventListener("change", () => {
+  setControlsOnly($("controlsOnlyToggle").checked);
+  setSettingsOpen(false);            // show the result
+});
+$("cockpitMiniEstop").onclick = triggerEstop;
+$("cockpitMiniArm").onclick = () => $("cockpitArmQuick").onclick();
+$("controlsDockBtn").onclick = () => setControlsDock(!layout.controlsDock);
+$("cockpitPadDisconnect").onclick = () => disconnectPad();
+$("cockpitSpeedUnlock").onclick = () => $("speedUnlockBtn").click();
+$("cockpitSteerUnlock").onclick = () => $("steerUnlockBtn").click();
 $("cockpitRotateClose").onclick = closeCockpit;
 $("cockpitEstop").onclick = triggerEstop;
 
@@ -1143,6 +1882,11 @@ document.addEventListener("fullscreenchange", () => {
 document.addEventListener("keydown", event => {
 
   if (event.key !== "Escape" || !cockpitOpen) return;
+
+  if (settingsOpen()) {
+    setSettingsOpen(false);
+    return;
+  }
 
   if (cockpitArranging) {
     setArranging(false);

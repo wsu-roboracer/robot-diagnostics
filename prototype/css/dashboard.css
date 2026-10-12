@@ -4408,7 +4408,8 @@ input:focus-visible {
   display: none;
 }
 
-body:has(.cockpit:not([hidden])) {
+/* only full screen locks the page; on the Drive tab it scrolls */
+body:has(.cockpit.full:not([hidden])) {
   overflow: hidden;
 }
 
@@ -5855,4 +5856,984 @@ body:has(.cockpit:not([hidden])) {
 /* warnings stay readable whatever is moved under them */
 .cockpit-msgs {
   z-index: 3;
+}
+
+/* ==========================================================
+   FULL SCREEN - floating parts (cockpit.js)
+   The controls card (desktop) and the close-object warning float
+   over the picture; drag to move, x to hide.
+========================================================== */
+
+/* placed by cockpit.js: its saved spot replaces the default corner */
+.cockpit [data-float].floated {
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+/* --- the close-object warning --- */
+
+.cockpit-warn {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  max-width: min(560px, calc(100% - 24px));
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .5));
+}
+
+.cockpit-warn.dragging {
+  cursor: grabbing;
+  opacity: .9;
+}
+
+/* shown only while there is something to say, and not when hidden */
+.cockpit-warn:has(> .cockpit-lidar[hidden]),
+.cockpit.no-warn .cockpit-warn {
+  display: none;
+}
+
+.cockpit-warn .cockpit-lidar {
+  min-width: 0;
+  border-radius: 10px 0 0 10px;
+  box-shadow: none;
+}
+
+.cockpit-warn-hide {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, .15);
+  border-radius: 0 10px 10px 0;
+  background: rgba(0, 0, 0, .6);
+  color: rgba(255, 255, 255, .85);
+  cursor: pointer;
+}
+
+.cockpit-warn-hide:hover {
+  background: rgba(0, 0, 0, .8);
+  color: #fff;
+}
+
+/* --- the controls card, floating (desktop) --- */
+
+.pane-hide {
+  display: none;
+}
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+
+  .pane[data-pane="controls"].floating {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 4;
+    width: 300px;
+    min-width: 0;
+    max-height: calc(100% - 32px);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .16);
+    border-radius: 16px;
+    background: rgba(12, 14, 18, .5);
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  }
+
+  .pane[data-pane="controls"].floating.dragging {
+    opacity: .9;
+  }
+
+  /* the title bar is the handle */
+  .pane[data-pane="controls"].floating .pane-head {
+    background: rgba(255, 255, 255, .05);
+    border-bottom-color: rgba(255, 255, 255, .12);
+    cursor: move;
+  }
+
+  .pane[data-pane="controls"] .pane-hide {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: rgba(255, 255, 255, .7);
+    cursor: pointer;
+  }
+
+  .pane[data-pane="controls"] .pane-hide:hover {
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+  }
+
+  /* the camera shows through the card */
+  .pane[data-pane="controls"].floating .cockpit-panel {
+    min-height: 0;
+    overflow-y: auto;
+    background: transparent;
+  }
+}
+
+/* phones: on the LiDAR picture the plot already shows what is close */
+@media (pointer: coarse), (max-width: 900px) {
+  .cockpit[data-picture="lidar"] .cockpit-warn {
+    display: none;
+  }
+}
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  /* the card has no fixed height: its body sizes to what it holds */
+  .pane[data-pane="controls"].floating .pane-body {
+    flex: 0 1 auto;
+  }
+}
+
+.cockpit-warn .cockpit-warn-hide {
+  background: rgba(0, 0, 0, .6);
+}
+
+/* ==========================================================
+   DRIVING VIEW ON THE DRIVE TAB (cockpit.js)
+   The same view as full screen, embedded in the page: a framed
+   block under the safety warning. .full makes it cover the screen.
+========================================================== */
+
+.cockpit:not(.full) {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  height: max(560px, calc(100vh - 170px));
+  margin-top: 16px;
+  border: 1px solid #262a30;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Full screen on the Drive tab; Exit in full screen */
+.cockpit:not(.full) .cockpit-exit-btn,
+.cockpit.full .cockpit-full-btn {
+  display: none;
+}
+
+/* phones: the Drive tab shows the pictures; driving is full screen */
+@media (pointer: coarse), (max-width: 900px) {
+  .cockpit:not(.full) {
+    height: clamp(320px, 72vh, 620px);
+  }
+}
+
+/* --- top bar: who is driving, the controller, vitals, alerts --- */
+
+.cockpit .who-chip[data-tone="ok"]   { color: var(--healthy); }
+.cockpit .who-chip[data-tone="you"]  { color: var(--orange); }
+.cockpit .who-chip[data-tone="warn"] { color: var(--degraded); }
+.cockpit .who-chip[data-tone="bad"]  { color: #ff6b60; }
+
+
+/* amber, beside STOP in importance: it removes the backup stop */
+.cockpit .cockpit-pad-off {
+  min-height: 30px;
+  padding: 4px 10px;
+  border-color: color-mix(in srgb, var(--degraded) 70%, transparent);
+  background: rgba(58, 49, 16, .85);
+  color: var(--degraded);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.cockpit-ctrl-alert {
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border-left: 5px solid var(--degraded);
+  background: rgba(58, 49, 16, .92);
+  color: #fff;
+  font-size: 13.5px;
+  text-align: center;
+}
+
+.cockpit-ctrl-alert[data-tone="bad"] {
+  border-left-color: var(--failed);
+  background: rgba(110, 22, 18, .92);
+}
+
+/* --- limits: always in view in the controls --- */
+
+.cockpit-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.cockpit-limits-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cockpit-limits .warn-btn {
+  margin-top: 0;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: normal;
+}
+
+.cockpit-limits .link-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* --- a pane title's own action (Float / Dock) --- */
+
+.pane-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  color: rgba(255, 255, 255, .85);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.pane-act:hover {
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+}
+
+/* --- the LiDAR floating over the camera --- */
+
+.cockpit.lidar-float .pane[data-pane="lidar"] {
+  position: absolute;
+  z-index: 3;
+  top: 42px;
+  right: 12px;
+  width: 340px;
+  height: 340px;
+  min-width: 200px;
+  min-height: 200px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(11, 13, 16, .78);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .45);
+  resize: both;
+}
+
+.cockpit.lidar-float .pane[data-pane="lidar"].dragging {
+  opacity: .9;
+}
+
+.cockpit.lidar-float .pane[data-pane="lidar"] .pane-head {
+  cursor: move;
+  background: rgba(255, 255, 255, .05);
+}
+
+/* small window: the plot, Center and zoom by scroll; the full toolbar
+   comes back when it is docked */
+.cockpit.lidar-float .pane[data-pane="lidar"] .viewer-radar {
+  padding: 6px;
+}
+
+.cockpit.lidar-float .pane[data-pane="lidar"] .viewer-radar-tools {
+  display: none;
+}
+
+/* warnings above the floating windows */
+.cockpit-warn {
+  z-index: 5;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  /* phones: the window floats over the camera picture, title and all */
+  .cockpit.lidar-float .pane[data-pane="lidar"]:not([hidden]) {
+    display: flex;
+    inset: auto;
+    top: 96px;
+    right: 12px;
+    width: min(42vh, 260px);
+    height: min(42vh, 260px);
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+  }
+
+  .cockpit.lidar-float .pane[data-pane="lidar"] .pane-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 8px;
+    color: rgba(255, 255, 255, .8);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    touch-action: none;
+  }
+
+  .cockpit.lidar-float .pane[data-pane="lidar"] .pane-body {
+    flex: 1 1 0;
+  }
+}
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  /* never over the panes' titles */
+  .pane[data-pane="controls"].floating {
+    max-height: calc(100% - 56px);
+  }
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  /* the page's banner already says these; the bar keeps to the
+     driving essentials */
+  .cockpit #cockpitHealth {
+    display: none;
+  }
+
+  /* on the Drive tab the bar sits above the picture, not over it */
+  .cockpit:not(.full) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cockpit:not(.full) .cockpit-top {
+    position: relative;
+    padding: 10px 12px;
+    background: #0b0d10;
+    border-bottom: 1px solid #262a30;
+  }
+
+  .cockpit:not(.full) .cockpit-view {
+    position: relative;
+    inset: auto;
+    flex: 1 1 0;
+    min-height: 200px;
+  }
+
+  .cockpit:not(.full) .cockpit-hud {
+    bottom: 10px;
+  }
+}
+
+/* ==========================================================
+   DRIVING VIEW - hiding the top bar, docked controls
+========================================================== */
+
+/* docked: a column beside the pictures, scrolling if it must */
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  .pane[data-pane="controls"]:not(.floating) .cockpit-panel {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .pane[data-pane="controls"]:not(.floating) .pane-head {
+    cursor: default;
+  }
+}
+
+/* the corner cluster: only while the bar is hidden */
+.cockpit-minibar {
+  display: none;
+}
+
+.cockpit.bar-hidden .cockpit-top {
+  display: none;
+}
+
+.cockpit.bar-hidden .cockpit-minibar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 16px);
+}
+
+.cockpit-minibar .top-btn {
+  min-height: 36px;
+  background: rgba(11, 13, 16, .78);
+  border-color: rgba(255, 255, 255, .3);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.cockpit-minibar .estop-btn {
+  min-height: 36px;
+}
+
+.cockpit-mini-alert {
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: var(--failed);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* Arm here only where the bar held it: phones, while driving */
+.cockpit-mini-arm {
+  display: none;
+}
+
+.cockpit-mini-arm.armed {
+  background: var(--orange) !important;
+  border-color: var(--orange) !important;
+}
+
+/* desktop: the cluster sits in the bottom bar's empty right end, clear
+   of every pane and its buttons */
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  .cockpit.bar-hidden .cockpit-minibar {
+    top: auto;
+    bottom: 10px;
+    right: 16px;
+    max-width: 40%;
+  }
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  .cockpit.bar-hidden.has-controls .cockpit-mini-arm {
+    display: flex;
+  }
+
+  /* Controls only: the sticks and STOP over the picture, nothing else */
+  .cockpit.focus .cockpit-hud,
+  .cockpit.focus .cockpit-warn,
+  .cockpit.focus.lidar-float .pane[data-pane="lidar"] {
+    display: none !important;
+  }
+}
+
+/* ==========================================================
+   DRIVING VIEW - top bar zones and the Settings panel
+   Status on the left, actions on the right with Emergency stop
+   last; alerts on their own row, only when there is one.
+========================================================== */
+
+.cockpit-top {
+  align-items: center;
+}
+
+.cockpit-status { order: 1; flex: 1 1 auto; }
+.cockpit-tools  { order: 2; flex: 0 1 auto; justify-content: flex-end; }
+.cockpit-msgs   { order: 3; }
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  .cockpit-msgs {
+    flex: 1 1 100%;
+  }
+}
+
+/* no alert, no row */
+.cockpit-msgs:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.cockpit-sep {
+  width: 1px;
+  height: 28px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, .2);
+}
+
+.cockpit .cockpit-settings-btn.active {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .7);
+  color: #fff;
+}
+
+/* --- the panel --- */
+
+.cockpit-settings {
+  --panel: rgba(255, 255, 255, .07);
+  --panel-soft: rgba(255, 255, 255, .08);
+  --surface-3: rgba(255, 255, 255, .16);
+  --border: rgba(255, 255, 255, .16);
+  --border-strong: rgba(255, 255, 255, .32);
+  --text: #fff;
+  --text-2: #dde1e6;
+  --muted: #b3bac2;
+  --link: #8cbcff;
+
+  position: absolute;
+  z-index: 7;
+  top: calc(var(--below-bar, 0px) + 8px);
+  right: 8px;
+  width: min(340px, calc(100% - 16px));
+  max-height: calc(100% - var(--below-bar, 0px) - 16px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 16px 16px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 14px;
+  background: rgba(12, 14, 18, .9);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+  color: var(--text);
+}
+
+.cockpit-settings[hidden] {
+  display: none;
+}
+
+.cs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cs-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.cs-head .pane-hide {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, .75);
+  cursor: pointer;
+}
+
+.cs-head .pane-hide:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+}
+
+.cs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cs-group + .cs-group {
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+}
+
+.cs-group h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .6);
+}
+
+.cs-row {
+  display: flex;
+  gap: 8px;
+}
+
+.cs-row .layout-pick {
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, .6);
+}
+
+.cs-group .link-btn {
+  align-self: flex-start;
+}
+
+.cs-touch-only {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  .cs-touch-only {
+    display: flex;
+  }
+
+  .cs-desk-only {
+    display: none;
+  }
+
+  /* the bar hides these on phones; in Settings they belong */
+  .cockpit-settings .layout-pick,
+  .cockpit-settings .layout-reset {
+    display: flex;
+  }
+
+  /* a drawer from the right, under the bar */
+  .cockpit-settings {
+    right: max(8px, env(safe-area-inset-right));
+    width: min(340px, 80%);
+  }
+
+  /* one row of actions: these fold to their icons */
+  .cockpit-settings-btn .btn-lbl,
+  .cockpit-panel-toggle .btn-lbl,
+  .cockpit-full-btn .btn-lbl {
+    display: none;
+  }
+
+  .cockpit-tools .cockpit-settings-btn,
+  .cockpit-tools .cockpit-panel-toggle,
+  .cockpit-tools .cockpit-full-btn {
+    min-width: 44px;
+    justify-content: center;
+    padding: 0 10px;
+  }
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  /* when the buttons wrap the divider has nothing to divide */
+  .cockpit-sep {
+    display: none;
+  }
+
+  .cockpit:not(.full) .cockpit-tools {
+    justify-content: flex-start;
+  }
+}
+
+/* ==========================================================
+   DRIVING VIEW - speedometer, keys-drive hint
+========================================================== */
+
+.speedo {
+  position: relative;
+  flex: none;
+  width: 96px;
+  height: 58px;
+  display: grid;
+  justify-items: center;
+}
+
+.speedo svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.speedo-track,
+.speedo-fill {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.speedo-track {
+  stroke: rgba(255, 255, 255, .14);
+}
+
+.speedo-fill {
+  stroke: var(--healthy);
+  stroke-dasharray: 0 100;
+  transition: stroke-dasharray .12s linear, stroke .2s;
+}
+
+.speedo.fast .speedo-fill    { stroke: var(--orange); }
+.speedo.reverse .speedo-fill { stroke: #8ab4ff; }
+
+.speedo-cmd {
+  stroke: var(--orange);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.speedo-v {
+  position: relative;
+  margin-top: 20px;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.speedo-u {
+  position: relative;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  opacity: .75;
+}
+
+.speedo-max {
+  position: absolute;
+  bottom: -12px;
+  font-size: 9px;
+  opacity: .55;
+  white-space: nowrap;
+}
+
+.cockpit .keys-chip {
+  color: var(--orange);
+}
+
+.cockpit-minibar .drive-state {
+  align-self: center;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .speedo {
+    width: 76px;
+    height: 46px;
+  }
+
+  .speedo-v {
+    margin-top: 15px;
+    font-size: 16px;
+  }
+
+  .speedo-max {
+    display: none;
+  }
+}
+
+/* ==========================================================
+   DRIVING VIEW - one button style
+   Frosted glass, one height, one radius; orange marks what is on.
+   Emergency stop keeps its solid red.
+========================================================== */
+
+.cockpit {
+  --btn-h: 36px;
+}
+
+.cockpit .top-btn {
+  height: var(--btn-h);
+  min-height: var(--btn-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .07);
+  color: #e9ecef;
+  font-size: 13.5px;
+  font-weight: 700;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.cockpit .top-btn .ic {
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) {
+  .cockpit .top-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, .14);
+    border-color: rgba(255, 255, 255, .32);
+    color: #fff;
+  }
+}
+
+.cockpit .top-btn:disabled {
+  opacity: .45;
+}
+
+/* on / open: orange */
+.cockpit .top-btn.active,
+.cockpit .top-btn.armed,
+.cockpit .top-btn[aria-expanded="true"] {
+  background: rgba(255, 121, 0, .22);
+  border-color: var(--orange);
+  color: #fff;
+}
+
+.cockpit .estop-btn {
+  height: var(--btn-h);
+  min-height: var(--btn-h);
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
+/* icon-only buttons are squares */
+.cockpit .cockpit-icon-btn {
+  width: var(--btn-h);
+  padding: 0;
+}
+
+/* segmented switches: same glass, the chosen one orange */
+.cockpit .range-switch {
+  height: var(--btn-h);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .05);
+}
+
+.cockpit .range-switch button {
+  height: 100%;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, .72);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cockpit .range-switch button + button {
+  border-left: 1px solid rgba(255, 255, 255, .12);
+}
+
+@media (hover: hover) {
+  .cockpit .range-switch button:hover:not([aria-pressed="true"]) {
+    background: rgba(255, 255, 255, .1);
+    color: #fff;
+  }
+}
+
+.cockpit .range-switch button[aria-pressed="true"],
+.cockpit .pane-switch button[aria-pressed="true"] {
+  background: var(--orange);
+  color: #fff;
+}
+
+.cockpit .pane-switch button[aria-pressed="true"] + button[aria-pressed="true"] {
+  border-left-color: rgba(0, 0, 0, .25);
+}
+
+.cockpit .layout-pick {
+  height: var(--btn-h);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .07);
+  color: #fff;
+}
+
+/* --- Settings rows --- */
+
+.cs-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.cockpit-settings .range-switch {
+  --btn-h: 32px;
+}
+
+.cockpit-settings .range-switch button {
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.cs-keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.cs-keys dt {
+  white-space: nowrap;
+}
+
+.cs-keys dd {
+  margin: 0;
+}
+
+.cs-keys kbd {
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .3);
+  color: #fff;
+}
+
+.cs-reset {
+  align-self: stretch;
+  margin-top: 2px;
+}
+
+/* --- phones: bigger targets, the actions as even squares --- */
+
+@media (pointer: coarse), (max-width: 900px) {
+  .cockpit {
+    --btn-h: 40px;
+  }
+
+  .cockpit-tools .cockpit-settings-btn,
+  .cockpit-tools .cockpit-panel-toggle,
+  .cockpit-tools .cockpit-full-btn,
+  .cockpit-tools .cockpit-icon-btn {
+    width: var(--btn-h);
+    min-width: var(--btn-h);
+    padding: 0;
+  }
+
+  .cockpit .pane-switch button {
+    padding: 0 11px;
+  }
+}
+
+/* the button style above must not undo these */
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  .cockpit .cockpit-arm-quick,
+  .cockpit .cockpit-panel-toggle {
+    display: none;
+  }
+}
+
+.cockpit .top-btn.cockpit-pad-off {
+  border-color: color-mix(in srgb, var(--degraded) 70%, transparent);
+  background: rgba(58, 49, 16, .85);
+  color: var(--degraded);
 }

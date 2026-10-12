@@ -151,6 +151,12 @@ function showTab(name) {
     $("tab" + id).setAttribute("aria-selected", String(tab === name));
   });
 
+  /* the Drive tab is the driving view (cockpit.js), embedded */
+  if (typeof embedCockpit === "function") {
+    if (name === "drive") embedCockpit();
+    else unembedCockpit();
+  }
+
   history.replaceState(
     null,
     "",

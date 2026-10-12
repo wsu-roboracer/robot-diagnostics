@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 # MJPEG proxy in front of the GStreamer tcpserversink started by
 # start_diagnostics.sh or bringup_launch.py. Browsers can't speak the raw
-# multipart TCP stream directly; this just relays it as a proper HTTP response.
+# multipart TCP stream directly; this relays it as a proper HTTP response.
+#
+# Newest frame only. Relaying every frame in order meant that whenever a
+# viewer's Wi-Fi was slower than the camera, frames queued up (in GStreamer,
+# in this process, in the kernel) and the picture fell seconds behind - you
+# drove looking at the past. Now the camera is read at full speed and each
+# viewer is sent the latest whole frame whenever it can take one; frames it
+# could not keep up with are skipped. A slow link costs frame rate, never delay.
 import collections
 import json
 import socket
@@ -14,6 +21,10 @@ GSTREAMER_HOST = "127.0.0.1"
 GSTREAMER_PORT = 8081
 HTTP_PORT = 8082
 BOUNDARY = b"--robotcamera"         # one per JPEG frame in the stream
+
+# How much a viewer's socket may hold. Enough for a couple of frames, so a
+# slow viewer drops frames here instead of queueing seconds of them.
+SEND_BUFFER = 64 * 1024
 
 # Frame times per viewer, for /stats. Each open stream counts the frames it
 # relays; the dashboard grades the camera's frame rate from this.
@@ -31,6 +42,72 @@ def camera_stats(now):
     newest = max((times[-1] for times in viewers if times), default=None)
     return {"viewers": len(viewers), "fps": fps,
             "last_frame_s": None if newest is None else round(now - newest, 2)}
+
+
+def split_frames(buf):
+    """Whole multipart parts in buf, and the rest still being received.
+    A part runs from one boundary to the next, boundary included, so each
+    is sent exactly as GStreamer wrote it. Bytes before the first
+    boundary belong to no frame and are dropped."""
+    start = buf.find(BOUNDARY)
+    if start < 0:
+        # keep a tail long enough to hold a boundary split across reads
+        return [], buf[-(len(BOUNDARY) - 1):]
+    parts = []
+    end = buf.find(BOUNDARY, start + len(BOUNDARY))
+    while end >= 0:
+        parts.append(buf[start:end])
+        start = end
+        end = buf.find(BOUNDARY, start + len(BOUNDARY))
+    return parts, buf[start:]
+
+
+class LatestFrame:
+    """The newest whole frame from the camera, for one viewer."""
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.frame = None
+        self.seq = 0
+        self.done = False
+
+    def put(self, frame):
+        with self.cond:
+            self.frame = frame
+            self.seq += 1
+            self.cond.notify_all()
+
+    def finish(self):
+        with self.cond:
+            self.done = True
+            self.cond.notify_all()
+
+    def next_after(self, seq, timeout=5.0):
+        """(frame, seq) newer than seq, or (None, seq) once the camera stops."""
+        with self.cond:
+            self.cond.wait_for(lambda: self.seq != seq or self.done, timeout)
+            if self.seq == seq:
+                return None, seq
+            return self.frame, self.seq
+
+
+def read_camera(stream, latest):
+    """Read GStreamer as fast as it sends, keeping only the newest frame."""
+    buf = b""
+    try:
+        while True:
+            data = stream.recv(65536)
+            if not data:
+                break
+            parts, buf = split_frames(buf + data)
+            if parts:
+                latest.put(parts[-1])
+            if len(buf) > 8 * 1024 * 1024:      # no boundary for 8 MB: resync
+                buf = b""
+    except OSError:
+        pass
+    finally:
+        latest.finish()
 
 
 class CameraHandler(BaseHTTPRequestHandler):
@@ -75,27 +152,31 @@ class CameraHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
 
+            # small send buffer, sent at once: frames go out as they come
+            self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SEND_BUFFER)
+            self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
             mine = collections.deque(maxlen=120)
             with _frames_lock:
                 _frames[threading.get_ident()] = mine
-            tail = b""
 
+            latest = LatestFrame()
+            threading.Thread(target=read_camera, args=(stream, latest),
+                             daemon=True).start()
+
+            seq = 0
             while True:
-                data = stream.recv(65536)
-                if not data:
-                    break
-                # A boundary split across two reads is caught by carrying
-                # the end of the last read; it is too short to hold a whole one.
-                frames = (tail + data).count(BOUNDARY)
-                tail = data[-(len(BOUNDARY) - 1):]
-                if frames:
-                    now = time.monotonic()
-                    with _frames_lock:
-                        mine.extend([now] * frames)
-                self.wfile.write(data)
+                frame, newer = latest.next_after(seq)
+                if frame is None:
+                    if latest.done:
+                        break
+                    continue                     # camera quiet; keep waiting
+                seq = newer
+                self.wfile.write(frame)
                 self.wfile.flush()
-
-            stream.close()
+                # frames actually delivered: what this viewer really sees
+                with _frames_lock:
+                    mine.append(time.monotonic())
 
         except (ConnectionError, BrokenPipeError, OSError):
             pass
@@ -103,6 +184,10 @@ class CameraHandler(BaseHTTPRequestHandler):
         finally:
             with _frames_lock:
                 _frames.pop(threading.get_ident(), None)
+            try:
+                stream.close()               # ends the reader thread too
+            except (NameError, OSError):
+                pass
 
     def log_message(self, format, *args):
         print(f"[HTTP] {args[0]}")
@@ -116,11 +201,21 @@ def self_test():
     stats = camera_stats(now)
     assert stats["viewers"] == 1 and 22 <= stats["fps"] <= 23, stats
     _frames.clear()
-    tail, frames = b"", 0
-    for data in (b"xx--robot", b"camera\r\njpeg--robotcamera\r\n"):
-        frames += (tail + data).count(BOUNDARY)
-        tail = data[-(len(BOUNDARY) - 1):]
-    assert frames == 2, "a boundary split across two reads must count once"
+    # frames split across reads, and a boundary split across two reads
+    buf, got = b"", []
+    for data in (b"junk--robot", b"camera\r\nA1--robotca", b"mera\r\nB2--robotcamera\r\nC"):
+        parts, buf = split_frames(buf + data)
+        got += parts
+    assert got == [b"--robotcamera\r\nA1", b"--robotcamera\r\nB2"], got
+    assert buf == b"--robotcamera\r\nC", buf
+
+    # a slow viewer gets the newest frame, not the backlog
+    latest = LatestFrame()
+    for name in (b"f1", b"f2", b"f3"):
+        latest.put(name)
+    frame, seq = latest.next_after(0, timeout=0.1)
+    assert (frame, seq) == (b"f3", 3), (frame, seq)
+    assert latest.next_after(seq, timeout=0.05) == (None, 3)
     print("camera_http self-test passed")
 
 
