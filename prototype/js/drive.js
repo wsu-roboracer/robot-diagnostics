@@ -35,8 +35,12 @@ const DRIVE_HZ = 20;
 
 /* Speed ramps rather than jumps, so a key press or a flick of
    the pad does not ask the VESC for a step change. Releasing is
-   NOT ramped — stop is always immediate. */
-const DRIVE_ACCEL = 2.0;        // m/s per second
+   NOT ramped — stop is always immediate.
+
+   5 m/s²: full normal speed (3 m/s) in 0.6 s. It was 2 m/s², which
+   took a quarter second just to command enough speed to get the car
+   rolling and 1.5 s to reach 3 m/s - it read as lag. */
+const DRIVE_ACCEL = 5.0;        // m/s per second
 const STEER_RATE = 2.5;         // rad per second
 
 /* zero-speed commands sent after release, so the last thing the
@@ -94,6 +98,12 @@ function limitSteer() {
 }
 
 function publishDrive(speed, steer) {
+
+  /* never send the car a number that is not one: anything odd is a stop */
+  if (!Number.isFinite(speed) || !Number.isFinite(steer)) {
+    speed = 0;
+    steer = 0;
+  }
 
   const now = Date.now();
 
