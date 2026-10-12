@@ -13,8 +13,10 @@
    The controls are only another way to hold the Drive tab's
    controller: they write the same padHeld / padVec that the Drive
    tab's pad does, so arming, the dead-man, ramping, limits and every
-   disarm rule stay in drive.js and cannot drift apart. Hiding the
-   controls or leaving full screen always disarms. */
+   disarm rule stay in drive.js and cannot drift apart. Leaving full
+   screen always disarms. Hiding the controls disarms on phones; on
+   desktops the keys keep driving while the Drive tab is underneath
+   (applyPanes). */
 
 /* the game layout: anything touch-first, or too narrow for a side panel */
 const COCKPIT_TOUCH_QUERY = "(pointer: coarse), (max-width: 900px)";

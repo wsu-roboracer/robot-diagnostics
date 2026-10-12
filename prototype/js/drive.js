@@ -15,8 +15,8 @@
       stops the car: ackermann_mux forwards message by message and
       sends no zero of its own when an input goes quiet (see
       tools/estop_capture.py). If the link dies mid-drive, no zero
-      arrives and the motor holds the last command until the VESC's
-      own command timeout (~1 s, unconfirmed).
+      arrives from here; system_diagnostics.py's drive watchdog sends
+      the zeros instead, 0.3 s after /drive goes quiet.
    2. Priority. The physical joystick is the mux's higher-priority
       input, so holding its deadman always overrides this page.
    3. Disarm on anything unexpected: STOP / Space / Esc, leaving
