@@ -115,11 +115,16 @@ function connect(url) {
     subscribeFixed();
 
     scan();
+
+    /* the camera follows the robot (camera.js) */
+    cameraOnRobotConnected(url);
   };
 
   ws.onclose = () => {
 
     setConnectionState("disconnected", false);
+
+    cameraOnRobotDisconnected();
   };
 
   ws.onerror = () => {

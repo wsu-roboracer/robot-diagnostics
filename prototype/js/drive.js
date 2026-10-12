@@ -431,8 +431,8 @@ function renderDrive() {
   $("measSpeed").textContent =
     fresh ? robotSpeedMps.toFixed(2) + " m/s" : "—";
 
-  $("hudBattery").textContent =
-    "🔋 " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
+  $("hudBattery").innerHTML =
+    icon("battery") + " " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
 
   const rows = driveVitals();
 
@@ -585,8 +585,7 @@ window.addEventListener("pagehide", () => {
 
 $("stopBtn").onclick = () => disarmDrive("stop pressed");
 
-$("driveCamConnect").onclick =
-  () => connectCamera($("cameraUrl").value.trim());
+$("driveCamConnect").onclick = reconnectCamera;
 
 $("armBtn").onclick = () => {
 
@@ -677,47 +676,47 @@ function controlState() {
 
   if (estopActive()) {
 
-    hero = { tone: "bad", icon: "🛑", title: "Emergency stop is on",
+    hero = { tone: "bad", icon: "octagonAlert", title: "Emergency stop is on",
              sub: "Nobody can drive the car until it is released at the top of the page." };
 
   } else if (!connected) {
 
-    hero = { tone: "none", icon: "⏸", title: "Not connected",
+    hero = { tone: "none", icon: "pause", title: "Not connected",
              sub: "Connect to the robot in the top bar." };
 
   } else if (foreign && pubs.autonomous.length && !pubs.web) {
 
-    hero = { tone: "bad", icon: "🤖", title: "Autonomous code is driving",
+    hero = { tone: "bad", icon: "bot", title: "Autonomous code is driving",
              sub: pubs.autonomous.join(", ") + " is sending drive commands." };
 
   } else if (foreign) {
 
-    hero = { tone: "bad", icon: "🖥️", title: "Someone else is driving",
+    hero = { tone: "bad", icon: "monitor", title: "Someone else is driving",
              sub: "Another dashboard is sending drive commands. You can't arm until they stop." };
 
   } else if (mux === "teleop") {
 
-    hero = { tone: "warn", icon: "🎮", title: "The controller is driving",
+    hero = { tone: "warn", icon: "gamepad", title: "The controller is driving",
              sub: "Someone is holding the controller's deadman. It overrides this page." };
 
   } else if (active) {
 
-    hero = { tone: "you", icon: "🕹️", title: "You are driving",
+    hero = { tone: "you", icon: "joystick", title: "You are driving",
              sub: "Let go to stop. STOP, Space or Esc disarms." };
 
   } else if (driveArmed) {
 
-    hero = { tone: "you", icon: "🕹️", title: "You're armed",
+    hero = { tone: "you", icon: "joystick", title: "You're armed",
              sub: "Hold the pad or a drive key to move." };
 
   } else if (mux === "autonomous") {
 
-    hero = { tone: "warn", icon: "🤖", title: "The car is following /drive",
+    hero = { tone: "warn", icon: "bot", title: "The car is following /drive",
              sub: "Something is sending drive commands." };
 
   } else {
 
-    hero = { tone: "ok", icon: "⏸", title: "Nobody is driving",
+    hero = { tone: "ok", icon: "pause", title: "Nobody is driving",
              sub: "The car is idle. Arm the controls to drive." };
   }
 
@@ -727,12 +726,12 @@ function controlState() {
 
   const chips = [
     padLinked === null
-      ? { tone: "", text: "🎮 Controller: unknown",
+      ? { tone: "", text: "Controller: unknown",
           title: "Needs system_diagnostics.py running on the robot" }
       : padLinked
-      ? { tone: "ok", text: "🎮 Controller connected",
+      ? { tone: "ok", text: "Controller connected",
           title: "The physical controller is your backup stop" }
-      : { tone: "warn", text: "🎮 No controller — no backup stop",
+      : { tone: "warn", text: "No controller — no backup stop",
           title: "Pair the PS4 controller so someone can take over" }
   ];
 
@@ -763,13 +762,13 @@ function renderControl() {
   const { hero, chips, alerts, padLinked } = controlState();
 
   $("controlHero").className = "control-hero tone-" + hero.tone;
-  $("controlIcon").textContent = hero.icon;
+  $("controlIcon").innerHTML = icon(hero.icon);
   $("controlTitle").textContent = hero.title;
   $("controlSub").textContent = hero.sub;
 
   $("controlChips").innerHTML =
     chips.map(chip =>
-      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.text)}</span>`
+      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${icon("gamepad")}${escapeHtml(chip.text)}</span>`
     ).join("");
 
   $("controlAlerts").innerHTML =
@@ -820,8 +819,8 @@ function renderPadDisconnect(padLinked) {
 
   button.hidden = !padLinked;
   button.disabled = padDisconnectBusy || held;
-  button.textContent =
-    padDisconnectBusy ? "Disconnecting…" : "🎮 Disconnect controller";
+  button.innerHTML =
+    padDisconnectBusy ? "Disconnecting…" : icon("gamepad") + " Disconnect controller";
   button.title =
     held
       ? "Someone is holding L1/R1 — they must let go first, or press E-STOP"
@@ -893,8 +892,8 @@ function setHighSpeed(on) {
     slider.value = NORMAL_MAX_SPEED;
   }
 
-  $("speedUnlockBtn").textContent =
-    on ? "Lock back to 3 m/s" : "⚠ Unlock high speed (up to 5 m/s)";
+  $("speedUnlockBtn").innerHTML =
+    on ? "Lock back to 3 m/s" : icon("alert") + " Unlock high speed (up to 5 m/s)";
 
   $("speedUnlockBtn").classList.toggle("unlocked", on);
   $("speedMode").hidden = !on;
@@ -915,8 +914,8 @@ function setFullSteer(on) {
     slider.value = NORMAL_MAX_STEER;
   }
 
-  $("steerUnlockBtn").textContent =
-    on ? "Lock back to 19°" : "⚠ Unlock full steering (up to 23°)";
+  $("steerUnlockBtn").innerHTML =
+    on ? "Lock back to 19°" : icon("alert") + " Unlock full steering (up to 23°)";
 
   $("steerUnlockBtn").classList.toggle("unlocked", on);
   $("steerMode").hidden = !on;
@@ -1002,7 +1001,8 @@ function setLidarBig(big) {
 
   $("driveGrid").dataset.lidar = big ? "big" : "normal";
 
-  $("lidarBigBtn").textContent = big ? "⤡ Shrink" : "⤢ Enlarge";
+  $("lidarBigBtn").innerHTML =
+    icon(big ? "minimize" : "maximize") + (big ? " Shrink" : " Enlarge");
   $("lidarBigBtn").setAttribute("aria-pressed", String(big));
 
   try {

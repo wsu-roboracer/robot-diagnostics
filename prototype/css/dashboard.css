@@ -98,6 +98,11 @@
   box-sizing: border-box;
 }
 
+/* hidden always wins, whatever display a component sets */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -1266,14 +1271,25 @@ a.check-btn {
   margin-top: 10px;
 }
 
+/* small secondary action in a card header (Full screen, Split,
+   Reconnect, Details): a real button, the same chip as Select beams */
 .link-btn {
-  background: none;
-  border: none;
-  color: var(--link);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
-  padding: 0;
-  font-size: 13px;
-  text-decoration: underline;
 }
 
 /* ----------------------------------------------------------
@@ -2195,11 +2211,6 @@ kbd {
 
 /* camera with a heads-up overlay */
 
-.drive-view h2 .link-btn {
-  font-size: 12px;
-  font-weight: 400;
-}
-
 .drive-cam {
   position: relative;
 }
@@ -2805,10 +2816,8 @@ kbd {
   flex: 1;
 }
 
-.attention-list a {
-  color: var(--link);
-  font-size: 12.5px;
-  white-space: nowrap;
+.attention-list .link-btn {
+  flex: none;
 }
 
 .attention-list li.all-clear {
@@ -4158,4 +4167,1691 @@ body:has(.viewer:not([hidden])) {
   border-color: rgba(255, 255, 255, .3);
   background: rgba(0, 0, 0, .5);
   color: #fff;
+}
+
+/* ==========================================================
+   PHONES — layout pass: a short sticky bar, card headers that
+   wrap instead of spilling, the Drive tab in driving order, and
+   a full screen viewer whose bars sit beside the picture rather
+   than on top of it
+========================================================== */
+
+/* full screen there is no page to scroll, so a drag on the plot
+   always pans it (the in-page plots keep normal page scrolling) */
+#viewerRadar {
+  touch-action: none;
+}
+
+@media (max-width: 800px) {
+
+  /* top bar: status · E-STOP · refresh · hide, then address +
+     Connect, then the theme. Folded, only the first row and the
+     tabs stay. */
+  .conn-status        { order: 1; flex: 1 1 0; min-width: 0; overflow: hidden; }
+  #estopBtn           { order: 2; padding: 0 12px; }
+  #refreshBtn         { order: 3; }
+  .topbar-toggle      { order: 4; min-width: 0; padding: 0 10px; }
+  .topbar-conn input  { order: 5; flex: 1 1 200px; }
+  #connectBtn         { order: 6; flex: none; }
+  .theme-switch       { order: 7; flex: 1 1 100%; }
+
+  .conn-status strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .connection-dot {
+    flex: none;
+  }
+
+  /* card headers: the title keeps its line, the tools wrap under it */
+  .live-card h2,
+  .side-card h2.split-head {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 8px;
+  }
+
+  .cam-tools {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 6px;
+    margin-left: auto;
+  }
+
+  .link-btn,
+  .select-toggle {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  /* the Drive camera's tools get a row of their own */
+  .drive-view h2 .cam-tools {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .drive-view h2 .size-switch {
+    margin-left: auto;
+  }
+
+  .advanced-card h3 {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  /* Drive: camera, who has the car, then the pad and STOP, then the
+     surroundings and the rest. (Enlarged LiDAR still goes first.) */
+  .drive-grid,
+  .drive-grid[data-cam="large"] {
+    grid-template-areas: none;
+  }
+
+  .drive-col {
+    display: contents;
+  }
+
+  /* see it, know who has it, drive it, then the rest */
+  .drive-view    { order: 1; }
+  .who-card      { order: 2; }
+  .drive-card    { order: 3; }
+  .surround-card { order: 4; }
+  .vitals-card   { order: 5; }
+  .limits-card   { order: 6; }
+
+  /* FULL SCREEN VIEWER: top bar, picture, bottom bar stacked, so
+     nothing covers the camera or the plot's toolbar */
+  .viewer {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .viewer-stage {
+    position: relative;
+    inset: auto;
+    order: 2;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .viewer-radar {
+    padding: 10px 12px;
+  }
+
+  .viewer-top {
+    position: static;
+    order: 0;
+    gap: 8px 12px;
+    padding: 10px 12px;
+    background: #000;
+    border-bottom: 1px solid #262a30;
+  }
+
+  .viewer-status,
+  .viewer-tools {
+    display: contents;
+  }
+
+  /* status pill, E-STOP and Exit on one row, then the facts, then
+     the mode switch across the width */
+  .viewer-health         { order: 1; }
+  #viewerEstop           { order: 2; margin-left: auto; min-height: 40px; }
+  #viewerClose           { order: 3; min-height: 40px; }
+  .viewer-fact           { order: 4; font-size: 13px; }
+  .viewer-tools > .range-switch {
+    order: 5;
+    flex: 1 1 100%;
+  }
+
+  .viewer-tools > .range-switch button {
+    flex: 1;
+    min-height: 38px;
+    font-size: 14px;
+  }
+
+  .viewer-alert {
+    position: static;
+    order: 1;
+    transform: none;
+    max-width: none;
+    margin: 8px 12px 0;
+  }
+
+  .viewer-select {
+    position: static;
+    order: 3;
+    width: auto;
+    margin: 0 12px 10px;
+  }
+
+  .viewer-select:not(:has(> .beam-select:not([hidden]))) {
+    display: none;
+  }
+
+  .viewer-bottom {
+    position: static;
+    order: 4;
+    gap: 10px 22px;
+    padding: 10px 16px 14px;
+    background: #000;
+    border-top: 1px solid #262a30;
+  }
+
+  .viewer-big .hud-v {
+    font-size: 24px;
+  }
+
+  .viewer-sys {
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+}
+
+/* small phones: the battery number and its gauge still share a row */
+@media (min-width: 341px) and (max-width: 420px) {
+  .battery-card {
+    grid-template-columns: 1fr 120px;
+  }
+
+  .battery-gauge {
+    margin: 0 0 0 auto;
+    transform-origin: right center;
+  }
+}
+
+/* narrow phones: the fold button shrinks to its arrow so the
+   connection state is never cut short */
+@media (max-width: 400px) {
+  .topbar {
+    gap: 8px 6px;
+  }
+
+  .topbar-toggle {
+    width: 44px;
+    padding: 0;
+  }
+
+  .topbar-toggle .toggle-word {
+    display: none;
+  }
+
+  #estopBtn {
+    padding: 0 10px;
+  }
+
+  .conn-status {
+    font-size: 11.5px;
+  }
+}
+
+/* phones held sideways: the footer flows with the page instead of
+   taking a slice of a short screen */
+@media (max-height: 500px) {
+  .footer {
+    position: static;
+  }
+
+  .page {
+    padding-bottom: 24px;
+  }
+}
+
+/* ==========================================================
+   BUTTONS — one feel everywhere: hover lifts the border, a press
+   gives, keyboard focus is always visible
+========================================================== */
+
+.top-btn,
+.check-btn,
+.arm-btn,
+.link-btn,
+.select-toggle,
+.jump-nav a,
+.range-switch button,
+.size-switch button,
+.theme-switch button,
+.radar-center,
+.radar-zoom button {
+  transition: background-color .15s ease, border-color .15s ease,
+              color .15s ease, transform .08s ease;
+}
+
+@media (hover: hover) {
+  .link-btn:hover,
+  .select-toggle:hover:not([aria-pressed="true"]),
+  .check-btn:hover:not(:disabled),
+  .top-btn:hover:not(:disabled):not(.warn-btn),
+  .arm-btn:hover:not(:disabled):not(.armed) {
+    border-color: var(--orange);
+    color: var(--text);
+    background: var(--panel-soft);
+  }
+
+  .range-switch button:hover:not([aria-pressed="true"]),
+  .size-switch button:hover:not([aria-pressed="true"]),
+  .theme-switch button:hover:not([aria-pressed="true"]) {
+    background: var(--panel-soft);
+    color: var(--text);
+  }
+
+  .viewer .range-switch button:hover:not([aria-pressed="true"]),
+  .viewer .select-toggle:hover:not([aria-pressed="true"]) {
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+  }
+}
+
+.link-btn:active,
+.select-toggle:active,
+.check-btn:active:not(:disabled),
+.top-btn:active:not(:disabled),
+.arm-btn:active:not(:disabled),
+.jump-nav a:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+/* inside a segmented switch the ring would be clipped by its edge */
+.range-switch button:focus-visible,
+.size-switch button:focus-visible,
+.theme-switch button:focus-visible {
+  outline-offset: -3px;
+}
+
+/* phones: header tools fill their row and share one height, so a
+   row of buttons reads as one control strip */
+@media (max-width: 800px) {
+  .drive-view h2 .cam-tools > .link-btn {
+    flex: 1 1 0;
+  }
+
+  .drive-view h2 .size-switch {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .size-switch button {
+    flex: 1;
+  }
+
+  .range-switch button {
+    min-height: 36px;
+    font-size: 13px;
+  }
+
+  .top-btn.small-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+
+/* phones: LiDAR toolbar as a small form — each label over its
+   control, the range steps across the full width */
+@media (max-width: 800px) {
+  .lidar-toolbar {
+    row-gap: 6px;
+  }
+
+  .lidar-toolbar-label {
+    flex: 1 1 100%;
+  }
+
+  .lidar-toolbar-label:not(:first-child) {
+    margin-top: 4px;
+  }
+
+  .lidar-toolbar .select-toggle {
+    margin: 0 0 0 auto;
+  }
+
+  .lidar-toolbar .range-switch:not(.view-switch) {
+    flex: 1 1 100%;
+  }
+
+  .lidar-toolbar .range-switch:not(.view-switch) button {
+    flex: 1;
+    padding: 4px 0;
+  }
+}
+
+/* ==========================================================
+   DRIVE MODE (cockpit.js) - first person: the camera fills the
+   screen, the LiDAR glows from the edge nearest an obstacle, the
+   controls sit beside it (desktop) or under the thumbs (phones)
+========================================================== */
+
+/* the way in: one calm, clearly-clickable card at the top of the
+   Drive tab. The accent is in the icon and the button, not the
+   whole surface. */
+.drive-mode-hero {
+  width: 100%;
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--orange);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+@media (hover: hover) {
+  .drive-mode-hero:hover {
+    border-color: color-mix(in srgb, var(--orange) 55%, var(--border));
+    border-left-color: var(--orange);
+    background: color-mix(in srgb, var(--orange) 5%, var(--panel));
+  }
+
+  .drive-mode-hero:hover .dmh-go .ic {
+    transform: translateX(3px);
+  }
+}
+
+.dmh-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--orange) 14%, var(--panel));
+  color: var(--orange);
+}
+
+.dmh-icon .ic {
+  width: 24px;
+  height: 24px;
+}
+
+.dmh-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dmh-text strong {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.dmh-text span {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.dmh-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 9px;
+  background: var(--orange);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dmh-go .ic {
+  transition: transform .15s ease;
+}
+
+@media (max-width: 800px) {
+  .drive-mode-hero {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .dmh-go {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 15px;
+  }
+}
+
+.cockpit {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: #000;
+  color: #fff;
+}
+
+.cockpit[hidden] {
+  display: none;
+}
+
+body:has(.cockpit:not([hidden])) {
+  overflow: hidden;
+}
+
+/* the camera owns the whole screen; everything else floats on it */
+.cockpit-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.cockpit-cam {
+  position: absolute;
+  inset: 0;
+}
+
+.cockpit-cam .stream-box {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  max-height: none;
+  border-radius: 0;
+  background: #000;
+}
+
+/* the whole frame, never cropped: what is at the edges matters */
+.cockpit-cam .stream-box img {
+  object-fit: contain;
+}
+
+/* parking-sensor glow on the edge facing the obstacle */
+.cockpit-glow {
+  --glow: transparent;
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+.cockpit-glow.glow-close { --glow: rgba(255, 196, 0, .55); opacity: 1; }
+.cockpit-glow.glow-near  { --glow: rgba(255, 70, 60, .75); opacity: 1;
+                           animation: cockpit-pulse .6s ease-in-out infinite alternate; }
+
+.glow-front {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 26%;
+  background: linear-gradient(var(--glow), transparent);
+}
+
+.glow-left {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 18%;
+  background: linear-gradient(90deg, var(--glow), transparent);
+}
+
+.glow-right {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 18%;
+  background: linear-gradient(270deg, var(--glow), transparent);
+}
+
+@keyframes cockpit-pulse {
+  from { opacity: .55; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cockpit-glow.glow-near { animation: none; }
+}
+
+.cockpit-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 16px 26px;
+  background: linear-gradient(rgba(0, 0, 0, .75), rgba(0, 0, 0, 0));
+}
+
+.cockpit-status,
+.cockpit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cockpit .drive-state {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+
+/* messages stack under the top bar, centred */
+.cockpit-msgs {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.cockpit-alert,
+.cockpit-lidar,
+.cockpit-note {
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
+}
+
+.cockpit-alert[hidden],
+.cockpit-lidar[hidden],
+.cockpit-note[hidden] {
+  display: none;
+}
+
+.cockpit-alert {
+  background: var(--failed);
+  color: #fff;
+  font-weight: 800;
+}
+
+.cockpit-lidar {
+  border-left: 6px solid #a9a9a9;
+  background: rgba(11, 13, 16, .82);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.cockpit-lidar.tone-close { border-left-color: var(--degraded); background: rgba(58, 49, 16, .9); }
+.cockpit-lidar.tone-near  { border-left-color: var(--failed);   background: rgba(110, 22, 18, .92); }
+.cockpit-lidar.tone-none  { color: #c3c8ce; }
+
+.cockpit-note {
+  background: rgba(11, 13, 16, .82);
+  font-size: 13.5px;
+  color: #e6e9ec;
+}
+
+/* small LiDAR map, bottom right, above the readout */
+.cockpit-mini {
+  position: absolute;
+  right: 16px;
+  bottom: 96px;
+  width: 200px;
+  pointer-events: none;
+}
+
+.cockpit-mini canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  opacity: .92;
+}
+
+.cockpit-mini-label {
+  display: block;
+  margin-top: 4px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .7);
+}
+
+/* command / steering / measured, like the Drive tab's camera HUD */
+.cockpit-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: clamp(280px, calc(100% - 700px), 560px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .6);
+  pointer-events: none;
+}
+
+/* desktop: the touch-only bits hide */
+.stick,
+.cockpit-stop-touch,
+.cockpit-arm-quick,
+.cockpit-rotate {
+  display: none;
+}
+
+/* The controls float inside the picture, bottom left, as frosted
+   glass: the camera shows through. Always dark, whatever the page
+   theme, because it sits on video - the page's colour tokens are
+   re-pointed at see-through values inside it. */
+.cockpit-panel {
+  --panel: rgba(255, 255, 255, .07);
+  --panel-soft: rgba(255, 255, 255, .09);
+  --surface-3: rgba(255, 255, 255, .16);
+  --border: rgba(255, 255, 255, .18);
+  --border-soft: rgba(255, 255, 255, .1);
+  --border-strong: rgba(255, 255, 255, .32);
+  --text: #fff;
+  --text-2: #dde1e6;
+  --muted: #b3bac2;
+  --link: #8cbcff;
+
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2;
+  width: 290px;
+  max-height: calc(100% - 92px);
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 16px;
+  background: rgba(12, 14, 18, .5);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  color: var(--text);
+}
+
+.cockpit.panel-open .cockpit-panel {
+  display: flex;
+}
+
+.cockpit-panel .pad-knob {
+  background: rgba(24, 27, 32, .82);
+}
+
+.cockpit-panel .stop-btn {
+  height: 52px;
+  font-size: 20px;
+}
+
+.cockpit-more {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.cockpit-more summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 2px 0;
+}
+
+.cockpit-more-sum {
+  float: right;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpit-more[open] summary {
+  margin-bottom: 6px;
+}
+
+.cockpit-more .link-btn {
+  margin-top: 6px;
+}
+
+.cockpit-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cockpit-panel h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.cockpit-panel .slider-row {
+  margin: 2px 0;
+}
+
+.cockpit-pad-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.cockpit-pad-wrap .drive-pad {
+  max-width: 200px;
+}
+
+.cockpit-keys {
+  margin-top: 0;
+  line-height: 1.6;
+}
+
+
+
+/* ---------- touch: sideways, like a game ---------- */
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  .cockpit-top {
+    padding: 10px max(12px, env(safe-area-inset-right)) 22px max(12px, env(safe-area-inset-left));
+  }
+
+  .cockpit-arm-quick {
+    display: flex;
+  }
+
+  .cockpit-tools .top-btn,
+  .cockpit-tools .estop-btn {
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .cockpit-arm-quick.armed {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: #fff;
+  }
+
+  /* the panel becomes a drawer from the right */
+  /* phones: the same glass, slid in from the right over the
+     throttle (the thumbs drive; this is for arming and limits) */
+  .cockpit-panel {
+    display: flex;
+    left: auto;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 3;
+    width: min(320px, 70%);
+    max-height: none;
+    padding-right: max(14px, env(safe-area-inset-right));
+    transform: translateX(calc(100% + 16px));
+    visibility: hidden;
+    transition: transform .22s ease, visibility 0s linear .22s;
+  }
+
+  .cockpit.panel-open .cockpit-panel {
+    transform: none;
+    visibility: visible;
+    transition: transform .22s ease;
+  }
+
+  /* the thumbs drive here; the pad and key hint are for desktops */
+  .cockpit-pad-wrap,
+  .cockpit-keys {
+    display: none;
+  }
+
+  .cockpit-msgs {
+    top: 60px;
+    width: min(520px, calc(100% - 260px));
+  }
+
+  .cockpit-lidar {
+    font-size: 14px;
+  }
+
+  /* top left: the throttle stick owns the right edge */
+  .cockpit-mini {
+    top: 64px;
+    bottom: auto;
+    right: auto;
+    left: max(12px, env(safe-area-inset-left));
+    width: 104px;
+  }
+
+  .cockpit-mini-label {
+    display: none;
+  }
+
+  /* readout floats above STOP, between the sticks */
+  .cockpit-hud {
+    bottom: 92px;
+    width: clamp(240px, calc(100% - 470px), 420px);
+    padding: 6px 10px;
+  }
+
+  .cockpit-hud .hud-v {
+    font-size: 15px;
+  }
+
+  .cockpit-hud .hud-k {
+    font-size: 9px;
+  }
+
+  .cockpit-stop-touch {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: 150px;
+    height: 64px;
+    font-size: 24px;
+  }
+
+  .cockpit-stop-touch:active {
+    transform: translateX(-50%) translateY(2px);
+  }
+
+  /* thumb sticks: steer bottom left, throttle bottom right */
+  .stick {
+    display: block;
+    position: absolute;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    opacity: .6;
+    transition: opacity .15s;
+  }
+
+  .stick.ready {
+    opacity: 1;
+  }
+
+  .stick-steer {
+    left: max(16px, env(safe-area-inset-left));
+    width: 200px;
+    height: 96px;
+  }
+
+  .stick-throttle {
+    right: max(16px, env(safe-area-inset-right));
+    width: 96px;
+    height: 180px;
+  }
+
+  .stick-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 48px;
+    border: 2px solid rgba(255, 255, 255, .35);
+    background: rgba(0, 0, 0, .38);
+    backdrop-filter: blur(2px);
+  }
+
+  .stick.ready .stick-track {
+    border-color: var(--orange);
+  }
+
+  /* centre lines: where "straight" and "stopped" are */
+  .stick-steer .stick-track::after,
+  .stick-throttle .stick-track::after {
+    content: "";
+    position: absolute;
+    background: rgba(255, 255, 255, .3);
+  }
+
+  .stick-steer .stick-track::after {
+    left: 50%;
+    top: 14px;
+    bottom: 14px;
+    width: 2px;
+    margin-left: -1px;
+  }
+
+  .stick-throttle .stick-track::after {
+    top: 50%;
+    left: 14px;
+    right: 14px;
+    height: 2px;
+    margin-top: -1px;
+  }
+
+  .stick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, .88);
+    border: 3px solid rgba(255, 255, 255, .5);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+    pointer-events: none;
+  }
+
+  .stick.ready .stick-knob {
+    border-color: var(--orange);
+  }
+
+  .stick.held .stick-knob {
+    background: var(--orange);
+  }
+
+  .stick-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    line-height: 1.3;
+    color: rgba(255, 255, 255, .8);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+    pointer-events: none;
+  }
+}
+
+/* phones held upright: ask for sideways rather than squeeze it in */
+@media (orientation: portrait) and (pointer: coarse),
+       (orientation: portrait) and (max-width: 900px) {
+
+  .cockpit-rotate {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    background: #000;
+    text-align: center;
+  }
+
+  .cockpit-rotate strong {
+    font-size: 20px;
+  }
+
+  .cockpit-rotate span {
+    max-width: 30ch;
+    color: #c3c8ce;
+    line-height: 1.45;
+  }
+
+  .cockpit-rotate .top-btn {
+    margin-top: 8px;
+    min-height: 44px;
+  }
+
+  .cockpit-rotate-icon {
+    font-size: 44px;
+    white-space: nowrap;
+    animation: cockpit-turn 1.6s ease-in-out infinite;
+  }
+
+  @keyframes cockpit-turn {
+    0%, 30%   { transform: rotate(0deg); }
+    60%, 100% { transform: rotate(90deg); }
+  }
+}
+
+/* ==========================================================
+   CAMERA SOURCE (camera.js) - automatic by default, the address
+   tucked away for an unusual setup
+========================================================== */
+
+.camera-controls {
+  align-items: center;
+}
+
+.camera-source {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.camera-source::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--healthy);
+}
+
+.camera-source.manual::before {
+  background: var(--link);
+}
+
+.camera-edit {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.camera-edit summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.camera-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.camera-edit-row input {
+  flex: 1 1 220px;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.camera-edit-row .check-btn[hidden] {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .camera-controls .camera-source {
+    flex: 1 1 100%;
+  }
+
+  .camera-controls .check-btn {
+    flex: 1 1 100%;
+  }
+
+  .camera-edit summary {
+    padding: 6px 0;
+  }
+
+  .camera-edit-row input {
+    flex: 1 1 100%;
+    min-height: 44px;
+    font-size: 16px; /* stops iOS zooming in on focus */
+  }
+
+  .camera-edit-row .check-btn {
+    flex: 1 1 calc(50% - 8px);
+    text-align: center;
+  }
+}
+
+/* ==========================================================
+   POLISH — honest offline banner, folded how-to, empty states
+========================================================== */
+
+/* the banner now says it, with the fix: one message, not three */
+#connHint {
+  display: none !important;
+}
+
+.status-banner[data-health="offline"] {
+  --tone: var(--unknown);
+  background: var(--panel-soft);
+}
+
+.status-banner[data-health="offline"] .overall-icon {
+  font-size: 22px;
+}
+
+.lidar-howto.in-fold {
+  margin: 6px 0 0;
+  text-align: left;
+}
+
+.info-tip {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: help;
+  font-size: 13px;
+}
+
+/* a table with no rows says so, instead of headers over a blank */
+.scroll[data-empty]:has(tbody:empty) thead {
+  display: none;
+}
+
+.scroll[data-empty]:has(tbody:empty)::after {
+  content: attr(data-empty);
+  display: block;
+  padding: 18px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ==========================================================
+   PAGE ORDER — Overview is the robot and what it sees; the ROS
+   graph summary sits on Advanced beside the nodes it counts
+========================================================== */
+
+.main-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.graph-card .card-body {
+  padding: 13px;
+}
+
+.graph-card .graph-sub:first-of-type {
+  margin-top: 18px;
+}
+
+/* ==========================================================
+   ICONS (icons.js) - one line set, sized to the text around it
+========================================================== */
+
+.ic {
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* buttons that hold an icon and a word line them up */
+.link-btn,
+.select-toggle,
+.radar-center,
+.hud-chip,
+.control-chip,
+.pad-disconnect-btn,
+.theme-switch button,
+.speed-dialog h2,
+.attention-list li.all-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.warn-btn {
+  gap: 8px;
+}
+
+.pad-disconnect-btn,
+.theme-switch button {
+  justify-content: center;
+}
+
+.refresh-symbol.ic {
+  width: 18px;
+  height: 18px;
+}
+
+#refreshBtn .refresh-symbol.ic {
+  stroke-width: 2.2;
+}
+
+.subsystem-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.subsystem-icon .ic {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.75;
+}
+
+.overall-icon .ic {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.5;
+}
+
+.control-icon .ic {
+  width: 24px;
+  height: 24px;
+  color: var(--tone);
+}
+
+.info-tip .ic {
+  width: 15px;
+  height: 15px;
+}
+
+.toggle-arrow {
+  transition: transform .2s ease;
+}
+
+.topbar.collapsed .toggle-arrow {
+  transform: rotate(180deg);
+}
+
+.stick-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.stick-steer .stick-label {
+  flex-direction: row;
+  justify-content: center;
+  gap: 4px;
+}
+
+.stick-label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cockpit-rotate-icon .ic {
+  width: 56px;
+  height: 56px;
+  stroke-width: 1.5;
+}
+
+/* ==========================================================
+   EMERGENCY STOP - flat, solid, in its own corner of the bar.
+   "Emergency stop" where there is room, "E-stop" on phones.
+========================================================== */
+
+.topbar-sep {
+  width: 1px;
+  height: 28px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.estop-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--failed) 75%, #000);
+  border-radius: 8px;
+  background: var(--failed);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: .01em;
+  box-shadow: none;
+  animation: none;
+}
+
+.estop-btn .ic {
+  width: 15px;
+  height: 15px;
+}
+
+.estop-btn:hover {
+  filter: none;
+  background: color-mix(in srgb, var(--failed) 85%, #000);
+}
+
+/* on: a steady, darker "pressed in" red instead of a pulse */
+.estop-btn.active {
+  animation: none;
+  background: color-mix(in srgb, var(--failed) 55%, #000);
+  border-color: color-mix(in srgb, var(--failed) 55%, #000);
+}
+
+.estop-short {
+  display: none;
+}
+
+/* ==========================================================
+   OVERVIEW - Subsystems and the ROS graph as two panels of one
+   height, the subsystems wider
+========================================================== */
+
+.main-grid {
+  grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.sub-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* the table fills its panel, so the two panels end together and
+   the rows share any spare height */
+.sub-panel .subsystem-wrap {
+  flex: 1;
+  display: flex;
+}
+
+.sub-panel .subsystem-table {
+  height: 100%;
+  min-width: 640px;
+}
+
+.sub-panel .subsystem-table thead th {
+  font-size: 14px;
+  padding: 11px 13px;
+}
+
+.graph-side {
+  min-width: 0;
+}
+
+.sub-grid {
+  display: none;
+}
+
+/* phone cards: the metric tiles' language - a status edge, the
+   verdict, the why */
+.sub-card {
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--unknown);
+  background: var(--panel);
+  padding: 12px 14px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sub-card.healthy  { border-left-color: var(--healthy); }
+.sub-card.degraded { border-left-color: var(--degraded); }
+.sub-card.failed   { border-left-color: var(--failed); }
+
+.sub-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sub-head .subsystem-icon {
+  width: 28px;
+}
+
+.sub-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub-card .health {
+  font-size: 13px;
+  gap: 6px;
+}
+
+.sub-card .health-dot {
+  width: 12px;
+  height: 12px;
+}
+
+.sub-detail {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sub-source {
+  margin: 0;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1250px) {
+  .main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 800px) {
+  /* phones: cards instead of the table */
+  .sub-panel .subsystem-wrap {
+    display: none;
+  }
+
+  .sub-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .sub-panel {
+    padding: 12px;
+  }
+
+  .sub-panel h2.split-head {
+    flex-wrap: wrap;
+  }
+
+  /* first row of the bar: status · refresh · hide · E-stop in the corner */
+  #refreshBtn    { order: 2; }
+  .topbar-toggle { order: 3; }
+  #estopBtn      { order: 4; padding: 0 12px; }
+  .topbar-sep    { display: none; }
+
+  .estop-long  { display: none; }
+  .estop-short { display: inline; }
+}
+
+/* touch screens held sideways are wider than 800 px but still phones:
+   the full-screen views use the short name there too */
+@media (pointer: coarse), (max-width: 900px) {
+  .cockpit .estop-long,
+  .viewer .estop-long  { display: none; }
+
+  .cockpit .estop-short,
+  .viewer .estop-short { display: inline; }
+}
+
+/* ==========================================================
+   DRIVE MODE - edge warning lights on/off
+========================================================== */
+
+.cockpit.no-glow .cockpit-glow {
+  display: none;
+}
+
+.cockpit-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-soft);
+  cursor: pointer;
+}
+
+.cockpit-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cockpit-switch-text strong {
+  font-size: 13.5px;
+}
+
+.cockpit-switch-text span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* a switch, not a tick box: it is a setting, on or off */
+.cockpit-switch input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  border-radius: 99px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.cockpit-switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  transition: transform .15s ease;
+}
+
+.cockpit-switch input:checked {
+  background: var(--orange);
+  border-color: var(--orange);
+}
+
+.cockpit-switch input:checked::after {
+  transform: translateX(18px);
+}
+
+.cockpit-switch input:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+/* ==========================================================
+   DRIVE MODE - arranging the map and the controls
+========================================================== */
+
+/* moved: the saved spot replaces the default corner */
+.cockpit [data-movable].moved {
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+.cockpit-stop-touch.moved:active {
+  transform: translateY(2px) !important;
+}
+
+.cockpit.arranging [data-movable] {
+  outline: 2px dashed var(--orange);
+  outline-offset: 4px;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* the whole part is the handle: nothing inside it reacts */
+.cockpit.arranging [data-movable] * {
+  pointer-events: none;
+}
+
+.cockpit.arranging [data-movable].dragging {
+  outline-style: solid;
+  opacity: .85;
+}
+
+/* the map is see-through to clicks normally; it must catch a drag */
+.cockpit.arranging .cockpit-mini {
+  pointer-events: auto;
+}
+
+.cockpit.arranging .stick {
+  opacity: 1;
+}
+
+.cockpit-arrange-bar {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  background: rgba(12, 14, 18, .82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 13.5px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+}
+
+.cockpit-arrange-bar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cockpit-arrange-bar .top-btn {
+  min-height: 36px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .3);
+  color: #fff;
+}
+
+.cockpit-arrange-bar .cockpit-arrange-done {
+  background: var(--orange);
+  border-color: var(--orange);
+  font-weight: 700;
+}
+
+.cockpit-arrange-btn {
+  align-self: stretch;
+  min-height: 36px;
+}
+
+/* the messages and the arrange bar share the top: drop the messages
+   below it while arranging */
+.cockpit.arranging .cockpit-msgs {
+  top: 116px;
+}
+
+/* warnings stay readable whatever is moved under them */
+.cockpit-msgs {
+  z-index: 3;
 }

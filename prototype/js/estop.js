@@ -122,7 +122,7 @@ async function releaseEstop() {
   if (deadmanHeld()) return;
 
   const ok = confirm(
-    "Release the emergency stop?\n\n" +
+    "Allow driving again?\n\n" +
     "The car will accept driving commands again. Make sure the area " +
     "is clear and nobody is about to drive.");
 
@@ -160,7 +160,7 @@ function renderEstop() {
 
   $("estopText").innerHTML =
     active
-      ? "<strong>🛑 EMERGENCY STOP IS ON.</strong> " +
+      ? "<strong>Emergency stop is on.</strong> " +
         "The car will not move for anyone — controller, this page or autonomous code."
       : escapeHtml(estopError);
 
@@ -186,12 +186,16 @@ function renderEstop() {
       ? "Someone is holding the controller's deadman — they must let go first"
       : "Let the car be driven again";
   release.textContent =
-    deadman ? "Release (controller in use)" : "Release e-stop";
+    deadman ? "Allow driving again (controller in use)" : "Allow driving again";
 
   const button = $("estopBtn");
 
   button.classList.toggle("active", active);
-  button.textContent = active ? "🛑 E-STOP ON" : "🛑 E-STOP";
+  /* the full name where there is room, "E-stop" on phones (CSS) */
+  button.innerHTML =
+    icon("stopSign") +
+    `<span class="estop-long">Emergency stop${active ? " on" : ""}</span>` +
+    `<span class="estop-short">E-stop${active ? " on" : ""}</span>`;
 }
 
 $("estopBtn").onclick = triggerEstop;
