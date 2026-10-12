@@ -342,7 +342,7 @@ function subsystemData() {
   return [
     {
       id: "controller",
-      icon: "🎮",
+      icon: "gamepad",
       name: "Controller",
       subtitle: "Input",
       source: "/joy",
@@ -352,7 +352,7 @@ function subsystemData() {
 
     {
       id: "vesc",
-      icon: "◉",
+      icon: "zap",
       name: "VESC",
       subtitle: "Motor Controller",
       source: "/vesc_driver_node",
@@ -362,7 +362,7 @@ function subsystemData() {
 
     {
       id: "lidar",
-      icon: "◌",
+      icon: "radar",
       name: "LiDAR",
       subtitle: "Hokuyo URG",
       source: "/urg_node + /scan",
@@ -372,7 +372,7 @@ function subsystemData() {
 
     {
       id: "odometry",
-      icon: "◍",
+      icon: "gauge",
       name: "Odometry",
       subtitle: "Wheel Encoder",
       source: "/vesc_to_odom_node",
@@ -382,7 +382,7 @@ function subsystemData() {
 
     {
       id: "camera",
-      icon: "▣",
+      icon: "camera",
       name: "Camera",
       subtitle: "Intel RealSense",
       source: "system: Camera",
@@ -392,7 +392,7 @@ function subsystemData() {
 
     {
       id: "battery",
-      icon: "ϟ",
+      icon: "battery",
       name: "Battery",
       subtitle: "Vehicle Power",
       source: "/sensors/core",
@@ -402,7 +402,7 @@ function subsystemData() {
 
     {
       id: "control",
-      icon: "⇄",
+      icon: "swap",
       name: "Control Mode",
       subtitle: mux ? mux : "Command Mux",
       source: "/ackermann_mux",
@@ -421,8 +421,15 @@ function renderSubsystems(all) {
   /* Battery has its own card right above; it still feeds the
      overall verdict (renderOverall gets the full list), but a
      table row would only repeat it. */
+  /* problems first: failed, then degraded, then unconfirmed; the
+     order among equals stays the usual one */
   const data =
-    all.filter(item => item.id !== "battery");
+    all
+      .filter(item => item.id !== "battery")
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) =>
+        healthRank(b.item.health) - healthRank(a.item.health) || a.index - b.index)
+      .map(entry => entry.item);
 
   $("subsystemRows").innerHTML =
     data.map(item => {
@@ -434,7 +441,7 @@ function renderSubsystems(all) {
             <div class="subsystem-name">
 
               <div class="subsystem-icon">
-                ${item.icon}
+                ${icon(item.icon)}
               </div>
 
               <div>
@@ -468,6 +475,43 @@ function renderSubsystems(all) {
         </tr>
       `;
     }).join("");
+
+  /* phones: one card per subsystem, in the metric tiles' style. The
+     node is usually named in the details already ("/urg_node is not
+     running"), so it only gets its own line when it is not. */
+  $("subsystemCards").innerHTML =
+    data.map(item => {
+
+      const sourceSaid =
+        item.source.split(/\s*\+\s*/).every(part => item.details.includes(part));
+
+      return `
+        <article class="sub-card ${item.health}">
+          <div class="sub-head">
+            <div class="subsystem-icon">${icon(item.icon)}</div>
+            <div class="sub-name">
+              <div class="subsystem-title">${escapeHtml(item.name)}</div>
+              <span class="subsystem-subtitle">${escapeHtml(item.subtitle)}</span>
+            </div>
+            <span class="health ${item.health}">
+              <span class="health-dot"></span>
+              ${healthLabel(item.health)}
+            </span>
+          </div>
+          <p class="sub-detail">${escapeHtml(item.details)}</p>
+          ${sourceSaid ? "" : `<p class="sub-source">${escapeHtml(item.source)}</p>`}
+        </article>
+      `;
+    }).join("");
+
+  const count = health => data.filter(item => item.health === health).length;
+
+  $("subsystemSummary").textContent =
+    [[count("failed"), "failed"], [count("degraded"), "degraded"],
+     [count("unknown"), "unconfirmed"], [count("healthy"), "healthy"]]
+      .filter(([n]) => n)
+      .map(([n, word]) => `${n} ${word}`)
+      .join(" · ");
 }
 
 /* ==========================================================
@@ -475,6 +519,26 @@ function renderSubsystems(all) {
 ========================================================== */
 
 function renderOverall(data) {
+
+  /* No rosbridge: nothing below is a verdict on the robot, so do
+     not call it FAILED. Say what is actually wrong, and the fix
+     (the hint that used to sit in a separate red strip). */
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+
+    const connecting = ws && ws.readyState === WebSocket.CONNECTING;
+
+    $("statusBanner").dataset.health = "offline";
+    $("overallStatus").textContent = connecting ? "CONNECTING…" : "NOT CONNECTED";
+    $("overallStatus").style.color = "var(--text)";
+    $("overallIcon").style.background = "var(--unknown)";
+    $("overallIcon").innerHTML = connecting ? "…" : window.icon("power");
+    $("overallNote").textContent =
+      $("connHint").textContent ||
+      (connecting
+        ? "Reaching the robot at " + $("wsUrl").value.trim()
+        : "Not talking to the robot — check the address in the top bar and press Connect.");
+    return;
+  }
 
   let worst = "healthy";
 
@@ -521,9 +585,9 @@ function renderOverall(data) {
       ? "var(--failed)"
       : "var(--unknown)";
 
-  icon.textContent =
+  icon.innerHTML =
     worst === "healthy"
-      ? "✓"
+      ? window.icon("check")
       : worst === "failed"
       ? "!"
       : worst === "degraded"
@@ -595,8 +659,11 @@ function renderStatusFacts(data) {
   const healthy =
     data.filter(item => item.health === "healthy").length;
 
+  /* no robot, no count: "0 / 7 healthy" read like seven failures */
   $("factSubsystems").textContent =
-    `${healthy} / ${data.length} healthy`;
+    ws && ws.readyState === WebSocket.OPEN
+      ? `${healthy} / ${data.length} healthy`
+      : "—";
 
   $("factControl").textContent =
     mux === "teleop"

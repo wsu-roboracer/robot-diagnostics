@@ -10,20 +10,150 @@
    rosbridge traffic and no library involved — just a URL.
 ========================================================== */
 
+/* ==========================================================
+   AUTOMATIC CAMERA
+
+   The camera follows the robot: when rosbridge connects, the stream
+   is opened on that same robot (start_diagnostics.sh serves it on
+   :8082), so switching robots in the top bar switches the camera
+   too. While the robot is connected and the stream is not up yet
+   (camera still starting, or it dropped), it keeps retrying on its
+   own. Typing an address (or ?video=) switches this off until "Use
+   automatic" is pressed.
+========================================================== */
+
+const CAMERA_PORT = 8082;
+const CAMERA_PATH = "/camera.mjpg";
+const CAMERA_RETRY_MIN_MS = 3000;
+const CAMERA_RETRY_MAX_MS = 15000;
+
+let cameraManual = false;       // the user chose the address
+let cameraAuto = false;         // the current stream was picked for them
+let cameraUrlNow = "";
+let cameraRetryTimer = null;
+let cameraRetryMs = CAMERA_RETRY_MIN_MS;
+let cameraRobotDropped = false; // the robot went away since the stream opened
+
+/* ws://192.168.1.206:9090 -> http://192.168.1.206:8082/camera.mjpg */
+function cameraUrlFor(wsUrl) {
+
+  try {
+
+    const host = new URL(wsUrl).hostname;
+
+    return host ? `http://${host}:${CAMERA_PORT}${CAMERA_PATH}` : "";
+
+  } catch (error) {
+
+    return "";
+  }
+}
+
+function cameraLive() {
+  return !$("cameraImage").hidden && Boolean($("cameraImage").naturalWidth);
+}
+
+/* rosbridge just opened (connection.js) */
+function cameraOnRobotConnected(wsUrl) {
+
+  const dropped = cameraRobotDropped;
+
+  cameraRobotDropped = false;
+
+  if (cameraManual) {
+    /* their address, but the robot is back: try it again */
+    if (dropped || !cameraLive()) connectCamera(cameraUrlNow, false);
+    return;
+  }
+
+  const url = cameraUrlFor(wsUrl);
+
+  if (!url) return;
+
+  $("cameraUrl").value = url;
+
+  /* already showing this robot's camera, and nothing went away:
+     a Refresh should not blank the picture */
+  if (url === cameraUrlNow && cameraLive() && !dropped) {
+    renderCameraSource();
+    return;
+  }
+
+  connectCamera(url, true);
+}
+
+/* rosbridge closed (connection.js): stop retrying until it is back */
+function cameraOnRobotDisconnected() {
+
+  cameraRobotDropped = true;
+
+  clearTimeout(cameraRetryTimer);
+  cameraRetryTimer = null;
+}
+
+function useAutomaticCamera() {
+
+  cameraManual = false;
+
+  const url =
+    cameraUrlFor(socketOpen() ? ws.url : $("wsUrl").value.trim());
+
+  $("cameraUrl").value = url;
+  connectCamera(url, true);
+}
+
+function useManualCamera(url) {
+
+  cameraManual = true;
+  connectCamera(url, false);
+}
+
+/* the Reconnect buttons: same address, same mode */
+function reconnectCamera() {
+  connectCamera(cameraUrlNow || $("cameraUrl").value.trim(), cameraAuto);
+}
+
+function renderCameraSource() {
+
+  let where = cameraUrlNow;
+
+  try {
+    where = new URL(cameraUrlNow).host;
+  } catch (error) {}
+
+  $("cameraSource").textContent =
+    cameraAuto
+      ? `Automatic · follows the robot${where ? " (" + where + ")" : ""}`
+      : `Manual address${where ? " · " + where : ""}`;
+
+  $("cameraSource").classList.toggle("manual", !cameraAuto);
+  $("cameraAutoBtn").hidden = cameraAuto;
+}
+
 function setCameraStatus(text, color) {
 
   $("camTag").textContent = text;
   $("camTag").style.color = color;
 }
 
-function connectCamera(url) {
+function connectCamera(url, auto = false) {
 
   const image = $("cameraImage");
+
+  clearTimeout(cameraRetryTimer);
+  cameraRetryTimer = null;
+
+  if (url !== cameraUrlNow) cameraRetryMs = CAMERA_RETRY_MIN_MS;
+
+  cameraUrlNow = url;
+  cameraAuto = auto;
+  renderCameraSource();
 
   if (!url) {
 
     setCameraStatus("NO STREAM", "var(--bad-ink)");
-    $("camMessage").textContent = "Enter a camera URL first.";
+    $("camMessage").textContent =
+      auto ? "Waiting for the robot…" : "Enter a camera URL first.";
     $("camMessage").hidden = false;
     image.hidden = true;
     return;
@@ -48,12 +178,39 @@ function connectCamera(url) {
     image.hidden = false;
     $("camMessage").hidden = true;
     setCameraStatus("LIVE", "var(--healthy)");
+    cameraRetryMs = CAMERA_RETRY_MIN_MS;
   };
 
   image.onerror = () => {
+
     image.hidden = true;
-    $("camMessage").textContent = "No stream at " + url;
     $("camMessage").hidden = false;
+
+    /* automatic, with the robot there: the camera may still be
+       starting, so keep trying, backing off */
+    if (auto && socketOpen()) {
+
+      const wait = cameraRetryMs;
+
+      cameraRetryMs = Math.min(cameraRetryMs * 2, CAMERA_RETRY_MAX_MS);
+
+      $("camMessage").textContent =
+        `No stream at ${url} yet — trying again in ${Math.round(wait / 1000)} s`;
+      setCameraStatus("RETRYING", "var(--warn-ink)");
+
+      cameraRetryTimer = setTimeout(() => {
+        if (cameraAuto && cameraUrlNow === url && socketOpen()) {
+          connectCamera(url, true);
+        }
+      }, wait);
+
+      return;
+    }
+
+    $("camMessage").textContent =
+      auto
+        ? `No stream at ${url} — it connects again when the robot does`
+        : "No stream at " + url;
     setCameraStatus("NO STREAM", "var(--bad-ink)");
   };
 

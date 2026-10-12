@@ -69,6 +69,7 @@ function render() {
 
   renderDrive();
   renderViewer();
+  renderCockpit();
 }
 
 /* ==========================================================
@@ -306,15 +307,21 @@ $("rangeApplyBtn").onclick = () => {
   }
 };
 
+/* typing an address takes the camera off automatic */
 $("cameraConnectBtn").onclick =
-  () => connectCamera($("cameraUrl").value.trim());
+  () => useManualCamera($("cameraUrl").value.trim());
 
 $("cameraUrl").addEventListener("keydown", event => {
 
   if (event.key === "Enter") {
-    connectCamera($("cameraUrl").value.trim());
+    useManualCamera($("cameraUrl").value.trim());
   }
 });
+
+$("cameraAutoBtn").onclick = () => {
+  useAutomaticCamera();
+  $("cameraEdit").open = false;
+};
 
 $("cameraSnapBtn").onclick = takePicture;
 
@@ -348,20 +355,25 @@ $("robotIp").textContent =
    robot #6 (192.168.1.206), 2026-09-23. The browser already
    knows which robot it's talking to; it's whatever host served
    this page. ?video=<url> still overrides it, the same way
-   ?url= overrides rosbridge, for a different robot or port. */
-$("cameraUrl").value =
-  location.protocol.startsWith("http") && location.hostname
-    ? `http://${location.hostname}:8082/camera.mjpg`
-    : "http://localhost:8082/camera.mjpg";
+   ?url= overrides rosbridge, for a different robot or port.
 
+   Now the camera follows rosbridge instead (camera.js): it opens on
+   whichever robot the top bar connects to, so it is right even when
+   the page is served from somewhere else. Until then, one try on the
+   robot the address box points at. */
 const queryVideo =
   new URLSearchParams(location.search).get("video");
 
 if (queryVideo) {
-  $("cameraUrl").value = queryVideo;
-}
 
-connectCamera($("cameraUrl").value.trim());
+  $("cameraUrl").value = queryVideo;
+  useManualCamera(queryVideo);
+
+} else {
+
+  $("cameraUrl").value = cameraUrlFor($("wsUrl").value.trim());
+  connectCamera($("cameraUrl").value, true);
+}
 
 /* A form, so Enter in the address box and the button do the
    same thing. Lives in the top bar: switching robots is one

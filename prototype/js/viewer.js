@@ -151,7 +151,7 @@ function renderViewer() {
   const estop = $("estopBtn");
   const mine = $("viewerEstop");
 
-  mine.textContent = estop.textContent;
+  mine.innerHTML = estop.innerHTML;
   mine.className = estop.className;
   mine.disabled = estop.disabled;
 
