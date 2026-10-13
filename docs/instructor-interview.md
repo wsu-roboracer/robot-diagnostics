@@ -277,6 +277,10 @@ the only warning a student gets. Red therefore moves up to #1's own 11.1 V floor
 
 ## Where the data comes from, and where each range lives
 
+The table below describes the code at the time of the interview, and most of the gaps it lists have
+since been closed. The current version, with every file and constant, is in
+[system-overview.md](system-overview.md#what-changes-what).
+
 The professor asked for this so the ranges can be changed later without digging through code.
 Each item below says where its data comes from and where its range is defined.
 
