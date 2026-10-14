@@ -1454,13 +1454,13 @@ tr.topic-detail pre {
 }
 
 .s-SILENT,
+.s-STALE,
+.s-NOT_ADVERTISED,
 .s-NODE_DOWN,
 .s-MISSING {
   color: var(--failed);
 }
 
-.s-NOT_ADVERTISED,
-.s-STALE,
 .s-SLOW {
   color: var(--warn-ink);
 }

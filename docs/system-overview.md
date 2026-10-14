@@ -435,10 +435,6 @@ measurement behind them, so they are the first to revisit.
 
 Not part of the sign-off: [disk](#disk) (yellow above 85% used, red above 95%).
 
-One place the code is gentler than the signed-off ranges: the topic table shows
-`STALE` and not-advertised topics in yellow, where the ranges call them red. The
-LiDAR and Odometry rows do go red when their topic stops.
-
 ### Before you edit
 
 Every file is in `prototype/` when developing, and in `f1tenth_system/f1tenth_stack/`
@@ -1329,13 +1325,17 @@ what silence means:
 | `input` | `/drive`, `/commands/motor/brake` | nothing; the stack listens to these |
 
 A continuous topic with no message for 2 seconds is `STALE`; one with a publisher
-that never sent anything is `SILENT`. `STALE`, slow and not-advertised topics are
-yellow; `SILENT`, `MISSING` (not in the graph) and no-publisher topics are red.
+that never sent anything is `SILENT`. Slow topics are yellow. `STALE`, `SILENT`,
+not-advertised (the node runs but never created the topic, usually because it
+could not open its device), `MISSING` (not in the graph) and no-publisher topics
+are red.
 
 **Why these lines.** A single "silence is a fault" rule flagged 16 of 23 topics on
-a healthy car, so each topic has a class. The signed-off ranges call a stopped
-topic red; this table shows `STALE` and not-advertised in yellow, while the
-LiDAR and Odometry rows go red. Signed off by the professor as a starting value; see
+a healthy car, so each topic has a class. With the classes, only topics that
+publish on a timer can be `STALE`: one that sends once is latched, and one that
+only sends while someone drives is an event, so neither is ever red for being
+quiet. That makes a stopped topic a real fault, so it is red. On a healthy car
+(robot #6), every listed topic is advertised by its node. Signed off by the professor as a starting value; see
 [Ranges at a glance](#ranges-at-a-glance).
 
 **On the page.** Key topics in the ROS Graph card, and the Advanced tab's topic
