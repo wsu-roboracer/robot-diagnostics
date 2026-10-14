@@ -1085,7 +1085,12 @@ lacks the driver that reports a PS4 controller's charge); `/joy`, field `buttons
 
 **On the page.** The Controller row in Subsystems, the controller chip in the
 driving view's top bar. **Run joystick check** (Advanced tab)
-runs the same `joy_enumerate_devices` check on demand and explains the result.
+runs the same `joy_enumerate_devices` check on demand and explains the result,
+usually in well under a second. It runs the program directly, not through
+`ros2 run`: that starts the whole `ros2` command-line tool first, and the first
+click after a bringup took longer than the page's 12 seconds and showed
+"timeout" although the robot answered. The robot's log records how long each
+check took (`joystick_check: ... took 0.1s`).
 **Disconnect controller** (Drive tab) drops the Bluetooth link; the robot refuses
 while L1 or R1 is held, unless the emergency stop is on.
 
