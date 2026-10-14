@@ -231,7 +231,9 @@ function topicTone(state) {
   if (
     state === "MISSING" ||
     state === "NODE_DOWN" ||
-    state === "SILENT"
+    state === "SILENT" ||
+    state === "STALE" ||
+    state === "NOT_ADVERTISED"
   ) return "bad";
 
   if (BAD_TOPIC_STATES.has(state)) return "warn";

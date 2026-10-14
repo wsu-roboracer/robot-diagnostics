@@ -20,6 +20,7 @@ it.
 - [Running it](#running-it)
 - [How each check works, and how to change it](#how-each-check-works-and-how-to-change-it)
   (starts with [Ranges at a glance](#ranges-at-a-glance))
+- [Dead ends: things we tried that don't work](#dead-ends-things-we-tried-that-dont-work)
 - [What was already on the robot, and what this project added](#what-was-already-on-the-robot-and-what-this-project-added)
 - [Reference: the files](#reference-the-files)
 
@@ -435,10 +436,6 @@ measurement behind them, so they are the first to revisit.
 | [Topics](#topics) | publishing | slow | stopped or never sent | Each topic has a class that says when silence is a fault, so a healthy idle car does not show red |
 
 Not part of the sign-off: [disk](#disk) (yellow above 85% used, red above 95%).
-
-One place the code is gentler than the signed-off ranges: the topic table shows
-`STALE` and not-advertised topics in yellow, where the ranges call them red. The
-LiDAR and Odometry rows do go red when their topic stops.
 
 ### Before you edit
 
@@ -1090,7 +1087,12 @@ lacks the driver that reports a PS4 controller's charge); `/joy`, field `buttons
 
 **On the page.** The Controller row in Subsystems, the controller chip in the
 driving view's top bar. **Run joystick check** (Advanced tab)
-runs the same `joy_enumerate_devices` check on demand and explains the result.
+runs the same `joy_enumerate_devices` check on demand and explains the result,
+usually in well under a second. It runs the program directly, not through
+`ros2 run`: that starts the whole `ros2` command-line tool first, and the first
+click after a bringup took longer than the page's 12 seconds and showed
+"timeout" although the robot answered. The robot's log records how long each
+check took (`joystick_check: ... took 0.1s`).
 **Disconnect controller** (Drive tab) drops the Bluetooth link; the robot refuses
 while L1 or R1 is held, unless the emergency stop is on.
 
@@ -1330,13 +1332,17 @@ what silence means:
 | `input` | `/drive`, `/commands/motor/brake` | nothing; the stack listens to these |
 
 A continuous topic with no message for 2 seconds is `STALE`; one with a publisher
-that never sent anything is `SILENT`. `STALE`, slow and not-advertised topics are
-yellow; `SILENT`, `MISSING` (not in the graph) and no-publisher topics are red.
+that never sent anything is `SILENT`. Slow topics are yellow. `STALE`, `SILENT`,
+not-advertised (the node runs but never created the topic, usually because it
+could not open its device), `MISSING` (not in the graph) and no-publisher topics
+are red.
 
 **Why these lines.** A single "silence is a fault" rule flagged 16 of 23 topics on
-a healthy car, so each topic has a class. The signed-off ranges call a stopped
-topic red; this table shows `STALE` and not-advertised in yellow, while the
-LiDAR and Odometry rows go red. Signed off by the professor as a starting value; see
+a healthy car, so each topic has a class. With the classes, only topics that
+publish on a timer can be `STALE`: one that sends once is latched, and one that
+only sends while someone drives is an event, so neither is ever red for being
+quiet. That makes a stopped topic a real fault, so it is red. On a healthy car
+(robot #6), every listed topic is advertised by its node. Signed off by the professor as a starting value; see
 [Ranges at a glance](#ranges-at-a-glance).
 
 **On the page.** Key topics in the ROS Graph card, and the Advanced tab's topic
@@ -1409,11 +1415,6 @@ example `f1-wsu-6`), from Python's `getpass.getuser()`; every robot's hostname i
 
 ### Things to avoid
 
-- **Do not name a new launch argument `port`.** Launch arguments are shared with
-  included launch files, and rosbridge's already declares `port`. When the
-  dashboard's argument was called `port`, rosbridge took port 8000, lost it to the
-  web server, and failed with "Address already in use" while nothing was on 9090.
-  That is why it is `dashboard_port`.
 - **Do not run `start_diagnostics.sh` on a car whose bringup already starts the
   dashboard.** Two bringups fight over the motor controller and the joystick.
 - **Every open dashboard tab is one of rosbridge's 10 clients.** Close tabs you are
@@ -1434,6 +1435,74 @@ These check the logic, not the hardware. Ranges and anything that depends on rea
 sensors still need a run on a car. From any machine,
 `python3 tools/rosbridge_check.py <robot ip>` checks that rosbridge is up and the
 main topics are arriving, with nothing to install.
+
+## Dead ends: things we tried that don't work
+
+Written down so nobody spends a session re-checking them. Each one was tried on
+the cars.
+
+- **Reading the controller's battery.** Only the `hid_sony` kernel driver
+  exposes a PS4 controller's charge, and NVIDIA's Jetson kernel does not include
+  it (`modprobe hid_sony` fails). `upower` sees nothing, and over Bluetooth the
+  controller advertises no battery service. The two ways that could work,
+  building `hid_sony` for the Jetson kernel or reading `/dev/hidraw*` directly,
+  both risk changing how the sticks and buttons are read, which steering depends
+  on. Tools like `ds4drv` add a second joystick device, so `joy` may pick the
+  wrong one. The page says "not exposed by this driver".
+- **The controller's blinking light bar.** With this driver it blinks forever,
+  whether or not the controller works. It says nothing about the connection.
+- **VESC temperatures reading 0.0.** Not a dead sensor: `vesc_driver` never
+  copied `temp_fet` and `temp_motor` into the message (the two-line patch fixes
+  it). After the fix, `temp_motor` reads about -74 C because the motors have no
+  sensor fitted, and `ntc_temp_mos1/2/3` stay 0.0 because this board has none.
+  `temperature_pcb`, named in older notes, does not exist in the message. A
+  value that never changes is not a reading: check that something writes a field
+  before calling the sensor dead.
+- **`/joy` silent while `jstest /dev/input/js0` works.** `joy` reads
+  `/dev/input/event*`, not `js0`, and over NoMachine only the login screen gets
+  permission to read it. The fix is the `input` group. `ros2 run joy
+  joy_enumerate_devices` shows it in one command: zero rows while `jstest` works
+  means this.
+- **`ros2 node list`.** With and without the daemon (`--no-daemon`), it has
+  listed too few nodes on a running car. The page asks rosapi instead, which has
+  been right every time.
+- **Raising rosbridge's 10-client limit.** There is no setting for it. Client 11
+  connects and gets nothing; close a tab instead, and it recovers within 30
+  seconds. Subscribing to `/scan` with no throttle once jammed rosbridge until
+  it was restarted, so the page always throttles.
+- **The camera through ROS.** `realsense2_camera` has no compressed topics, and
+  a raw colour frame is about 2.7 MB (83 MB/s), far too much for Wi-Fi and
+  rosbridge. Only one program can open the RealSense at a time, so the ROS
+  camera node and the GStreamer stream cannot both run. That is why the camera
+  skips ROS.
+- **"Fixing" the `/ackermann_drive` remap in `bringup_launch.py`.** The remap
+  (`ackermann_cmd_out` to `ackermann_drive`) does nothing, because the mux
+  publishes on `ackermann_cmd`. Changing it to rename `ackermann_cmd` would move
+  the mux's output away from `ackermann_to_vesc_node`, which listens on
+  `ackermann_cmd`, and the car would silently stop driving. If anyone cleans it
+  up, delete the line.
+- **Treating `mux.yaml`'s 0.2 s timeout as a stop delay.** It only decides when
+  a quiet input stops counting for priority. Commands pass through the mux in
+  about 0.2 ms, and nothing sends a zero when an input goes quiet. That is why
+  the page sends zeros when you let go, and why the drive watchdog exists.
+- **One "has it published lately?" rule for every topic.** It flagged 16 of 23
+  topics on a healthy car. Topic classes fixed it (see [Topics](#topics)).
+- **Measuring topic rates from a laptop.** Over Wi-Fi, the 40 and 50 Hz topics
+  read about 30 Hz. Measure on the robot, or use the rate a node reports itself,
+  as `urg_node` does on `/diagnostics`.
+- **`ros2 topic echo /diagnostics --once`.** It prints one publisher's message,
+  and three nodes publish there. Use `--times 10`, or the page.
+- **Running a tool with `ros2 run` from inside a node.** `ros2 run` starts the
+  whole `ros2` command-line tool first, which on the Jetson is slow the first
+  time after a bringup. The joystick check used it, and its first click after a
+  bringup took longer than the page's 12 seconds and showed "timeout" even
+  though the robot answered. Run the program directly instead:
+  `system_diagnostics` finds `joy_enumerate_devices` under `AMENT_PREFIX_PATH`
+  at startup.
+- **A launch argument named `port`.** Launch arguments are shared with included
+  launch files, and rosbridge's already has `port`. Rosbridge took port 8000,
+  lost it to the web server, and failed with "Address already in use" while
+  nothing was on 9090. That is why the web server's is `dashboard_port`.
 
 ## What was already on the robot, and what this project added
 

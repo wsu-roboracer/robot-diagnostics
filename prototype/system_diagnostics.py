@@ -428,15 +428,20 @@ class SystemDiagnostics(Node):
         joy_enumerate_devices separates the third, and it is the expensive one to
         run, which is what makes it a button rather than a tile.
         """
-        # 8s: `ros2 run` pays DDS discovery on every invocation and is slow on the
-        # Jetson. The page allows 12s, so this must fail first and say so.
-        rc, out = probe(["ros2", "run", "joy", "joy_enumerate_devices"], timeout=8)
+        # Run the binary directly, as the slow loop does. `ros2 run` starts the
+        # ros2 command-line tool first, which is slow on the Jetson the first time
+        # after a bringup: the first click on 2026-10-14 ran past the page's 12s
+        # and showed "timeout" although the robot answered. 8s: the page allows
+        # 12s, so this must fail first and say so.
+        cmd = [self.joy_enum] if self.joy_enum else ["ros2", "run", "joy", "joy_enumerate_devices"]
+        started = time.time()
+        rc, out = probe(cmd, timeout=8)
         devices = parse_joy_devices(out)
         pad = self._slow_get("pad") or {}
         response.success, response.message = joy_verdict(
             rc, out, devices, bool(pad.get("connected")), in_input_group())
         self.get_logger().info(f"joystick_check: {len(devices)} device(s), "
-                               f"success={response.success}")
+                               f"success={response.success}, took {time.time() - started:.1f}s")
         return response
 
     # ---------- disconnecting the controller ----------

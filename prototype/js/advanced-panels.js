@@ -309,7 +309,7 @@ function renderAttention() {
       if (!BAD_TOPIC_STATES.has(state)) continue;
 
       items.push({
-        rank: state === "STALE" || state === "SLOW" ? 1 : 2,
+        rank: state === "SLOW" ? 1 : 2,
         what: topic.name,
         why: state + " — " + topicReason(topic, state),
         link: "#secTopics"
