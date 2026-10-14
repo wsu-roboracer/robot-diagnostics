@@ -254,7 +254,8 @@ every bringup, so it starts with everything else.
 
 Under throttle the voltage swings about 0.2 V within a second. Judged reading by
 reading, a pack near a line would flicker between colours. The lines (yellow below
-11.6 V, red below 11.1 V) were set after a run-down test: from 10.4 V the robot
+11.6 V, red below 11.1 V) were set after a run-down test with the car sitting still, not driving: from
+10.4 V the robot
 lost power about five minutes later at 8.8 V or below, so the earlier red line of
 10.5 V was too late.
 
@@ -418,7 +419,7 @@ measurement behind them, so they are the first to revisit.
 
 | Item | Green | Yellow | Red | Basis |
 |---|---|---|---|---|
-| [Battery](#battery) (5 second median) | 11.6 V or more | 11.1 to 11.6 V | below 11.1 V | A run-down test on robot #2: from 10.4 V the robot lost power about five minutes later at 8.8 V or below, falling faster below about 10 V. Red at 11.1 V (3.7 V per cell) leaves time to swap the pack. The 11.6 V yellow is a *convention*, a buffer to get a spare ready |
+| [Battery](#battery) (5 second median) | 11.6 V or more | 11.1 to 11.6 V | below 11.1 V | A run-down test on robot #2, car sitting still: from 10.4 V the robot lost power about five minutes later at 8.8 V or below, falling faster below about 10 V. Red at 11.1 V (3.7 V per cell) leaves time to swap the pack. The 11.6 V yellow is a *convention*, a buffer to get a spare ready |
 | [VESC FET temperature](#motor-controller-vesc-temperature-and-faults) | below 65 C | 65 to 80 C | 80 C or more, or any VESC fault code | The VESC's own over-temperature fault trips near 85 C. Idle reads about 31 C. Never measured under a long drive, so treat as provisional |
 | [Board temperature](#board-temperatures) | below 70 C | 70 to 85 C | 85 C or more | The Jetson's own trip points, read on robot #2: it slows down at 70 C and 99 C and shuts off at 104.5 C. Idle is about 50 C. Never measured under a long drive |
 | [CPU load](#cpu) (1 minute average) | up to the core count (6) | above 6 | above 12 | More processes waiting than cores means work is queueing. The CPU is capped at 1.51 GHz in the 15 W power mode, so full load with a normal temperature is not a fault |
@@ -564,8 +565,8 @@ median, not the latest reading. Green at 11.6 V or more, yellow from 11.1 to
 11.6 V ("low, get a spare pack ready"), red below 11.1 V ("replace the pack
 soon"). The percentage is a straight line from 11.1 V (0%) to 12.6 V (100%).
 
-**Why these lines.** A run-down test on robot #2 started at 10.4 V, and the robot
-lost power about five minutes later at 8.8 V or below, falling faster below about
+**Why these lines.** A run-down test on robot #2, with the car sitting still and
+not driving, started at 10.4 V, and the robot lost power about five minutes later at 8.8 V or below, falling faster below about
 10 V. Driving draws far more current than that idle test, so red sits at 11.1 V
 (3.7 V per cell) to leave time to swap the pack. Nothing on the car protects the
 pack from running too low, so this red is the only warning. Yellow at 11.6 V is a
