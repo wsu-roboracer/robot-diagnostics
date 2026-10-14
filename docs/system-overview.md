@@ -19,14 +19,17 @@ it.
 - [Why it is built this way](#why-it-is-built-this-way)
 - [Running it](#running-it)
 - [How each check works, and how to change it](#how-each-check-works-and-how-to-change-it)
+  (starts with [Ranges at a glance](#ranges-at-a-glance))
 - [What was already on the robot, and what this project added](#what-was-already-on-the-robot-and-what-this-project-added)
 - [Reference: the files](#reference-the-files)
 
-Related documents: why each green / yellow / red range was chosen, and the
-professor's sign-off, are in [instructor-interview.md](instructor-interview.md).
-The measurements behind the decisions below are in
+Every green / yellow / red range, and why it was chosen, is in this document: all
+of them in [Ranges at a glance](#ranges-at-a-glance), and each one again under its
+check. For history only: [instructor-interview.md](instructor-interview.md) is the
+record of the interview where the professor signed off on the ranges, and
 [ros-status-spike-notes.md](ros-status-spike-notes.md) and
-[ros-status-spike-summary.md](ros-status-spike-summary.md).
+[ros-status-spike-summary.md](ros-status-spike-summary.md) hold the raw
+measurements. This document does not need them to be read.
 
 ## How it works
 
@@ -392,6 +395,7 @@ the same order each time.
 
 - **Where it comes from**: the file, command or ROS topic the value is read from.
 - **How it is judged**: who decides the colour (the robot or the page) and the rule.
+- **Why these lines**: where the green / yellow / red numbers came from.
 - **What is sent**: what reaches the page, with the exact names.
 - **On the page**: what you see, and where.
 - **To change**: the file and setting to edit, with the current value.
@@ -399,6 +403,41 @@ the same order each time.
 The names under "What is sent" are the agreement between the robot side and the
 page. If one side renames something, the other side does not fail with an error;
 that value just goes blank or grey "unknown". Change both sides together.
+
+### Ranges at a glance
+
+The professor signed off on these ranges. They are starting values, not final
+ones: most come from hardware limits read off the robot or from common
+conventions, not from a class using the cars. Expect them to change once the
+professor runs the class and sees how they hold up against the tests students
+actually run. When one changes, update the code (the check's "To change" table
+says where) and this table together.
+
+**Basis** says where each number comes from. Rows marked *convention* have no
+measurement behind them, so they are the first to revisit.
+
+| Item | Green | Yellow | Red | Basis |
+|---|---|---|---|---|
+| [Battery](#battery) (5 second median) | 11.6 V or more | 11.1 to 11.6 V | below 11.1 V | A run-down test on robot #2: from 10.4 V the robot lost power about five minutes later at 8.8 V or below, falling faster below about 10 V. Red at 11.1 V (3.7 V per cell) leaves time to swap the pack. The 11.6 V yellow is a *convention*, a buffer to get a spare ready |
+| [VESC FET temperature](#motor-controller-vesc-temperature-and-faults) | below 65 C | 65 to 80 C | 80 C or more, or any VESC fault code | The VESC's own over-temperature fault trips near 85 C. Idle reads about 31 C. Never measured under a long drive, so treat as provisional |
+| [Board temperature](#board-temperatures) | below 70 C | 70 to 85 C | 85 C or more | The Jetson's own trip points, read on robot #2: it slows down at 70 C and 99 C and shuts off at 104.5 C. Idle is about 50 C. Never measured under a long drive |
+| [CPU load](#cpu) (1 minute average) | up to the core count (6) | above 6 | above 12 | More processes waiting than cores means work is queueing. The CPU is capped at 1.51 GHz in the 15 W power mode, so full load with a normal temperature is not a fault |
+| [RAM available](#memory-ram) | 20% or more | 10 to 20% | below 10% | Idle reads 63 to 80% available |
+| [GPU load](#gpu) | below 95% | 95% or more for 5 seconds | none | *Convention.* A busy GPU means a heavy job is running, not a fault. Heat shows up in the board temperature |
+| [Wi-Fi signal](#wi-fi) | -67 dBm or better | below -67 dBm | below -75 dBm, or no link | *Convention.* Measured -39 to -43 dBm in the lab |
+| [Wi-Fi packet loss](#wi-fi) (to the router) | under 1% | 1% or more | 5% or more | *Convention.* Measured 0%; past bad sessions lost 90 to 100% |
+| [Wi-Fi round trip](#wi-fi) | under 30 ms | 30 ms or more | 100 ms or more | *Convention.* Measured 1.4 to 3.2 ms |
+| [Lidar](#lidar) | 38 to 42 Hz | scanning, outside that rate | no scans, or not running | `urg_node`'s own accepted rate, 40 Hz within 5% (`sensors.yaml`) |
+| [Camera](#camera) | on USB 3 (5000M), 15 fps or more | slower USB link, or under 15 fps | not found on USB, or no frame for 3 seconds | Half the camera's 30 fps. The RealSense is a USB 3 camera, so a slower link means it is in the wrong port or cable |
+| [Controller](#controller) | connected and readable by ROS, or no controller | - | connected but ROS cannot read it | No controller is normal when nobody is driving. A controller ROS cannot read looks connected but can neither drive nor stop the car |
+| [Nodes](#nodes) | all expected nodes running | - | any missing | A missing node is a failed bringup, so there is no in-between |
+| [Topics](#topics) | publishing | slow | stopped or never sent | Each topic has a class that says when silence is a fault, so a healthy idle car does not show red |
+
+Not part of the sign-off: [disk](#disk) (yellow above 85% used, red above 95%).
+
+One place the code is gentler than the signed-off ranges: the topic table shows
+`STALE` and not-advertised topics in yellow, where the ranges call them red. The
+LiDAR and Odometry rows do go red when their topic stops.
 
 ### Before you edit
 
@@ -491,9 +530,9 @@ Copying into `src/` is not enough on its own: the robot runs the built copy in
 | `sensors.yaml` or `bringup_launch.py` | restart bringup | `colcon build --packages-select f1tenth_stack`, then restart bringup |
 
 Before moving a green / yellow / red line, read why it is there in
-[instructor-interview.md](instructor-interview.md). Several were signed off by the
-professor, and the battery lines came from a test that ran a pack until the robot
-lost power.
+[Ranges at a glance](#ranges-at-a-glance) and the check's "Why these lines". The
+professor signed off on them, and the battery lines came from a test that ran a
+pack until the robot lost power.
 
 A note on `/diagnostics` reports, which most checks use: each report has a name
 (such as `system: CPU`), a level (0 OK, 1 warning, 2 error, 3 not measured yet), a
@@ -524,6 +563,14 @@ within a second, so the page keeps the last 5 seconds of readings and judges the
 median, not the latest reading. Green at 11.6 V or more, yellow from 11.1 to
 11.6 V ("low, get a spare pack ready"), red below 11.1 V ("replace the pack
 soon"). The percentage is a straight line from 11.1 V (0%) to 12.6 V (100%).
+
+**Why these lines.** A run-down test on robot #2 started at 10.4 V, and the robot
+lost power about five minutes later at 8.8 V or below, falling faster below about
+10 V. Driving draws far more current than that idle test, so red sits at 11.1 V
+(3.7 V per cell) to leave time to swap the pack. Nothing on the car protects the
+pack from running too low, so this red is the only warning. Yellow at 11.6 V is a
+convention: a buffer to get a spare ready. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **What is sent.** `/sensors/core`, field `state.voltage_input`.
 
@@ -559,6 +606,11 @@ the field is always exactly `0.0`.
 not running or `fault_code` is not 0. Otherwise the FET temperature decides:
 green below 65 C, yellow from 65 C, red from 80 C. A reading of exactly 0.0 is
 treated as "no reading" (the missing patch), not as 0 C.
+
+**Why these lines.** The VESC shuts itself off with an over-temperature fault near
+85 C, so red at 80 C comes before that. Idle reads about 31 C. The car has never
+been measured on a long drive, so these are provisional. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **What is sent.** `/sensors/core`, fields `state.temp_fet` and `state.fault_code`;
 the node list from rosapi.
@@ -613,6 +665,12 @@ zone that fails is skipped for that second and listed as "unreadable this pass".
 - The Temperature tile's rows, on the page, each graded with the same 70 and
   85 C; the tile takes the worst row, including the VESC's FET row.
 
+**Why these lines.** They come from the Jetson's own trip points, read on robot
+#2: it slows itself down at 70 C and 99 C, and shuts off at 104.5 C. Idle is about
+50 C. Yellow marks the first slowdown; red leaves about 14 C before the second.
+Not measured on a long drive. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
+
 **What is sent.** Report `system: Thermal`, one key per zone named as the zone
 (`tj-thermal`, `cpu-thermal`, `gpu-thermal`, `soc0-thermal`...), values like
 `46.1 C`.
@@ -646,6 +704,11 @@ Shows how busy the processor is.
 above the number of cores, red above twice the number of cores. The busy percent
 is shown but not graded.
 
+**Why these lines.** A load above the core count means work is waiting for a
+core. The CPU is capped at 1.51 GHz in the 15 W power mode, so the board can be
+slower than expected without being hot or broken. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
+
 **What is sent.** Report `system: CPU`, keys `cores`, `load 1m`, `load 5m`,
 `load 15m`, `usage %`.
 
@@ -673,6 +736,10 @@ would free from its cache) and swap.
 **How it is judged.** On the robot, by the percent available: yellow below 20%,
 red below 10%.
 
+**Why these lines.** Idle reads 63 to 80% available, so yellow and red mean
+something is using far more than usual. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
+
 **What is sent.** Report `system: Memory`, keys `total`, `available`,
 `available %`, `swap used`.
 
@@ -694,6 +761,9 @@ Warns before the robot's disk fills up.
 for the root filesystem once a second (the NVMe drive, about 1 TB).
 
 **How it is judged.** On the robot, by percent used: yellow above 85%, red above 95%.
+
+**Why these lines.** Common defaults, not part of the professor's sign-off. The
+disk is about 1 TB and idle is under 5% used.
 
 **What is sent.** Report `system: Storage`, keys `total`, `used`, `free`, `used %`.
 
@@ -717,6 +787,11 @@ percent (0 to 1000). The clock speed comes from the GPU's `cur_freq` file under
 **How it is judged.** On the robot. Yellow once the GPU has been at 95% or more for
 5 seconds in a row (5 readings, one a second). There is no red: a busy GPU just
 means something is using it.
+
+**Why these lines.** A convention: a busy GPU means a heavy job is running, which
+is normal. Heat from it shows up in the board temperature, so there is no red.
+Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **What is sent.** Report `system: GPU`, keys `usage %`, `freq`, `source` (the file
 or `tegrastats`).
@@ -782,6 +857,11 @@ worst:
 | Round trip | under 30 ms | 30 ms or more | 100 ms or more |
 
 No link at all is red ("down"). A value that has not been measured yet is left out.
+
+**Why these lines.** Common Wi-Fi conventions, not measurements. In the lab the
+robots read -39 to -43 dBm, 0% loss and 1.4 to 3.2 ms; bad sessions in the past
+lost 90 to 100% of packets. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **What is sent.** Report `system: Network`: keys `wifi signal` (dBm), `wifi loss %`,
 `wifi rtt ms`, `wifi gateway`, and a key named after the interface (`wlP1p1s0`)
@@ -858,6 +938,10 @@ The Network tile's Lidar row is judged separately: "unplugged" (no cable link) a
 "no reply" (cable in, no ping answer, usually no power) are red, "answering" is
 green.
 
+**Why these lines.** The rate range is `urg_node`'s own, 40 Hz within 5%. No
+scans is red because the car cannot see. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
+
 **What is sent.** `/scan` (fields above); report `urg_node: Laser Scan topic status`,
 keys `Actual frequency (Hz)`, `Minimum acceptable frequency (Hz)`,
 `Maximum acceptable frequency (Hz)`; report `system: Network`, the key starting
@@ -907,6 +991,11 @@ frames.
 slower than 5000M (USB 3) is yellow. The frame rate on the page, every 2 seconds
 while the picture is showing: no frame for more than 3 seconds is red, under 15
 fps is yellow. The Camera row takes the worse of the two.
+
+**Why these lines.** 15 fps is half the camera's 30. The RealSense is a USB 3
+camera, so a slower link means it is in the wrong port or on the wrong cable.
+Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **What is sent.** Report `system: Camera`, keys `product`, `usb serial`,
 `usb port`, `link speed`; and the `/stats` JSON, of which the page reads `fps`
@@ -988,6 +1077,11 @@ is none.
 | attached and connected over Bluetooth | OK, "connected" |
 | attached, no Bluetooth link | yellow (also normal for a few seconds after connecting) |
 | attached, but ROS cannot read it | red, "add the user to the input group" |
+
+**Why these lines.** No controller is normal when nobody is driving. A controller
+ROS cannot read looks connected but can neither drive nor stop the car, so it is
+red. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **What is sent.** Report `system: Gamepad`, keys `js devices`, `bluetooth`,
 `device`, `battery %` (always "not exposed by this driver": the Jetson's kernel
@@ -1205,6 +1299,10 @@ faster sign of trouble.
 **How it is judged.** On the page, against `EXPECTED_NODES`: the 8 drive nodes plus
 `system_diagnostics`, `rosbridge_websocket`, `rosapi` and `rosapi_params`.
 
+**Why these lines.** A missing node is a failed bringup, so there is no yellow.
+Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
+
 **On the page.** "Nodes 12 / 12 up" in the banner, the ROS Graph card, and the
 Advanced tab's node table.
 
@@ -1233,6 +1331,12 @@ what silence means:
 A continuous topic with no message for 2 seconds is `STALE`; one with a publisher
 that never sent anything is `SILENT`. `STALE`, slow and not-advertised topics are
 yellow; `SILENT`, `MISSING` (not in the graph) and no-publisher topics are red.
+
+**Why these lines.** A single "silence is a fault" rule flagged 16 of 23 topics on
+a healthy car, so each topic has a class. The signed-off ranges call a stopped
+topic red; this table shows `STALE` and not-advertised in yellow, while the
+LiDAR and Odometry rows go red. Signed off by the professor as a starting value; see
+[Ranges at a glance](#ranges-at-a-glance).
 
 **On the page.** Key topics in the ROS Graph card, and the Advanced tab's topic
 table (click a row to see its live message).
