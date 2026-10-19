@@ -322,7 +322,13 @@
     grid-template-columns: 12px 1fr;
   }
 
-  .sys-values {
+  /* under the name, not in the dot's 12px column (one word a line) */
+  .sys-msg {
+    grid-column: 2;
+  }
+
+  .sys-values,
+  .sys-explain {
     grid-column: 1 / -1;
   }
 }
