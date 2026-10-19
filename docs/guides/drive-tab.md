@@ -274,6 +274,8 @@ The keys drive even with the Controls card closed. They do nothing while you are
 
 **The view looks wrong after rearranging.** Settings → **Reset all view settings**.
 
+**Nothing is Responding, All Nodes are down.** Likely Cause: Faulty Battery **Replace Battery**
+
 ## How a command reaches the car
 
 ```mermaid
