@@ -2,7 +2,7 @@
 
 How to drive a RoboRacer from the dashboard: what is on the screen, how to arm and drive, what stops the car, how to arrange the view, and how it works on a phone.
 
-This guide is for **people driving the car**. How the commands reach the motors, and where each piece lives in the code, is in [design/dashboard-drive-control.md](../design/dashboard-drive-control.md). The emergency stop has its own page, [design/emergency-stop.md](../design/emergency-stop.md).
+This guide is for **people driving the car**. How the commands reach the motors, and where each piece lives in the code, is in [design/dashboard-drive-control.md](../design/dashboard-drive-control.md). The emergency stop has its own page, [design/emergency-stop.md](../design/emergency-stop.md). The other tabs have their own guides: [Overview](overview-tab.md) and [Advanced](advanced-tab.md).
 
 ![The Drive tab, connected to F1-WSU-2, before arming](images/drive-tab/01-drive-tab.jpg)
 
