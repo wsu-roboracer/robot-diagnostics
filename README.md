@@ -116,7 +116,7 @@ Why each piece is built this way, and which file to change for each check, is in
 | [`prototype/`](prototype/) | **The dashboard.** The page (`dashboard.html`, `css/`, `js/`), the robot-side services (`system_diagnostics.py`, `camera_http.py`), the start script, tools for checking a car, and `tests/`. Its [README](prototype/README.md) maps every file |
 | [`docs/`](docs/) | User guides, the system overview, design docs, decisions (ADRs), research, sprint reviews. Its [README](docs/README.md) is the index |
 | [`diagnostic-hardware/`](diagnostic-hardware/) | The physical indicator: the PCB hat's Gerbers, EasyEDA project and layouts |
-| [`Engineering_Logs/`](Engineering_Logs/) | Each team member's log |
+| [`Engineering_Logs/`](Engineering_Logs/) | Team members' engineering logs |
 | [`Images/`](Images/) | Screenshots used in the logs and earlier docs |
 | [`.github/`](.github/) | The checks every pull request runs, and the pull request template |
 
@@ -136,6 +136,11 @@ The dashboard grew out of the ROS status prototype, which is why it lives in `pr
 - **Made a decision that is hard to reverse?** Record it as an ADR in [`docs/adr/`](docs/adr/).
 - **New documents** go in the matching folder in `docs/`, with lowercase-dash names and a line in [docs/README.md](docs/README.md).
 
-## Team
+## Contributors
 
-Alex, Luke and Saman, Weber State University. Each keeps a log in [`Engineering_Logs/`](Engineering_Logs/).
+- Saman Chapagain
+- Luke Peterson
+- Darrin Bracken
+- Alex Stapp
+
+Weber State University. Engineering logs are in [`Engineering_Logs/`](Engineering_Logs/).
