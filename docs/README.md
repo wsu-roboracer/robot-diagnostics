@@ -2,6 +2,12 @@
 
 Start with **[system-overview.md](system-overview.md)**: what the dashboard is, how it works, how to run it, and which file and setting to change for each check.
 
+## Guides: using the dashboard
+
+| Document | What it covers |
+|---|---|
+| [guides/drive-tab.md](guides/drive-tab.md) | Driving the car from the dashboard, with screenshots: arming, the controls, what stops the car, full screen, the LiDAR and warnings, arranging the view, limits, and driving on a phone |
+
 ## Design: how parts of the dashboard work
 
 | Document | What it covers |
