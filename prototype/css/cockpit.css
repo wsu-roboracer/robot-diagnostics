@@ -2307,8 +2307,8 @@ body:has(.cockpit.full:not([hidden])) {
   color: #e9ecef;
   font-size: 13.5px;
   font-weight: 700;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* no blur of its own: a blurred button inside a blurred card (or under
+     the Settings panel) can lose its contents in Chrome */
   transition: background-color .15s ease, border-color .15s ease, color .15s ease;
 }
 
