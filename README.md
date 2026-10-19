@@ -1,91 +1,53 @@
 # Robot Diagnostics
 
-Robot Diagnostics is a project for the Weber State University RoboRacer platform.
+A live health dashboard for the Weber State University **RoboRacer** (F1TENTH) cars. It runs on the car and shows, in any browser on the same Wi-Fi, whether the car is ready to drive and what is wrong when it is not: ROS nodes and topics, battery, computer temperatures and load, network and LiDAR, camera, controller, and every subsystem's health. It can also drive the car, with an emergency stop that works for everyone.
 
-The goal of this project is to make it easier to understand the current health of the robot and quickly identify problems with its different subsystems.
+![The dashboard's Overview tab](Images/dashboard-overview.png)
 
-## What This Project Does
+## Quick start
 
-The RoboRacer has several hardware and software components that need to work together correctly.
+**On a car** (the normal way). Copy the dashboard to the car once, then start it:
 
-When something fails, it can take time to figure out what is causing the problem. A user may need to manually check ROS nodes, sensors, network connections, controllers, battery information, cameras, or other hardware.
+```bash
+rsync -av ~/Desktop/robot-diagnostics/prototype/ f1-wsu-2@192.168.1.202:~/diag/
+ssh f1-wsu-2@192.168.1.202 '~/diag/start_diagnostics.sh'
+```
 
-This project is being developed to bring that information together into one diagnostic system.
+Then open `http://192.168.1.202:8000/dashboard.html`. Cars are F1-WSU-1 to F1-WSU-12 at `192.168.1.201` to `.212`; pick one from the robot list in the dashboard's top bar.
 
-The system should help users answer questions such as:
+**From your laptop, against a car**, without copying anything (handy while changing the page):
 
-- Is the robot connected to the network?
-- Are the required ROS nodes running?
-- Is the controller connected?
-- Is the camera working?
-- Is the LiDAR available?
-- What is the battery status?
-- Which subsystem is causing a problem?
+```bash
+cd prototype
+python3 -m http.server 8000
+# open http://localhost:8000/dashboard.html?url=ws://192.168.1.202:9090
+```
 
-## Who This Is For
+**Checks with no robot:** `node prototype/tests/run.mjs` runs every logic check and prints PASS or FAIL for each.
 
-This project is intended for people who work with the Weber State RoboRacer platform, including:
+The full guide to running it, every check it makes, and which file to change for each is **[docs/system-overview.md](docs/system-overview.md)**.
 
-- Students using the robots in labs
-- Instructors setting up and troubleshooting the robots
-- Researchers working with the RoboRacer platform
-- Developers working on RoboRacer software and hardware
+## Where things live
 
-## Problem We Are Solving
+| Folder | What is in it |
+|---|---|
+| [`prototype/`](prototype/) | **The dashboard.** The page (`dashboard.html`, `css/`, `js/`), the robot-side services (`system_diagnostics.py`, `camera_http.py`), the start script, tools for checking a car, and `tests/`. Its [README](prototype/README.md) maps every file |
+| [`docs/`](docs/) | How it works and why: the system overview, design docs, decisions (ADRs), research, sprint reviews. Its [README](docs/README.md) is an index |
+| [`diagnostic-hardware/`](diagnostic-hardware/) | The physical indicator: the PCB hat's Gerbers, EasyEDA project and layouts |
+| [`Engineering_Logs/`](Engineering_Logs/) | Each team member's log |
+| [`Images/`](Images/) | Screenshots used by the README and the logs |
 
-Troubleshooting the RoboRacer currently requires checking different parts of the system separately.
+The dashboard grew out of the ROS status prototype, which is why it lives in `prototype/`. That folder is the working dashboard.
 
-This can make it difficult to quickly determine whether a problem is caused by software, networking, sensors, hardware, or another subsystem.
+## Why this exists
 
-The goal of Robot Diagnostics is to provide an at-a-glance view of the robot's condition so users know where to begin troubleshooting.
+When a RoboRacer misbehaves, the cause can be anywhere: a ROS node that did not start, a flat battery, a lost Wi-Fi link, an unplugged LiDAR, a controller that will not pair. Finding it meant checking each part separately, by hand. This project brings all of it onto one screen, so anyone using the cars (students in labs, instructors setting them up, anyone developing on them) knows where to start.
 
-Subsystems may report states such as:
+Each subsystem reports one of four states: **Healthy**, **Degraded**, **Failed** or **Unknown**. Unknown means the dashboard cannot tell yet (for example, nothing has reported); it does not mean failed.
 
-- Healthy
-- Degraded
-- Failed
-- Unknown
+## Working on it
 
-An `Unknown` state means the system cannot currently determine the condition of that subsystem. It does not automatically mean the subsystem has failed.
-
-## Current Status
-
-The project is currently in the research, design, and early prototype stage.
-
-Current work includes:
-
-- Researching common RoboRacer failure modes
-- Identifying important robot subsystems
-- Defining subsystem health states
-- Researching ROS status information
-- Designing and testing dashboard mockups
-- Building an early diagnostic prototype
-- Deciding how diagnostic information should be presented
-
-The final architecture is still being evaluated.
-
-Possible approaches include:
-
-- Web application
-- Status server
-- Physical status indicator
-
-Architecture decisions will be documented in `docs/adr/`.
-
-## How It Works
-
-[docs/system-overview.md](docs/system-overview.md) explains how the dashboard works, how to run it on a robot or from `prototype/` for testing, and which file and setting to change for each check.
-
-## Repository Structure
-
-```text
-robot-diagnostics/
-├── docs/
-│   └── adr/
-├── Engineering_Logs/
-├── Images/
-├── prototype/
-├── scripts/
-├── src/
-├── tests/
-└── README.md
+- Each part of the page has its own files: see [prototype/README.md](prototype/README.md) for the scripts and [prototype/css/README.md](prototype/css/README.md) for the styles.
+- Run `node prototype/tests/run.mjs` before opening a pull request. Pull requests run it automatically too.
+- Record a decision that is hard to reverse as an ADR in [`docs/adr/`](docs/adr/).
+- New documents go in the matching folder in `docs/`, with lowercase-dash names, and a line in [docs/README.md](docs/README.md).
