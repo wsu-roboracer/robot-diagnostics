@@ -776,7 +776,7 @@ this measurement unreproducible.
 ### Robot #2: WiFi, thermal trip points and CPU power mode (2026-09-21)
 
 Taken to support the green, yellow and red ranges proposed in
-[instructor-interview.md](instructor-interview.md) (#6). All read-only, no sudo except
+[instructor-interview.md](../meetings/instructor-interview.md) (#6). All read-only, no sudo except
 `nvpmodel`. Robot #2, idle, bringup state not recorded.
 
 **WiFi** (`wlP1p1s0`, `192.168.1.202`, gateway `192.168.1.1`). Every source works without sudo.
@@ -1043,7 +1043,7 @@ PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a chang
   fps by eye. Not measured. The research doc measured the ROS colour topic at 25 to 28 fps.
 - **This is not the design the spike recommended** (a compressed topic through rosbridge, see
   block C), and it sidesteps the raw-frame limits: the 2.76 MB frames never touch rosbridge.
-- **How the server is built.** [Camera Streaming Research](Camera%20Streaming%20Research.pdf)
+- **How the server is built.** [Camera Streaming Research](camera-streaming-research.pdf)
   (PR #36) documents it. `gst-launch-1.0` reads the RealSense colour stream straight from its
   V4L2 device, `/dev/video4`, encodes each frame as JPEG and serves it on TCP port 8081. A small
   Python HTTP server, `/tmp/camera_http.py`, reads that port and serves it as
@@ -1142,7 +1142,7 @@ PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a chang
 
 ### What to do with the results
 
-Every block writes a file. `scp` the directory back and fold the numbers into Section 3 and Section 4, then update `docs/subsystem-inventory.md` in the same pass - **the `[MEASURE]` and `[CONFIRM]` tags in #1 are the point of the exercise**, and a measurement that stays in a text file on the robot has not closed anything.
+Every block writes a file. `scp` the directory back and fold the numbers into Section 3 and Section 4, then update `docs/design/subsystem-inventory.md` in the same pass - **the `[MEASURE]` and `[CONFIRM]` tags in #1 are the point of the exercise**, and a measurement that stays in a text file on the robot has not closed anything.
 
 ---
 
@@ -1272,7 +1272,7 @@ Message arrival detects the same failure in under a second.
 
 ### #3 - ADR, web app vs status server vs physical indicator
 
-[ADR 0001](adr/0001-Diagonstics_form.md) has since proposed the web app. The points below still apply to it.
+[ADR 0001](../adr/0001-diagnostics-form.md) has since proposed the web app. The points below still apply to it.
 
 **1. The web app is viable and cheaper than it looks.** rosbridge is already a declared dependency, already installed, and works. The browser needs no ROS install and no message packages. Verified end to end on real hardware.
 
@@ -1290,7 +1290,7 @@ Message arrival detects the same failure in under a second.
 - **Carry a topic class** (`continuous` / `event` / `latched` / `input`). Without it a healthy car reads as 16 broken topics.
 - **Carry `depends_on`**, as #1 already recommends. S-09 failing takes S-01, S-10 and S-15 with it in the same instant.
 - **Distinguish "check could not run" from "check passed"**, per #1's `unknown`. S-11, S-13 and parts of S-15 are only meaningful while moving.
-- **The thresholds are proposed in [instructor-interview.md](instructor-interview.md)**, one row
+- **The thresholds are proposed in [instructor-interview.md](../meetings/instructor-interview.md)**, one row
   per item in the professor's top band, with the basis for each number. He has signed off on
   them, and the rows marked *convention* have no measurement behind them. That document also
   lists where each item's data comes from and where its range is defined.

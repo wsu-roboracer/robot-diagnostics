@@ -1,6 +1,6 @@
 # Diagnostics dashboard prototype
 
-Proof of concept from the ROS status spike (#2). Its only job was to show that a web page can display live robot health, so it is scrappy on purpose and not the final tool. The findings are in [docs/ros-status-spike-summary.md](../docs/ros-status-spike-summary.md).
+Proof of concept from the ROS status spike (#2). Its only job was to show that a web page can display live robot health, so it is scrappy on purpose and not the final tool. The findings are in [docs/research/ros-status-spike-summary.md](../docs/research/ros-status-spike-summary.md).
 
 The page is read-only apart from one button, and changes nothing on the car. It shows which nodes are running, which topics are actually publishing, battery voltage, the mux's active control input, everything on `/diagnostics`, a live `/rosout` warning and error feed, and an OS-level system panel. Click a topic row to see its real message data.
 

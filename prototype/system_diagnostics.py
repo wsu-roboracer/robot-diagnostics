@@ -51,7 +51,7 @@ except ImportError:
 OK, WARN, ERROR, STALE = 0, 1, 2, 3
 
 # Thresholds signed off with the professor in issue #6; the basis for each is
-# in docs/instructor-interview.md. Measured idle values are noted so a change
+# in docs/meetings/instructor-interview.md. Measured idle values are noted so a change
 # can be checked against them. The VESC FET range is judged in the page
 # (FET_WARN / FET_ERR in the page's config.js), the CPU range inside cpu().
 TJ_WARN, TJ_ERR = 70.0, 85.0        # board temperature, C. Idle about 50 C; the board

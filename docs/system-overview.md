@@ -26,10 +26,10 @@ it.
 
 Every green / yellow / red range, and why it was chosen, is in this document: all
 of them in [Ranges at a glance](#ranges-at-a-glance), and each one again under its
-check. For history only: [instructor-interview.md](instructor-interview.md) is the
+check. For history only: [instructor-interview.md](meetings/instructor-interview.md) is the
 record of the interview where the professor signed off on the ranges, and
-[ros-status-spike-notes.md](ros-status-spike-notes.md) and
-[ros-status-spike-summary.md](ros-status-spike-summary.md) hold the raw
+[ros-status-spike-notes.md](research/ros-status-spike-notes.md) and
+[ros-status-spike-summary.md](research/ros-status-spike-summary.md) hold the raw
 measurements. This document does not need them to be read.
 
 ## How it works

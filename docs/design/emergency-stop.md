@@ -136,8 +136,8 @@ This is also step 6 of the first-drive checklist in
 
 | File | What it does |
 |---|---|
-| [`prototype/js/estop.js`](../prototype/js/estop.js) | The button and banner. Calls `emergency_stop` / `emergency_release` and reads `system: E-stop` from `/diagnostics` |
-| [`prototype/system_diagnostics.py`](../prototype/system_diagnostics.py) | The robot side: `emergency_stop`, `emergency_release`, the 50 Hz `estop_hold`, `estop_status`, `parse_pgrep` |
-| [`prototype/dashboard.html`](../prototype/dashboard.html) | The `estopBtn` button in the top bar and the `estopBar` banner |
-| [`prototype/js/drive.js`](../prototype/js/drive.js) | Disarms the web controller and refuses to arm while E-STOP is on, and shows it in *Who's driving* |
-| [`prototype/css/topbar.css`](../prototype/css/topbar.css) | Styling: section 2, "Emergency stop button and banner", including keeping the button visible on phones |
+| [`prototype/js/estop.js`](../../prototype/js/estop.js) | The button and banner. Calls `emergency_stop` / `emergency_release` and reads `system: E-stop` from `/diagnostics` |
+| [`prototype/system_diagnostics.py`](../../prototype/system_diagnostics.py) | The robot side: `emergency_stop`, `emergency_release`, the 50 Hz `estop_hold`, `estop_status`, `parse_pgrep` |
+| [`prototype/dashboard.html`](../../prototype/dashboard.html) | The `estopBtn` button in the top bar and the `estopBar` banner |
+| [`prototype/js/drive.js`](../../prototype/js/drive.js) | Disarms the web controller and refuses to arm while E-STOP is on, and shows it in *Who's driving* |
+| [`prototype/css/topbar.css`](../../prototype/css/topbar.css) | Styling: section 2, "Emergency stop button and banner", including keeping the button visible on phones |

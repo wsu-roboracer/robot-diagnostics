@@ -31,7 +31,7 @@ const CLIENT_LIMIT = 10;
 const PUBLISH_STALE_MS = 8000;
 
 /* Battery lines signed off with the professor (issue #6,
-   docs/instructor-interview.md). Yellow below 11.6 V is a buffer: the
+   docs/meetings/instructor-interview.md). Yellow below 11.6 V is a buffer: the
    pack still runs fine, get a replacement ready. Red below 11.1 V (3.7 V
    per cell) means replace the pack soon - a run-down test showed the
    pack falls off a cliff below about 10 V. The % estimate runs from
