@@ -24,7 +24,7 @@ Start with **[system-overview.md](system-overview.md)**: what the dashboard is, 
 | [hardware/physical-implementation.md](hardware/physical-implementation.md) | The physical indicator: LEDs and a display on a PCB hat on the Orin's 40-pin header |
 | [hardware/physical-mount-considerations.pdf](hardware/physical-mount-considerations.pdf) | Where and how to mount it on the car |
 
-The PCB hat's design files (Gerber, EasyEDA project, layouts) are in [`diagnostic-hardware/`](../diagnostic-hardware/).
+The PCB hat's design files (Gerber, EasyEDA project, layouts) are in [`diagnostic-hardware/`](../diagnostic-hardware).
 
 ## Research
 
