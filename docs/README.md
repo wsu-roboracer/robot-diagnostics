@@ -6,7 +6,9 @@ Start with **[system-overview.md](system-overview.md)**: what the dashboard is, 
 
 | Document | What it covers |
 |---|---|
+| [guides/overview-tab.md](guides/overview-tab.md) | Reading the first page, with screenshots: the status banner, battery and computer tiles, subsystems, ROS graph, camera, LiDAR, what each colour means, and every threshold in one table |
 | [guides/drive-tab.md](guides/drive-tab.md) | Driving the car from the dashboard, with screenshots: arming, the controls, what stops the car, full screen, the LiDAR and warnings, arranging the view, limits, and driving on a phone |
+| [guides/advanced-tab.md](guides/advanced-tab.md) | Finding out why something is wrong: needs attention, the car's own checks, nodes, topics and their states, the joystick check, and the warning log |
 
 ## Design: how parts of the dashboard work
 
