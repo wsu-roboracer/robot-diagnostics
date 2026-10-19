@@ -15,7 +15,14 @@
   } catch (error) {}
 </script>
 
-<link rel="stylesheet" href="css/dashboard.css">
+<!-- One stylesheet per area of the page, loaded in this order (later
+     files may override earlier ones). css/README.md says what is where. -->
+<link rel="stylesheet" href="css/base.css">      <!-- colours, reset, icons, shared buttons -->
+<link rel="stylesheet" href="css/topbar.css">    <!-- top bar, emergency stop, status banner, tabs, footer -->
+<link rel="stylesheet" href="css/overview.css">  <!-- Overview tab, the LiDAR card and its radar panel -->
+<link rel="stylesheet" href="css/drive.css">     <!-- the Drive tab's own cards and the unlock dialogs -->
+<link rel="stylesheet" href="css/advanced.css">  <!-- Advanced tab -->
+<link rel="stylesheet" href="css/cockpit.css">   <!-- the driving view: Drive tab and full screen -->
 </head>
 
 <body>
@@ -32,11 +39,24 @@
       <strong id="connLabel">CONNECTING...</strong>
     </span>
 
-    <input id="wsUrl" spellcheck="false"
-           aria-label="rosbridge address"
-           title="rosbridge WebSocket address — press Enter or Connect">
+    <!-- one joined field: pick a car (ROBOTS in config.js), its address
+         fills in and stays editable for any other one, then Connect -->
+    <div class="conn-field">
+      <label class="conn-robot" title="Pick a robot to connect to">
+        <i data-icon="car"></i>
+        <select class="robot-pick" id="robotPick" aria-label="Robot"></select>
+        <i class="conn-caret" data-icon="chevronDown"></i>
+      </label>
 
-    <button class="top-btn" id="connectBtn" type="submit">Connect</button>
+      <label class="conn-addr">
+        <i data-icon="link"></i>
+        <input id="wsUrl" spellcheck="false"
+               aria-label="rosbridge address"
+               title="rosbridge WebSocket address — edit it, then press Enter or Connect">
+      </label>
+
+      <button class="conn-go" id="connectBtn" type="submit"><i data-icon="plug"></i><span>Connect</span></button>
+    </div>
 
     <!-- phones/tablets only: folds the bar down to status + tabs -->
     <button class="top-btn topbar-toggle" id="topbarToggle" type="button"
@@ -331,7 +351,7 @@
       </div>
     </div>
 
-    <div class="live-card">
+    <div class="live-card lidar-card" data-view="lines">
       <h2>
         <span>LiDAR</span>
         <span class="live-tag" id="lidarTag">waiting</span>
@@ -419,12 +439,10 @@
       </div>
 
       <div class="lidar-legend" data-view="lines" aria-label="Colour key">
-        <span class="only-detailed"><i class="sw sw-near"></i>Very close (under 0.5 m)</span>
-        <span class="only-detailed"><i class="sw sw-close"></i>Close (under 1 m)</span>
-        <span class="only-detailed"><i class="sw sw-far"></i>Far away</span>
-        <span class="only-detailed"><i class="sw sw-free"></i>Open space</span>
-        <span class="only-detailed"><i class="sw sw-ghost"></i>Where things were 1 s ago</span>
-        <span class="only-detailed"><i class="sw sw-moved"></i>Moving toward the car</span>
+        <span class="only-detailed"><i class="sw sw-hit"></i>A LiDAR return</span>
+        <span class="only-detailed"><i class="sw sw-obj-warn"></i>Obstacle under 1 m</span>
+        <span class="only-detailed"><i class="sw sw-obj-danger"></i>Obstacle under 0.3 m</span>
+        <span class="only-detailed"><i class="sw sw-blindarea"></i>Rear blind area</span>
         <span class="only-lines"><i class="sw sw-line"></i>Green line: outline of everything the LiDAR sees</span>
         <span class="only-lines"><i class="sw sw-ring-near"></i>Red circle: very close (0.5 m)</span>
         <span class="only-lines"><i class="sw sw-ring-close"></i>Amber circle: close (1 m)</span>
@@ -432,7 +450,32 @@
       </div>
 
 
-      <!-- closest return in each direction, with the trend over ~1 s -->
+      <!-- DETAILED VIEW (radar.js): what is close, in words -->
+      <div class="radar-panel">
+        <div class="radar-banner none" id="radarBanner" role="status">WAITING FOR /scan</div>
+
+        <div class="radar-sub">Closest in each direction</div>
+        <ul class="radar-sectors" id="radarSectors"></ul>
+
+        <div class="radar-sub">Nearest objects</div>
+        <ol class="radar-objects" id="radarObjects"></ol>
+
+        <div class="radar-foot">
+          <span>Scan rate <b id="radarRate">—</b></span>
+          <span class="radar-legend-note">Danger &lt; 0.30 m · Warn &lt; 1.00 m</span>
+        </div>
+
+        <div class="radar-options">
+          <label class="radar-check"><input type="checkbox" id="radarSweep" checked> Sweep line</label>
+        </div>
+
+        <label class="radar-mask">
+          <span>Ignore angles (your own robot), degrees, + is left</span>
+          <input type="text" id="radarMask" spellcheck="false" placeholder="e.g. 120:135, -135:-120">
+        </label>
+      </div>
+
+      <!-- LINES VIEW: closest return in each direction, with the trend over ~1 s -->
       <div class="sector-grid">
         <div class="sector">
           <span class="sector-k">Ahead</span>
@@ -670,12 +713,10 @@
           </div>
 
           <div class="lidar-legend" data-view="lines" aria-label="Colour key">
-            <span class="only-detailed"><i class="sw sw-near"></i>Very close (under 0.5 m)</span>
-            <span class="only-detailed"><i class="sw sw-close"></i>Close (under 1 m)</span>
-            <span class="only-detailed"><i class="sw sw-far"></i>Far away</span>
-            <span class="only-detailed"><i class="sw sw-free"></i>Open space</span>
-            <span class="only-detailed"><i class="sw sw-ghost"></i>Where things were 1 s ago</span>
-            <span class="only-detailed"><i class="sw sw-moved"></i>Moving toward the car</span>
+            <span class="only-detailed"><i class="sw sw-hit"></i>A LiDAR return</span>
+            <span class="only-detailed"><i class="sw sw-obj-warn"></i>Obstacle under 1 m</span>
+            <span class="only-detailed"><i class="sw sw-obj-danger"></i>Obstacle under 0.3 m</span>
+            <span class="only-detailed"><i class="sw sw-blindarea"></i>Rear blind area</span>
         <span class="only-lines"><i class="sw sw-line"></i>Green line: outline of everything the LiDAR sees</span>
         <span class="only-lines"><i class="sw sw-ring-near"></i>Red circle: very close (0.5 m)</span>
         <span class="only-lines"><i class="sw sw-ring-close"></i>Amber circle: close (1 m)</span>
@@ -1493,6 +1534,7 @@
 <script src="js/estop.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/cockpit.js"></script>
+<script src="js/radar.js"></script>
 <script src="js/main.js"></script>
 
 </body>

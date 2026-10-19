@@ -12,7 +12,7 @@ Track 2 - robot-diagnostics. Work for issue #6.
 > open.
 >
 > Measurements from the robot and the detail behind the proposals live in the
-> [spike notes](ros-status-spike-notes.md) and [summary](ros-status-spike-summary.md). This
+> [spike notes](../research/ros-status-spike-notes.md) and [summary](../research/ros-status-spike-summary.md). This
 > document keeps to what he said and what we decided from it.
 
 > **Key ranges**, signed off by the professor. The full table, with a basis for every number,
@@ -65,7 +65,7 @@ the robot's `~/.bashrc`, plus driving the car with the controller and reading wh
 | `r2t` (`ros2 topic list`) | Which topics exist | Whether messages are flowing. A dead node's topic lingers for about 18 s |
 | `joy` (`ros2 topic echo /joy`) | Controller input reaching ROS | Silent both with no controller and when ROS cannot open the pad |
 | `joystick_test` (`jstest /dev/input/js0`) | The pad works at the OS level | It passes when ROS still cannot read the pad |
-| `lidar` (`ping 192.168.0.10`) | The lidar answers on its Ethernet link | Whether it is scanning, or scanning sensibly. It passes while the lidar driver cannot connect, see [the notes](ros-status-spike-notes.md#robot-2-the-lidars-single-connection-and-orphaned-nodes-2026-09-21) |
+| `lidar` (`ping 192.168.0.10`) | The lidar answers on its Ethernet link | Whether it is scanning, or scanning sensibly. It passes while the lidar driver cannot connect, see [the notes](../research/ros-status-spike-notes.md#robot-2-the-lidars-single-connection-and-orphaned-nodes-2026-09-21) |
 | `cam` | Starts the camera | Nothing checks it once started |
 | Nothing set up | | **Battery, WiFi, CPU, GPU and temperatures have no alias or documented check** |
 
@@ -98,7 +98,7 @@ not a ranking.
 
 - Each item shows **green for good, yellow for "eh", red for bad**. This is the same
   Healthy / Degraded / Failed vocabulary as the
-  [subsystem inventory](subsystem-inventory.md).
+  [subsystem inventory](../design/subsystem-inventory.md).
 - All of the items above sit **at the top**. Deeper subsystem detail stays available for
   anyone who wants to go further, but is not the first thing on the page.
 
@@ -153,9 +153,9 @@ Take a picture and see it on the dashboard. **Live video would be a bonus.**
   served from port 8082 on the robot, with **Connect Camera** and **Take Picture** buttons. It
   looks like 10 to 20 fps by eye, not measured. It skips ROS image topics and rosbridge, which
   is why the raw-frame limits above do not apply. The video server is a temporary setup on the
-  robot, described in [Camera Streaming Research](Camera%20Streaming%20Research.pdf), and it is
+  robot, described in [Camera Streaming Research](../research/camera-streaming-research.pdf), and it is
   not saved anywhere shared. See
-  [the notes](ros-status-spike-notes.md#camera-feature-as-merged-pr-35-2026-09-21).
+  [the notes](../research/ros-status-spike-notes.md#camera-feature-as-merged-pr-35-2026-09-21).
 
 ### Lidar radar view
 
@@ -199,7 +199,7 @@ powered.
 Every source for this works without sudo on robot #2, and the readings there were clean (0%
 packet loss, 1.4 to 3.2 ms round trip, -41 to -43 dBm). The sources, the measurements, and the
 design notes are in
-[the spike notes](ros-status-spike-notes.md#robot-2-wifi-thermal-trip-points-and-cpu-power-mode-2026-09-21).
+[the spike notes](../research/ros-status-spike-notes.md#robot-2-wifi-thermal-trip-points-and-cpu-power-mode-2026-09-21).
 
 Recommend replacing the dropped S-16 with a WiFi check covering signal, round trip, packet
 loss and the send and receive rates, rather than reviving the old reachability wording. Needs
@@ -238,7 +238,7 @@ a decision from the team, since IDs are not renumbered.
 
 The professor signed off on every row. **Basis** says where the numbers come from, and rows
 marked *convention* have no measurement behind them, so they are the first to revisit if real
-use disagrees. The measurements are in [the spike notes](ros-status-spike-notes.md).
+use disagrees. The measurements are in [the spike notes](../research/ros-status-spike-notes.md).
 
 | Item | Green | Yellow | Red | Basis |
 |---|---|---|---|---|
@@ -273,13 +273,13 @@ leave much less than those five minutes. The car also kept running below the rou
 #1 says LiPo damage starts, so nothing on the car protects the pack, and the dashboard's red is
 the only warning a student gets. Red therefore moves up to #1's own 11.1 V floor. The
 2026-09-09 dropout at 10.9 V was most likely not the pack. Details and caveats are in
-[the notes](ros-status-spike-notes.md#robot-2-battery-run-down-test-2026-09-21).
+[the notes](../research/ros-status-spike-notes.md#robot-2-battery-run-down-test-2026-09-21).
 
 ## Where the data comes from, and where each range lives
 
 The table below describes the code at the time of the interview, and most of the gaps it lists have
 since been closed. The current version, with every file and constant, is in
-[system-overview.md](system-overview.md#what-changes-what).
+[system-overview.md](../system-overview.md#what-changes-what).
 
 The professor asked for this so the ranges can be changed later without digging through code.
 Each item below says where its data comes from and where its range is defined.
@@ -304,7 +304,7 @@ Three things to know first:
 | **CPU load** | `/proc/loadavg`, the 1 minute average, and the core count. Published as `system: CPU` | Inside `cpu()` in `system_diagnostics.py`, with no named constant: yellow above the core count, red above twice it | Yes |
 | **RAM** | `MemAvailable` in `/proc/meminfo`. Published as `system: Memory` | `MEM_WARN, MEM_ERR = 20.0, 10.0` (percent available) in `system_diagnostics.py` | Yes |
 | **GPU load** | `tegrastats`, the `GR3D_FREQ` field. The node already runs `tegrastats` for the power rails | Not defined | **Not built.** Nothing publishes GPU load yet |
-| **WiFi** signal, loss, round trip, traffic | `iw dev wlP1p1s0 link` and `/proc/net/wireless` for signal, `ping` to the default gateway for loss and round trip, and `/sys/class/net/wlP1p1s0/statistics/*` for traffic and errors. Full list in [the notes](ros-status-spike-notes.md#robot-2-wifi-thermal-trip-points-and-cpu-power-mode-2026-09-21) | Not defined | **Not built.** The Network tile already looks for a `wifi signal` value and draws dBm on a bar, but nothing publishes one, so it shows a count of links that are up |
+| **WiFi** signal, loss, round trip, traffic | `iw dev wlP1p1s0 link` and `/proc/net/wireless` for signal, `ping` to the default gateway for loss and round trip, and `/sys/class/net/wlP1p1s0/statistics/*` for traffic and errors. Full list in [the notes](../research/ros-status-spike-notes.md#robot-2-wifi-thermal-trip-points-and-cpu-power-mode-2026-09-21) | Not defined | **Not built.** The Network tile already looks for a `wifi signal` value and draws dBm on a bar, but nothing publishes one, so it shows a count of links that are up |
 | **Nodes** | `/rosapi/nodes` over rosbridge, compared with the list of nodes bringup starts | `EXPECTED_NODES` in `dashboard.html`. Edit it if bringup changes | The list and the count are there. How a missing node is coloured was not checked |
 | **Topics** | rosbridge subscriptions, throttled. Each topic has a class (continuous, event, latched, input) that decides whether silence is a fault | `TOPICS` in `dashboard.html` for the classes, and the page's `classifyTopic()` for the states | Partly. No table of expected rates was found, so "SLOW, below half the expected rate" is not evidently applied. Rates shown come from throttled subscriptions and read low |
 | **Lidar** rate | The lidar driver, `urg_node`, which publishes "Laser Scan topic status" (actual, target and acceptable rates) on `/diagnostics` | `diagnostics_tolerance: 0.05` (40 Hz within 5%, so 38 to 42 Hz) and `diagnostics_window_time: 5.0` in `sensors.yaml`. A bringup restart applies a change | **No.** The page does not read those bounds. Its lidar tile uses whether `/urg_node` is running and the `/scan` state |

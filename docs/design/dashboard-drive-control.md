@@ -374,7 +374,7 @@ in `localStorage` under the key `driveCam`.
 | `prototype/js/graph-data.js` | `onDiagnostics()`: sets `mux` (`teleop` / `autonomous` / `idle`) from the `ackermann_mux` status |
 | `prototype/js/metrics.js` | `updateSpeed()` from `/odom`, and `drawScanCanvas()`, used by the Surroundings view |
 | `prototype/dashboard.html` | The Drive tab markup (`#panelDrive`) |
-| `prototype/css/dashboard.css` | The "DRIVE TAB" section: layout, pad, camera overlay, vitals |
+| `prototype/css/drive.css`, `prototype/css/cockpit.css` | The Drive tab's own cards (layout, pad, camera overlay, vitals), and the driving view on top of them |
 
 The main functions in `drive.js`:
 

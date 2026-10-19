@@ -26,10 +26,10 @@ it.
 
 Every green / yellow / red range, and why it was chosen, is in this document: all
 of them in [Ranges at a glance](#ranges-at-a-glance), and each one again under its
-check. For history only: [instructor-interview.md](instructor-interview.md) is the
+check. For history only: [instructor-interview.md](meetings/instructor-interview.md) is the
 record of the interview where the professor signed off on the ranges, and
-[ros-status-spike-notes.md](ros-status-spike-notes.md) and
-[ros-status-spike-summary.md](ros-status-spike-summary.md) hold the raw
+[ros-status-spike-notes.md](research/ros-status-spike-notes.md) and
+[ros-status-spike-summary.md](research/ros-status-spike-summary.md) hold the raw
 measurements. This document does not need them to be read.
 
 ## How it works
@@ -1188,7 +1188,7 @@ browser or device starts from the defaults.
 | Edge light directions | `js/cockpit.js` | `COCKPIT_GLOW_SECTORS` |
 | Speed units | `js/cockpit.js` | `SPEED_UNITS` |
 | Saved settings that Reset clears | `js/cockpit.js` | `VIEW_KEYS` |
-| The look (sizes, colours, the frosted style) | `css/dashboard.css` | the `cockpit` rules |
+| The look (sizes, colours, the frosted style) | `css/cockpit.css` | its contents list at the top |
 | The markup (buttons, Settings panel) | `dashboard.html` | the `cockpit` element |
 
 ### Driving from the page
@@ -1424,9 +1424,15 @@ example `f1-wsu-6`), from Python's `getpass.getuser()`; every robot's hostname i
 
 ```bash
 cd prototype
-node verify_radar.mjs                       # LiDAR plot geometry
-node verify_testing.mjs                     # Select beams index and angle math
-node verify_system.mjs                      # system panel, joystick check, connection banners
+node tests/run.mjs                          # everything below, with a pass/fail summary
+```
+
+Or run any one on its own:
+
+```bash
+node tests/verify_radar.mjs                 # LiDAR plot geometry
+node tests/verify_testing.mjs               # Select beams index and angle math
+node tests/verify_system.mjs                # system list, joystick check, connection banners
 python3 camera_http.py --self-test          # camera frame splitting, newest-frame relay, frame rate
 python3 system_diagnostics.py --self-test   # emergency stop and controller disconnect logic
 ```
@@ -1565,7 +1571,7 @@ Almost everything added only reads. The exceptions:
 
 ### The page
 
-`dashboard.html` is the markup. It loads `css/dashboard.css` and the files in
+`dashboard.html` is the markup. It loads the stylesheets in `css/` (one per area; see `css/README.md`) and the files in
 `js/` in a fixed order; they share one scope, so `config.js` must load first and
 `main.js` last.
 

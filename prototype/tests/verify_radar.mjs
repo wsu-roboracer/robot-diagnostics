@@ -7,9 +7,11 @@ import fs from 'fs';
 
 // The page's logic is split across js/*.js, loaded by dashboard.html in order.
 // Read them the same way so this keeps working if a function moves files.
-const html = fs.readFileSync('dashboard.html', 'utf8');
+// Paths are from this file, so the check runs from any folder.
+const page = f => new URL('../' + f, import.meta.url);
+const html = fs.readFileSync(page('dashboard.html'), 'utf8');
 const src = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)]
-  .map(m => fs.readFileSync(m[1], 'utf8'))
+  .map(m => fs.readFileSync(page(m[1]), 'utf8'))
   .join('\n');
 
 const geoStart = src.indexOf('function isValidRange');
