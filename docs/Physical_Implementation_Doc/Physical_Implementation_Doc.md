@@ -11,14 +11,14 @@ The 40-pin header has only about 20–25 usable GPIO pins, and many are shared w
 
 ### Recommended approach: addressable RGB LEDs (WS2812B / "NeoPixel" style)
 
-![LED Panel](../Images/LED%20Pane.png)
+![LED Panel](../../Images/LED%20Panel.png)
 
 * Each LED has a tiny driver chip inside. LEDs are **chained in series**: data goes in one end, and each LED passes it to the next.
 * The whole chain needs only **3 wires**: 5 V, GND, and 1 data line. This works for 5 LEDs or hundreds of LEDs.
 * Each LED can display any color (green/yellow/red) and any pattern. This satisfies the **future matrix** goals without requiring additional GPIO pins.
 * **Caveat:** These LEDs expect a 5 V data signal, while the Orin outputs 3.3 V. Add a small **level shifter** (e.g., 74AHCT125) on the PCB. This is inexpensive and requires only one chip.
 
-![Level Shifter](../Images/LevelShifter.jpg)
+![Level Shifter](../../Images/LevelShifter.jpg)
 
 * **Caveat 2:** The Orin's data pin must generate precise timing. A plain GPIO can be unreliable for this on Linux. Two common approaches are:
 
@@ -48,4 +48,4 @@ All of it fits on **one PCB** with a single 40-pin connector (or a ribbon cable)
 * **Mounting:** Keep the hat clear of the fan. Use standoffs attached to the board's mounting holes, and take caliper measurements before finalizing the PCB outline.
 
 ### Sketch
-[View the Document (PDF)](../Images/PCB_Hat_Designs/PCB_Hat_designs_enhanced.pdf)
+[View the Document (PDF)](../../Images/PCB_Hat_Designs/PCB_Hat_designs_enhanced.pdf)

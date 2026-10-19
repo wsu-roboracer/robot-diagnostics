@@ -1,2 +1,19 @@
+# Python
 __pycache__/
 *.pyc
+
+# Node (only if someone installs test tooling locally)
+node_modules/
+
+# macOS and editors
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Local tool settings
+.claude/
+
+# Logs and captures from running things locally
+*.log
+baseline.txt
