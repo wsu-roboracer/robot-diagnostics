@@ -6,9 +6,11 @@ import fs from 'fs';
 
 // Same technique as verify_radar.mjs: concatenate the page's scripts
 // in the order dashboard.html loads them.
-const html = fs.readFileSync('dashboard.html', 'utf8');
+// Paths are from this file, so the check runs from any folder.
+const page = f => new URL('../' + f, import.meta.url);
+const html = fs.readFileSync(page('dashboard.html'), 'utf8');
 const src = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)]
-  .map(m => fs.readFileSync(m[1], 'utf8'))
+  .map(m => fs.readFileSync(page(m[1]), 'utf8'))
   .join('\n');
 
 // selectionStats calls isValidRange, defined back in connection.js —

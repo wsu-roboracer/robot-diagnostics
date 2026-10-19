@@ -1123,7 +1123,7 @@ PR #33 rewrote the dashboard, which is now 5,372 lines, and PR #34 undid a chang
   (clamped 2-12 m) so a doorway does not zoom to a dot and an open hallway does not shrink a
   near wall to nothing. The geometry - `isValidRange()` and `polarToCanvas()` in
   `dashboard.html` - is checked with no browser or robot needed by
-  `prototype/verify_radar.mjs` (`node verify_radar.mjs`).
+  `prototype/tests/verify_radar.mjs` (`node tests/verify_radar.mjs`).
 - **Building it found a real bug in the summary stats that were already shipping.** A
   "no-return" beam on this Hokuyo does not come back as `inf` or `NaN`, and is not clipped to
   `range_max` - measured on the robot 2026-09-23, it reads back as **~65.5 m**, the raw SCIP
@@ -1336,7 +1336,7 @@ open http://192.168.1.202:8000/dashboard.html
 
 ### Without a robot
 
-The Docker setup with fake nodes was not kept. `node prototype/verify_system.mjs` still checks the page's system panel with no robot.
+The Docker setup with fake nodes was not kept. `node prototype/tests/verify_system.mjs` still checks the page's system panel with no robot.
 
 ### Untried fixes for the broken snap
 

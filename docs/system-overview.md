@@ -1424,9 +1424,15 @@ example `f1-wsu-6`), from Python's `getpass.getuser()`; every robot's hostname i
 
 ```bash
 cd prototype
-node verify_radar.mjs                       # LiDAR plot geometry
-node verify_testing.mjs                     # Select beams index and angle math
-node verify_system.mjs                      # system panel, joystick check, connection banners
+node tests/run.mjs                          # everything below, with a pass/fail summary
+```
+
+Or run any one on its own:
+
+```bash
+node tests/verify_radar.mjs                 # LiDAR plot geometry
+node tests/verify_testing.mjs               # Select beams index and angle math
+node tests/verify_system.mjs                # system list, joystick check, connection banners
 python3 camera_http.py --self-test          # camera frame splitting, newest-frame relay, frame rate
 python3 system_diagnostics.py --self-test   # emergency stop and controller disconnect logic
 ```

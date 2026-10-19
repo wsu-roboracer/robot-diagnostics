@@ -12,8 +12,9 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 | `css/` | The page's styling, one file per area: `base`, `topbar`, `overview`, `drive`, `advanced`, `cockpit`. [css/README.md](css/README.md) says what is where |
 | `js/*.js` | The page's logic, split by job. They are plain scripts that share one scope, so **the load order in `dashboard.html` matters**: `config.js` first, `main.js` last. See the table below |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
+| `camera_http.py` | The camera's HTTP proxy: relays the GStreamer MJPEG stream to browsers, always the newest frame, so a slow link drops frames instead of lagging |
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
-| `verify_system.mjs` | Runs the page's real system panel and joystick-check code against sample messages. No robot needed: `node verify_system.mjs` |
+| `tests/` | Checks that need no robot. Run them all with `node tests/run.mjs`: LiDAR plot geometry, beam selection maths, the system list, joystick check and connection banners (all against the page's real `js/`), and the self-tests in `camera_http.py` and `system_diagnostics.py` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
 
@@ -21,19 +22,24 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 
 | Script | What is in it |
 |---|---|
-| `js/config.js` | Thresholds, timings, expected nodes and shared state. Change limits and node lists here |
+| `js/config.js` | Thresholds, timings, expected nodes, the robot list (`ROBOTS`) and shared state. Change limits and node lists here |
+| `js/icons.js` | The line icons used across the page (`icon("name")`, or `<i data-icon="name">` in the HTML) |
 | `js/helpers.js` | Small shared helper functions |
-| `js/connection.js` | The rosbridge connection, service calls and subscriptions, plus the scan handler and the radar geometry helpers (`isValidRange`, `polarToCanvas`) |
+| `js/connection.js` | The rosbridge connection, service calls and subscriptions, plus the scan handler and the LiDAR geometry helpers (`isValidRange`, `polarToCanvas`) |
 | `js/graph-data.js` | Reading the ROS graph, diagnostics, VESC data and the log; topic classification |
 | `js/health.js` | Subsystem health, overall health and the status banner |
 | `js/status-panels.js` | Diagnostic counts, battery, uptime, footer and the ROS Graph card |
 | `js/advanced-panels.js` | The Advanced tab: topic and node tables and the "Needs attention" list |
 | `js/system-tiles.js` | The Robot System list (every OS-level probe and its readings) |
-| `js/metrics.js` | Advanced diagnostics, priority metrics with 60 s trend lines, lidar readout and the radar plot |
-| `js/camera.js` | Camera stream and take-picture |
-| `js/checks.js` | Connection health and on-demand checks |
-| `js/drive.js` | The Drive tab's virtual controller |
-| `js/main.js` | Render loop, tabs, theme switch, buttons, connection form and startup. Must load last |
+| `js/metrics.js` | The Overview tiles (CPU, RAM, GPU, Temperature, Network) and their row details, LiDAR readouts, and the Lines view of the LiDAR plot |
+| `js/camera.js` | Camera stream, automatic reconnect, and take-picture |
+| `js/checks.js` | Connection health banners and the on-demand joystick check |
+| `js/lidar-select.js` | Select beams: picking a range of LiDAR beam indices |
+| `js/estop.js` | The Emergency stop button and banner |
+| `js/drive.js` | The driving logic: arming, the dead-man, limits, who's driving. Its own cards sit hidden under the driving view |
+| `js/cockpit.js` | The driving view on the Drive tab and in full screen: panes, floating controls, Settings, thumb sticks, speedometer |
+| `js/radar.js` | The Detailed LiDAR view: the radar drawing, obstacle detection and its panel on the Overview card |
+| `js/main.js` | Render loop, tabs, theme switch, buttons, the connection form and robot picker, and startup. Must load last |
 
 ## Looking at it
 

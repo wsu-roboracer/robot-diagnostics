@@ -4,7 +4,7 @@
 import fs from 'fs';
 
 // The page's own files, loaded the way dashboard.html loads them.
-const read = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+const read = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 const src = ['js/config.js', 'js/helpers.js', 'js/system-tiles.js', 'js/checks.js'].map(read).join('\n');
 
 // A minimal DOM: every element the code touches is a plain object.

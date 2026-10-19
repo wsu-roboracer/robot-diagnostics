@@ -376,7 +376,7 @@ function onScan(message) {
 }
 
 /* ---- radar geometry ----
-   Pure, so verify_radar.mjs can check it with no DOM/websocket.
+   Pure, so tests/verify_radar.mjs can check it with no DOM/websocket.
 
    A "no return" beam does NOT come back as inf/NaN on this
    Hokuyo — measured on the robot, it reports ~65.5 m (the raw
