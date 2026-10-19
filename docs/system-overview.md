@@ -1188,7 +1188,7 @@ browser or device starts from the defaults.
 | Edge light directions | `js/cockpit.js` | `COCKPIT_GLOW_SECTORS` |
 | Speed units | `js/cockpit.js` | `SPEED_UNITS` |
 | Saved settings that Reset clears | `js/cockpit.js` | `VIEW_KEYS` |
-| The look (sizes, colours, the frosted style) | `css/dashboard.css` | the `cockpit` rules |
+| The look (sizes, colours, the frosted style) | `css/cockpit.css` | its contents list at the top |
 | The markup (buttons, Settings panel) | `dashboard.html` | the `cockpit` element |
 
 ### Driving from the page
@@ -1565,7 +1565,7 @@ Almost everything added only reads. The exceptions:
 
 ### The page
 
-`dashboard.html` is the markup. It loads `css/dashboard.css` and the files in
+`dashboard.html` is the markup. It loads the stylesheets in `css/` (one per area; see `css/README.md`) and the files in
 `js/` in a fixed order; they share one scope, so `config.js` must load first and
 `main.js` last.
 

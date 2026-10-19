@@ -52,6 +52,10 @@ function setConnectionState(text, connected) {
   $("connDot").className =
     "connection-dot " +
     (connected ? "connected" : "disconnected");
+
+  /* the pill around it, coloured to match */
+  $("connDot").parentElement.dataset.state =
+    connected ? "connected" : /connecting/i.test(text) ? "connecting" : "disconnected";
 }
 
 function setConnectionHint(text) {

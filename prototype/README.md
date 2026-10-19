@@ -8,8 +8,8 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 
 | File | What it is |
 |---|---|
-| `dashboard.html` | The page's markup. It loads `css/dashboard.css` and the scripts in `js/`, in that order. No CDN, works with no internet |
-| `css/dashboard.css` | All of the page's styling |
+| `dashboard.html` | The page's markup. It loads the stylesheets in `css/` and the scripts in `js/`, in that order. No CDN, works with no internet |
+| `css/` | The page's styling, one file per area: `base`, `topbar`, `overview`, `drive`, `advanced`, `cockpit`. [css/README.md](css/README.md) says what is where |
 | `js/*.js` | The page's logic, split by job. They are plain scripts that share one scope, so **the load order in `dashboard.html` matters**: `config.js` first, `main.js` last. See the table below |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |

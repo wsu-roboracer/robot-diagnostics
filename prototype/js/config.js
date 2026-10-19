@@ -323,3 +323,13 @@ const rowEls = new Map();       // topic -> the row's live elements
 let tableKey = "";              // rebuild the table only when the
                                 // topic set itself changes
 
+/* ==========================================================
+   ROBOTS - the connect dropdown in the top bar
+   Each car's rosbridge. Change a name or address here; the
+   address box beside the dropdown also takes any other one.
+========================================================== */
+
+const ROBOTS = Array.from({ length: 12 }, (_, i) => ({
+  name: `F1-WSU-${i + 1}`,
+  url: `ws://192.168.1.${201 + i}:9090`
+}));

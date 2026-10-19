@@ -140,4 +140,4 @@ This is also step 6 of the first-drive checklist in
 | [`prototype/system_diagnostics.py`](../prototype/system_diagnostics.py) | The robot side: `emergency_stop`, `emergency_release`, the 50 Hz `estop_hold`, `estop_status`, `parse_pgrep` |
 | [`prototype/dashboard.html`](../prototype/dashboard.html) | The `estopBtn` button in the top bar and the `estopBar` banner |
 | [`prototype/js/drive.js`](../prototype/js/drive.js) | Disarms the web controller and refuses to arm while E-STOP is on, and shows it in *Who's driving* |
-| [`prototype/css/dashboard.css`](../prototype/css/dashboard.css) | Styling, including keeping the button visible on phones |
+| [`prototype/css/topbar.css`](../prototype/css/topbar.css) | Styling: section 2, "Emergency stop button and banner", including keeping the button visible on phones |
