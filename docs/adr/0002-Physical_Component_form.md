@@ -47,8 +47,11 @@ We chose Option A.
 Option A is the best decision for us because it offers a good balance between size, diagnostic potential, and cost.
 It's fits snug over the 40 pin header and USB ports. Its raised around 25 mm, so it doesn't cover the fan.
 Gives us a larger 5x5 matrix which works better with the LiDAR information than a small matrix, or no matrix at all.
-Approved by Professor Hadzik
+Approved by Professor Hadzik.
 
+See PCB hat design:
+https://github.com/wsu-roboracer/robot-diagnostics/blob/main/diagnostic-hardware/designs/pcb-hat-recommended-layout.pdf
+https://github.com/wsu-roboracer/robot-diagnostics/blob/main/diagnostic-hardware/designs/pcb-hat-3d-render.png
 
 ## Consequences
 
