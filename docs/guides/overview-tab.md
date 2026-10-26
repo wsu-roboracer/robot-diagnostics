@@ -167,6 +167,7 @@ The live picture from the car's camera. **It connects on its own** whenever the 
 - **Full screen** opens the camera full screen; **Split** opens the camera and LiDAR side by side. Both are the [driving view](drive-tab.md#full-screen).
 - **LIVE** in the corner means pictures are arriving. *no stream* means none are.
 - **Take Picture** freezes the current frame below the stream. **Save PNG** downloads it.
+- **Record** records the camera to a video file; press it again (**Stop**) to save it. See [Recording the camera](drive-tab.md#recording-the-camera).
 
 ![A picture taken](images/overview-tab/11-snapshot.jpg)
 
@@ -199,7 +200,7 @@ The radar view, for seeing exactly what is close:
 - The banner below gives the worst one: *WARN: 0.79 m front*.
 - **Closest in each direction**: left, front-left, front, front-right and right, each CLEAR, WARN or DANGER.
 - **Nearest objects**: distance, direction and width, and whether it is approaching.
-- **Sweep line** turns the radar sweep on or off.
+- **Sweep** (in the toolbar, Detailed only) turns the radar's turning line on or off. It is one setting with the driving view's.
 - **Ignore angles** hides parts of your own robot the LiDAR sees, as degrees with + to the left, for example `120:135, -135:-120`.
 
 Your choice of view is remembered in this browser.
