@@ -17,11 +17,12 @@ This guide is for **people driving the car**. How the commands reach the motors,
 5. [Full screen](#full-screen)
 6. [Seeing what is around the car](#seeing-what-is-around-the-car)
 7. [Arranging the view](#arranging-the-view)
-8. [Speed and steering limits](#speed-and-steering-limits)
-9. [On a phone](#on-a-phone)
-10. [Keyboard](#keyboard)
-11. [Troubleshooting](#troubleshooting)
-12. [How a command reaches the car](#how-a-command-reaches-the-car)
+8. [Recording the camera](#recording-the-camera)
+9. [Speed and steering limits](#speed-and-steering-limits)
+10. [On a phone](#on-a-phone)
+11. [Keyboard](#keyboard)
+12. [Troubleshooting](#troubleshooting)
+13. [How a command reaches the car](#how-a-command-reaches-the-car)
 
 ## Before you drive
 
@@ -48,12 +49,14 @@ Status on the left, actions on the right, Emergency stop last and set apart so i
 | **DISARMED / ARMED / DRIVING** | The state of the controls on this page. DRIVING means a command is going out right now |
 | **Health pill** | The overall verdict from the Overview tab (HEALTHY, DEGRADED, FAILED, UNKNOWN) |
 | **Battery** | The battery voltage from the motor controller (VESC) |
+| **Latency** | The round trip from this page to the car and back, every 2 s. Green under 50 ms, amber from 50 ms, red from 120 ms. Each command takes about half of it to arrive (see [Why the controller feels quicker](#why-the-controller-feels-quicker)) |
 | **Disconnect controller** | Shown while a physical controller is connected. Drops its Bluetooth link; press the PS button on the controller to reconnect. Refused while someone holds L1 or R1 |
 | **Who is driving** | One answer: *Nobody is driving*, *You're armed*, *You are driving*, *The controller is driving*, *Someone else is driving*, *Autonomous code is driving*, or *Emergency stop is on* |
 | **Camera · LiDAR · Controls** | Which panes show. Orange means on |
+| **Record** | Records the camera to a video file; press again to stop and save it (see [Recording the camera](#recording-the-camera)) |
 | **Settings** | Everything about how the view looks (see [Arranging the view](#arranging-the-view)) |
 | **Full screen** / **Exit** | Cover the whole screen, or come back. Leaving full screen disarms |
-| **⌃** | Hide the top bar for more picture |
+| **⌃** | Hide the top bar for more picture. On a computer the essentials move to a [side rail](#hiding-the-top-bar-the-side-rail) |
 | **Emergency stop** | Stops the car for everyone (see [What stops the car](#what-stops-the-car)) |
 
 A row of messages can appear under the bar: red alerts that must not be missed (*Not connected*, *No data from the robot*, *Emergency stop is on*) and short notes about what just happened (*Armed. Hold the pad or a drive key to move.*).
@@ -96,7 +99,7 @@ Pick whichever is easiest; they all do the same thing.
 
 **The car only moves while you hold.** Let go and it stops at once: the page sends a burst of zero-speed commands immediately, without ramping down.
 
-Starting is ramped so the motor controller never gets a jump: about **0.6 s from stop to the normal top speed of 3 m/s**, with steering following at a matching pace. The page sends 20 commands a second while you hold.
+The page sends **50 commands a second** while you hold, about the physical controller's own rate, and a press or a release goes out at once rather than waiting for the next one. The **keys** are all or nothing, so their speed builds up: about **0.4 s from stop to the normal top speed of 3 m/s**, with steering at full lock in about 40 ms. The **pad** and the **thumb sticks** are proportional like the controller's stick, so they follow your thumb almost at once (3 m/s in 0.15 s). Stopping is never ramped.
 
 ### 3. Stop and disarm
 
@@ -138,7 +141,9 @@ The physical controller always wins. If someone holds its deadman (L1 or R1), th
 
 ![Full screen with the camera, LiDAR and controls](images/drive-tab/06-full-screen.jpg)
 
-**Full screen** turns the same view into a first-person driving screen. Camera and LiDAR can sit side by side; drag the divider between them to change the split, or drag a pane's title onto another to swap them. **Exit** (or **Esc**) comes back, and disarms.
+**Full screen** turns the same view into a first-person driving screen. Camera and LiDAR can sit side by side; drag the divider between them to change the split. To move a pane, drag it by its title: over the **left half** of another pane it goes before it, over the **right half** after it, and that half lights up orange to show where it will land. **Esc** cancels the move (and, as always on the Drive tab, stops the car). **Exit** (or **Esc**) comes back, and disarms.
+
+![Moving the camera pane: the right half of the Controls lights up, so the camera will land after it](images/drive-tab/23-moving-a-pane.jpg)
 
 The Overview tab's camera buttons open full screen directly, with just the camera or the camera and LiDAR.
 
@@ -155,6 +160,8 @@ The LiDAR is a top-down map with the car in the middle, facing up. In the **Deta
 - **Point at the map** for details: an object's distance, direction, width and whether it is approaching; or, over empty space, how far and in which direction that spot is.
 
 **Lines** is the simpler view: one green outline of everything the LiDAR sees. Zoom with the range buttons or the scroll wheel, drag to look around, and press **Center** to bring the car back to the middle.
+
+In the Detailed view, **Sweep** in the LiDAR's toolbar turns the radar's turning line on or off (also in Settings → LiDAR). The **×** at the right of the LiDAR's title closes it, like the Controls card's; **LiDAR** in the top bar (or the rail) brings it back. If the LiDAR is the only picture, the camera takes its place.
 
 ### LiDAR over the camera
 
@@ -180,9 +187,9 @@ The LiDAR is a top-down map with the car in the middle, facing up. In the **Deta
 
 | Section | Options |
 |---|---|
-| **Arrangement** | LiDAR over camera · Dock the controls · Hide the top bar · *Controls only* (phones) |
+| **Arrangement** | LiDAR over camera · Dock the controls · Hide the top bar · Side rail on the left or right · *Controls only* (phones) |
 | **On the picture** | Edge warning lights · Close-object warning |
-| **LiDAR** | Lines or Detailed · range |
+| **LiDAR** | Lines or Detailed · range · Sweep line (the turning line on the Detailed view) |
 | **Readouts** | Speed in m/s, km/h or mph |
 | **Screen** | Keep the screen awake · Buzz when very close (phones) |
 | **Keyboard** | The keys, as a reminder (desktop) |
@@ -202,11 +209,29 @@ If you would rather the controls never cover the picture, **Dock** them (on the 
 
 On a computer, closing the Controls card (its **×**, or **Controls** in the top bar) **does not disarm**. The keys still drive, and an orange chip in the top bar says so: *Keys drive: W A S D / arrows · Space stops*. This gives you the whole picture while you drive.
 
-### Hiding the top bar
+### Hiding the top bar: the side rail
 
-![The top bar hidden: the corner buttons stay](images/drive-tab/12-top-bar-hidden.jpg)
+![The top bar hidden: the side rail, driving with the keys](images/drive-tab/21-side-rail.jpg)
 
-**⌃** in the top bar (or Settings → *Hide the top bar*) tucks the bar away. A small cluster stays in the corner with what must never be out of reach: the **ARMED** state, **Disarm**, **Emergency stop**, any red alert, and **Show** to bring the bar back.
+**⌃** in the top bar (or Settings → *Hide the top bar*) tucks the top and bottom bars away, so the picture gets the whole height. On a computer, on the Drive tab and in full screen, everything you need to drive moves into a narrow **side rail**. Top to bottom:
+
+- the **state** (DISARMED, ARMED, DRIVING), the car's health and the battery
+- **Area clear** and **Arm** / **Disarm**, and **STOP**
+- the **speedometer** and who is driving
+- **Camera**, **LiDAR** and **Controls**, **Rec**, **Settings**, **Full screen** (or **Exit** in full screen) and **Show bar**
+- **E-stop**, at the bottom
+
+Red alerts and notes still show over the top of the picture. On a short screen the rail's buttons keep only their icons. It goes on the right; Settings → **Side rail** → **Left** moves it. **Show bar** brings the bars back.
+
+On a phone, hiding the bar keeps a small cluster in the corner instead: the **ARMED** state, **Disarm**, **E-stop**, any red alert, and **Show**.
+
+## Recording the camera
+
+![Recording in full screen](images/drive-tab/22-recording.jpg)
+
+**Record** (in the top bar, the rail, or under the camera on the Overview) records what the camera shows. While it runs, the button turns red with the time, and **● REC** shows on the picture. It carries on if you switch tabs or go full screen.
+
+Press it again to stop: the video downloads straight away, named by when it started, for example `camera-2026-10-26-14-03-22.mp4` (`.webm` in browsers that cannot make MP4). The recording happens in your browser from the picture already on screen, so it adds nothing to the car's Wi-Fi. A recording stops by itself after 15 minutes, because it is held in the browser's memory until it is saved. The page asks before closing while a recording runs.
 
 ## Speed and steering limits
 
@@ -274,13 +299,24 @@ The keys drive even with the Controls card closed. They do nothing while you are
 
 **The view looks wrong after rearranging.** Settings → **Reset all view settings**.
 
+### Why the controller feels quicker
+
+The physical controller talks to the car over Bluetooth, and its commands never leave the car: from the stick to the motor command takes about 20 ms, measured, every time. A command from this page has a longer way to go: your computer's Wi-Fi, the router, the car's Wi-Fi, then rosbridge, which unpacks it before it joins the same path as the controller's. That trip is usually 5 to 30 ms, but Wi-Fi is shared and bursty, and when a packet is lost the ones behind it wait for the resend, so now and then a command arrives 100 ms or more late. That is the hitch you feel.
+
+The page now does what it can on its own side: 50 commands a second (it was 20), a key or a touch goes out at once (it waited up to 50 ms), and the pad and sticks follow your thumb with no ramp to speak of. The rest is the link, and the **Latency** reading in the top bar (and the side rail) shows it. When it is amber or red:
+
+- **Move closer to the router**, or use one on 5 GHz.
+- **Turn the camera off** while driving (the **Camera** button). Its picture is about 10 to 15 Mbit/s on the same Wi-Fi as your commands.
+- **Close other dashboards** on the same car; each one adds its own traffic.
+- **Drive with the pad or the sticks** for fine control. The keys are on or off, so they ramp.
+
 **Nothing is Responding, All Nodes are down.** Likely Cause: Faulty Battery **Replace Battery**
 
 ## How a command reaches the car
 
 ```mermaid
 flowchart LR
-  you["You: pad, keys<br/>or thumb sticks"] --> page["Dashboard page<br/>drive.js, 20 commands/s<br/>while you hold"]
+  you["You: pad, keys<br/>or thumb sticks"] --> page["Dashboard page<br/>drive.js, 50 commands/s<br/>while you hold"]
   page -- "/drive over Wi-Fi<br/>(rosbridge, port 9090)" --> mux["ackermann_mux<br/>physical controller<br/>has priority"]
   pad["Physical controller<br/>deadman L1 / R1"] --> mux
   mux --> a2v["ackermann_to_vesc"] --> vesc["VESC motor<br/>controller"] --> motor(("Motor and<br/>steering"))

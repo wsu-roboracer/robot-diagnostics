@@ -777,9 +777,27 @@ function parseMasks(text) {
     .map(m => [Number(m[1]), Number(m[2])]);
 }
 
-$("radarSweep").addEventListener("change", () => {
-  radarState.sweep = $("radarSweep").checked;
-  try { localStorage.setItem("radarSweep", radarState.sweep ? "on" : "off"); } catch (error) {}
+/* One setting, three places: the Sweep button in each LiDAR toolbar
+   (the Overview card's and the driving view's) and the driving view's
+   Settings. Off takes the line away at once, not on the next scan. */
+function setRadarSweep(on) {
+
+  radarState.sweep = on;
+  $("cockpitSweepToggle").checked = on;
+  document.querySelectorAll("[data-sweep-toggle]").forEach(button =>
+    button.setAttribute("aria-pressed", String(on)));
+
+  try { localStorage.setItem("radarSweep", on ? "on" : "off"); } catch (error) {}
+
+  if (!$("panelOverview").hidden) renderRadar();
+  if (typeof cockpitPaneShown === "function" && cockpitPaneShown("lidar")) redrawPaneRadar();
+}
+
+$("cockpitSweepToggle").addEventListener("change", () =>
+  setRadarSweep($("cockpitSweepToggle").checked));
+
+document.querySelectorAll("[data-sweep-toggle]").forEach(button => {
+  button.onclick = () => setRadarSweep(!radarState.sweep);
 });
 
 $("radarMask").addEventListener("change", () => {
@@ -796,4 +814,6 @@ try {
   radarState.masks = parseMasks($("radarMask").value);
 } catch (error) {}
 
-$("radarSweep").checked = radarState.sweep;
+$("cockpitSweepToggle").checked = radarState.sweep;
+document.querySelectorAll("[data-sweep-toggle]").forEach(button =>
+  button.setAttribute("aria-pressed", String(radarState.sweep)));

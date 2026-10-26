@@ -1507,7 +1507,7 @@ function setLidarView(view) {
     button.setAttribute("aria-pressed", String(button.dataset.lidarView === lidarView))
   );
 
-  document.querySelectorAll(".lidar-legend, .lidar-card").forEach(el => {
+  document.querySelectorAll(".lidar-legend, .lidar-card, .viewer-radar").forEach(el => {
     el.dataset.view = lidarView;
   });
 }

@@ -153,7 +153,7 @@ a human is actively holding something**, and every uncertain situation resolves 
 |---|---|
 | **Disarmed** | Nothing. `/drive` is not advertised. |
 | **Armed** (nothing held) | Nothing (the last thing sent was a zero). |
-| **Driving** (something held) | A command every 50 ms (20 Hz). |
+| **Driving** (something held) | A command every 20 ms (50 Hz), plus one at once whenever the input changes (at most one extra per 10 ms). |
 | **Just released** | Five `speed: 0, steering_angle: 0` messages, then nothing. |
 
 The zero-speed burst on release **is** the stop. Nothing downstream turns silence into a zero,
@@ -208,9 +208,10 @@ Keys combine (W + A is forward-left). Keys are ignored while you are typing in a
 |---|---|---|
 | Max speed | 3.0 m/s | Slider, 0.3 to 3.0 m/s; up to 5.0 m/s after the high-speed unlock |
 | Max steering | 0.34 rad (19°) | Slider, 0.05 to 0.34 rad; up to 0.41 rad (23°) after the full-steering unlock |
-| `DRIVE_ACCEL` | 2.0 m/s² | How fast the speed may rise or change |
-| `STEER_RATE` | 2.5 rad/s | How fast steering may change |
-| `DRIVE_HZ` | 20 | Commands per second while driving |
+| `KEY_ACCEL`, `PAD_ACCEL` | 8, 20 m/s² | How fast the speed may rise or change: keys (all or nothing), and the pad and thumb sticks (proportional) |
+| `KEY_STEER_RATE`, `PAD_STEER_RATE` | 8, 20 rad/s | How fast steering may change, the same way |
+| `DRIVE_HZ` | 50 | Commands per second while driving |
+| `DRIVE_NOW_MIN_MS` | 10 ms | An input change sends at once; at most one such extra command per this long |
 | `STOP_BURST` | 5 | Zero-speed messages after release |
 
 Speed is **ramped** so a key press does not ask the VESC for a step change. **Stopping is
@@ -367,7 +368,7 @@ in `localStorage` under the key `driveCam`.
 |---|---|
 | `prototype/js/estop.js` | The E-STOP button and banner: calls the robot's `emergency_stop` / `emergency_release` services, reads `system: E-stop` |
 | `prototype/system_diagnostics.py` | The robot side of E-STOP (`emergency_stop`, `emergency_release`, 50 Hz zero-speed hold) and `controller_disconnect` |
-| `prototype/js/drive.js` | The whole controller: arm and disarm, the 20 Hz loop (`driveTick`), pad and keyboard input, disarm triggers, the Vitals list (`driveVitals`), the camera size switch |
+| `prototype/js/drive.js` | The whole controller: arm and disarm, the 50 Hz loop (`driveTick`, and `driveNow` on an input change), pad and keyboard input, disarm triggers, the Vitals list (`driveVitals`), the camera size switch |
 | `prototype/js/main.js` | `showTab()`: disarms when leaving Drive, and moves the camera. Calls `renderDrive()` from the 2 Hz render loop |
 | `prototype/js/connection.js` | The rosbridge socket (`ws`) and `connect()`. Replacing the socket disarms the controller on its next tick |
 | `prototype/js/helpers.js` | `send()`: writes one JSON message to the socket if it is open |
@@ -394,7 +395,7 @@ The main functions in `drive.js`:
 |---|---|
 | The topic or message type | `DRIVE_TOPIC`, `DRIVE_TYPE` in `drive.js` |
 | The command rate | `DRIVE_HZ`. Keep the period well under the mux's 0.2 s timeout, or the mux masks `/drive` between messages and the car stutters |
-| How gently speed builds up | `DRIVE_ACCEL`, `STEER_RATE` |
+| How gently speed builds up | `KEY_ACCEL`, `KEY_STEER_RATE` (keys), `PAD_ACCEL`, `PAD_STEER_RATE` (pad and sticks) |
 | The slider ranges and defaults | The `#maxSpeed` and `#maxSteer` inputs in `dashboard.html` |
 | The obstacle warning distances (plot and vital together) | `LIDAR_NEAR`, `LIDAR_CLOSE` in `metrics.js` |
 | The keys | `KEY_FWD`, `KEY_BACK`, `KEY_LEFT`, `KEY_RIGHT` in `drive.js` |
@@ -492,7 +493,10 @@ Only then drive on the floor. Start with the speed slider well below the 3 m/s d
 - **Link loss is not covered by the page.** If the connection dies mid-drive, the car holds
   its last command until the VESC's own command timeout (around 1 s, unmeasured). Measure it
   (step 6 above) before driving on the floor.
-- **Wi-Fi latency is in the loop.** Every command, including STOP, takes the network trip to
+- **Wi-Fi latency is in the loop.** The physical controller's commands never leave the car
+  (about 20 ms stick to motor, over Bluetooth); the page's cross Wi-Fi and rosbridge, usually
+  5 to 30 ms with occasional spikes past 100 ms. The driving view's **Latency** chip shows the
+  round trip live. Every command, including STOP, takes the network trip to
   reach the car.
 - **Browser throttling.** Browsers slow down timers in background tabs. The page disarms
   when it is hidden for this reason. Do not remove that trigger.

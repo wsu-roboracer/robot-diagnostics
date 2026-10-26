@@ -999,6 +999,19 @@ Signed off by the professor as a starting value; see
 `usb port`, `link speed`; and the `/stats` JSON, of which the page reads `fps`
 and `last_frame_s`.
 
+**Recording.** **Record** (the camera card, the driving view's top bar, the side
+rail) records the stream in the browser: each frame of the page's one camera
+`<img>` is drawn onto a canvas 30 times a second, and the browser's
+`MediaRecorder` encodes the canvas, as MP4 where the browser can (Safari, recent
+Chrome) and WebM otherwise. Nothing runs on the robot and nothing extra crosses the
+Wi-Fi. The same `Access-Control-Allow-Origin` header that lets Take Picture read
+the frame lets this read every frame. Stop downloads the file, named by when it
+started (`camera-2026-10-26-14-03-22.mp4`). It is held in memory until then, so a
+recording stops itself at 15 minutes (about 280 MB at 2.5 Mbit/s); the page asks
+before closing while one runs. A dropped stream records as black frames with "No
+camera signal", so the video keeps real time. Settings: `RECORD_FPS`,
+`RECORD_BITRATE`, `RECORD_MAX_MS` and `RECORD_TYPES` in `js/camera.js`.
+
 **On the page.** The camera picture (Overview and the driving view), its
 status tag (`LIVE · 30 fps`), and the Camera row in Subsystems. The page finds the
 camera on port 8082 of the robot rosbridge is connected to, and retries every 3
@@ -1147,27 +1160,46 @@ Opening it from the Overview does not change the Drive tab's own layout.
 
 **Panes and layouts.** The pane buttons at the top turn Camera, LiDAR and Controls
 on or off. Panes sit side by side; drag the bar between two to resize them, and
-drag a pane's title onto another to swap them. The layouts menu has Camera, Watch
+drag a pane's title over the left or right half of another to put it before or after that one. The layouts menu has Camera, Watch
 (camera and LiDAR), Drive (camera and controls), Drive + LiDAR, and LiDAR. Each
 layout keeps your own changes in the browser, and Reset puts it back.
 
 **Desktop arrangement.** The controls float over the picture as a see-through card
 (drag its title to move it, the x to close it), or dock as a column beside the
 pictures (**Dock the controls**). The LiDAR can also float over the camera as a
-small window you can move and resize (**A small LiDAR window on the picture**).
-The "Very close" warning floats on the picture; drag it or hide it.
+small window you can move and resize (**A small LiDAR window on the picture**),
+and has an x of its own; closing the only picture shows the camera instead, so
+there is always one. The "Very close" warning floats on the picture; drag it or
+hide it. Dragging a docked pane by its title lights up the half of the pane it
+will land beside; Esc cancels the move (and still stops the car).
 
-**The top bar.** Left: who is driving, Disconnect controller, battery. Right: the
-actions, with Emergency stop last. Alerts get their own row only when there is
-one. The bar can be hidden (its hide button, or Settings); a corner cluster then
-keeps Emergency stop, Arm and Show.
+**The top bar.** Left: the driving state, health, battery, **Latency** (below),
+the controller, who is driving. Right: the pane buttons, **Record**, Settings,
+Full screen or Exit, hide, and Emergency stop last. Alerts get their own row only
+when there is one.
+
+**The side rail.** Hiding the top bar (its hide button, or Settings) on a desktop
+moves the essentials into one column at the side, so the picture gets the whole
+height: state, health, battery, latency, the safety box, Arm, STOP, the
+speedometer, who is driving, the pane buttons, Rec, Settings, Full screen or Exit,
+Show bar, and E-stop at the bottom. Each rail button calls the same handler as the
+button it stands in for, so no driving rule is repeated. It compacts by its own
+height (a container query), so it fits a short Drive tab as well as full screen.
+Settings → **Side rail** picks left or right. On phones, hiding the bar leaves a
+corner cluster instead: E-stop, Arm and Show.
+
+**Latency.** Every 2 s while the view is open, the page calls rosapi's
+`get_time` and times the answer; the chip shows the median of the last five, green
+under 50 ms, amber from 50 ms, red from 120 ms. It is the round trip, so a command
+takes about half of it to reach the car. It hides when the service does not
+answer rather than show a guess.
 
 **Settings** holds every "how it looks" option in one panel: the arrangement
-switches above, Hide the top bar, Controls only (phones), the edge lights and the
-"Very close" warning, the LiDAR view and range, speed units, keep the screen awake,
-buzz when something is very close (phones), thumb stick placement, reconnect
-camera, and **Reset all view settings**, which clears them all and reloads the
-page.
+switches above, Hide the top bar, Side rail (left or right), Controls only
+(phones), the edge lights and the "Very close" warning, the LiDAR view, range and
+sweep line, speed units, keep the screen awake, buzz when something is very close
+(phones), thumb stick placement, reconnect camera, and **Reset all view
+settings**, which clears them all and reloads the page.
 
 **Phones** (anything touch-first, or 900 px wide or less): one picture at a time,
 Camera and LiDAR taking turns (unless the LiDAR floats over the camera). Driving
@@ -1187,6 +1219,8 @@ browser or device starts from the defaults.
 | What counts as a phone | `js/cockpit.js` | `COCKPIT_TOUCH_QUERY` (touch-first, or 900 px wide or less) |
 | Edge light directions | `js/cockpit.js` | `COCKPIT_GLOW_SECTORS` |
 | Speed units | `js/cockpit.js` | `SPEED_UNITS` |
+| Latency check and its colours | `js/cockpit.js` | `LATENCY_EVERY_MS = 2000`, `LATENCY_WARN_MS = 50`, `LATENCY_BAD_MS = 120` |
+| How far a title drag goes before it is a move | `js/cockpit.js` | `PANE_DRAG_START_PX = 5` |
 | Saved settings that Reset clears | `js/cockpit.js` | `VIEW_KEYS` |
 | The look (sizes, colours, the frosted style) | `css/cockpit.css` | its contents list at the top |
 | The markup (buttons, Settings panel) | `dashboard.html` | the `cockpit` element |
@@ -1197,8 +1231,9 @@ Drives the car from a browser, through the same input an autonomous stack uses.
 
 **Where it comes from.** The driving view's controls (the pad, the keys, or a
 phone's thumb sticks) set what the Drive tab's controller sends. It publishes
-`ackermann_msgs/AckermannDriveStamped` on `/drive`, the mux's navigation input, 20
-times a second while armed and while the pad, a key or a stick is held. The
+`ackermann_msgs/AckermannDriveStamped` on `/drive`, the mux's navigation input, 50
+times a second while armed and while the pad, a key or a stick is held, and at once
+whenever the input changes (a press, a drag, a release). The
 physical controller has a higher priority in the mux, so holding its deadman
 always overrides the page.
 
@@ -1209,8 +1244,9 @@ always overrides the page.
 - **Deadman.** Commands go out only while the pad, a key (W A S D or the arrows)
   or a stick is held. Letting go sends 5 zero-speed commands, which is what stops
   the car: the mux sends no zero of its own when an input goes quiet.
-- **Ramping.** Speed rises at most 5 m/s per second (3 m/s in 0.6 s); steering
-  changes at most 2.5 rad per second. Stopping is never ramped.
+- **Ramping.** With the keys (all or nothing), speed rises at most 8 m/s per second
+  (3 m/s in 0.38 s) and steering 8 rad per second. The pad and thumb sticks are
+  proportional, so they ramp only lightly (20 m/s², 20 rad/s). Stopping is never ramped.
 - **Bad values.** Any speed or steering that is not a number is sent as a stop.
 - **Limits.** 3 m/s and 19° by default, always shown in the controls. Unlocking
   5 m/s or 23.5° needs a warning dialog, and switches off again when you leave the
@@ -1223,6 +1259,12 @@ always overrides the page.
   background, the connection dropping, the emergency stop, arranging the sticks,
   resetting the view settings, and on a phone closing the controls or turning it
   upright.
+- **Why the physical controller still feels quicker.** Its commands go over
+  Bluetooth and never leave the car (about 20 ms from stick to motor, measured).
+  The page's cross Wi-Fi and rosbridge first: usually 5 to 30 ms, with spikes of
+  100 ms or more when a packet is lost and resent. The page's own share is now
+  small (a key reaches a command in about 6 ms, measured in the browser); the
+  **Latency** chip shows the rest.
 - **Who is driving.** The page reads `/drive`'s publishers from rosapi and the
   messages' `header.frame_id`, so it can tell another page or an autonomous stack
   from itself, and ignore the watchdog's zeros (marked `"drive_watchdog"`).
@@ -1233,8 +1275,8 @@ always overrides the page.
 |---|---|---|
 | Default limits | `js/drive.js` | `NORMAL_MAX_SPEED = 3.0` (m/s), `NORMAL_MAX_STEER = 0.34` (rad, 19°) |
 | Unlocked limits | `js/drive.js` | `HIGH_MAX_SPEED = 5.0`, `FULL_MAX_STEER = 0.41` (23.5°) |
-| Ramping | `js/drive.js` | `DRIVE_ACCEL = 5.0` (m/s per second), `STEER_RATE = 2.5` (rad per second) |
-| Command rate, stop burst | `js/drive.js` | `DRIVE_HZ = 20`, `STOP_BURST = 5` |
+| Ramping | `js/drive.js` | `KEY_ACCEL = 8.0`, `KEY_STEER_RATE = 8.0` (keys); `PAD_ACCEL = 20.0`, `PAD_STEER_RATE = 20.0` (pad and sticks) |
+| Command rate, stop burst | `js/drive.js` | `DRIVE_HZ = 50`, `DRIVE_NOW_MIN_MS = 10`, `STOP_BURST = 5` |
 | Keys | `js/drive.js` | `KEY_FWD`, `KEY_BACK`, `KEY_LEFT`, `KEY_RIGHT` |
 | When closing the controls disarms | `js/cockpit.js` | the start of `applyPanes()` |
 

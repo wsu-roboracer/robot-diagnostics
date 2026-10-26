@@ -15,6 +15,8 @@
      10. Thumb sticks and STOP
      11. Arranging the sticks
      12. Rotate prompt
+     13. Side rail
+     14. Recording
    ================================================================== */
 
 /* ------------------------------------------------------------------
@@ -873,32 +875,115 @@ body:has(.cockpit.full:not([hidden])) {
     touch-action: none;
   }
 
+  .pane-head:hover {
+    color: #fff;
+    background: #171b20;
+  }
+
   .pane.moving .pane-head {
     cursor: grabbing;
     color: #fff;
   }
 
-  /* where a dragged pane will land */
-  .pane.drop-target::after {
+  /* the pane being moved dims; the page shows grabbing everywhere */
+  .pane.moving {
+    opacity: .45;
+  }
+
+  .cockpit.pane-dragging,
+  .cockpit.pane-dragging * {
+    cursor: grabbing !important;
+  }
+
+  /* where it will land: the half it takes, with a bar at that edge */
+  .pane.drop-before::after,
+  .pane.drop-after::after {
     content: "";
     position: absolute;
-    inset: 0;
-    z-index: 5;
-    border: 2px dashed var(--orange);
-    background: rgba(255, 121, 0, .08);
+    top: 0;
+    bottom: 0;
+    z-index: 8;
+    width: 50%;
+    background: rgba(255, 121, 0, .16);
     pointer-events: none;
   }
 
+  .pane.drop-before::after {
+    left: 0;
+    border-left: 4px solid var(--orange);
+  }
+
+  .pane.drop-after::after {
+    right: 0;
+    border-right: 4px solid var(--orange);
+  }
+
+  /* the label that follows the pointer */
+  .pane-ghost {
+    position: fixed;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--orange);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .5);
+    transform: translate(12px, 12px);
+    pointer-events: none;
+  }
+
+  .pane-ghost .ic {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* a wide grab area with a thin line and a grip in the middle */
   .pane-divider {
+    position: relative;
     flex: none;
-    width: 6px;
-    background: #262a30;
+    width: 10px;
+    background: #0b0d10;
     cursor: col-resize;
     touch-action: none;
   }
 
-  .pane-divider:hover,
-  .pane-divider.dragging {
+  .pane-divider::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 2px;
+    background: #262a30;
+  }
+
+  .pane-divider::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    width: 6px;
+    height: 36px;
+    margin-top: -18px;
+    border-radius: 3px;
+    background: #3a4048;
+  }
+
+  .pane-divider:hover::before,
+  .pane-divider.dragging::before {
+    left: 3px;
+    width: 4px;
+    background: var(--orange);
+  }
+
+  .pane-divider:hover::after,
+  .pane-divider.dragging::after {
     background: var(--orange);
   }
 
@@ -914,23 +999,9 @@ body:has(.cockpit.full:not([hidden])) {
     cursor: move;
   }
 
-  .pane[data-pane="controls"] .pane-hide {
+  /* the controls' and the LiDAR's x */
+  .pane .pane-hide {
     display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    margin-left: auto;
-    padding: 0;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: rgba(255, 255, 255, .7);
-    cursor: pointer;
-  }
-
-  .pane[data-pane="controls"] .pane-hide:hover {
-    background: rgba(255, 255, 255, .12);
-    color: #fff;
   }
 
   /* the card has no fixed height: its body sizes to what it holds */
@@ -938,8 +1009,9 @@ body:has(.cockpit.full:not([hidden])) {
     flex: 0 1 auto;
   }
 
+  /* docked, the controls move like any pane */
   .pane[data-pane="controls"]:not(.floating) .pane-head {
-    cursor: default;
+    cursor: grab;
   }
 }
 
@@ -1002,9 +1074,32 @@ body:has(.cockpit.full:not([hidden])) {
   }
 }
 
-/* --- the controls card, floating (desktop) --- */
+/* --- a pane's x: the controls card and the LiDAR (desktop; on phones
+   only the floating LiDAR has a title bar to put it in) --- */
 .pane-hide {
   display: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, .7);
+  cursor: pointer;
+}
+
+.pane-hide:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  .cockpit.lidar-float .pane[data-pane="lidar"] .pane-hide {
+    display: grid;
+  }
 }
 
 /* --- a pane title's own action (Float / Dock) --- */
@@ -1780,6 +1875,22 @@ body:has(.cockpit.full:not([hidden])) {
   margin-top: 2px;
 }
 
+/* a choice of three, not a switch: the words, then the choice under them */
+.cockpit-switch.cs-choice {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  cursor: default;
+}
+
+.cs-choice .range-switch {
+  display: flex;
+}
+
+.cs-choice .range-switch button {
+  flex: 1;
+}
+
 /* ------------------------------------------------------------------
    9. SPEEDOMETER AND READOUT
    ------------------------------------------------------------------ */
@@ -2338,3 +2449,386 @@ body:has(.cockpit.full:not([hidden])) {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------
+   13. SIDE RAIL
+   ------------------------------------------------------------------ */
+
+/* A computer with the top bar hidden (cockpit.js applyRail): the bars'
+   essentials in one column at the side, the picture the whole height,
+   on the Drive tab and in full screen */
+.cockpit-rail {
+  display: none;
+}
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+
+  .cockpit.rail {
+    --rail-w: 104px;
+    flex-direction: row;
+  }
+
+  .cockpit.rail .cockpit-rail {
+    flex: none;
+    width: var(--rail-w);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+    padding: 10px 8px;
+    background: #0b0d10;
+    overflow-y: auto;
+    scrollbar-width: none;
+    container-type: size;        /* the rail compacts by its own height */
+  }
+
+  .cockpit.rail-left .cockpit-rail {
+    order: -1;
+    border-right: 1px solid #262a30;
+  }
+
+  .cockpit.rail-right .cockpit-rail {
+    order: 1;
+    border-left: 1px solid #262a30;
+  }
+
+  /* the rail stands in for both bars and the corner buttons */
+  .cockpit.rail .cockpit-bottom,
+  .cockpit.rail .cockpit-minibar {
+    display: none !important;
+  }
+
+  /* what is left of the top bar: its alerts and notes, over the top of
+     the picture, clear of the rail */
+  .cockpit.rail .cockpit-top,
+  .cockpit.rail.bar-hidden .cockpit-top {
+    display: flex;
+    position: absolute;
+    z-index: 6;
+    top: 8px;
+    left: 0;
+    right: 0;
+    justify-content: center;
+    padding: 0 16px;
+    background: none;
+    border: 0;
+    pointer-events: none;
+  }
+
+  .cockpit.rail-left .cockpit-top  { left: var(--rail-w); }
+
+  .cockpit.rail-right .cockpit-top { right: var(--rail-w); }
+
+  .cockpit.rail .cockpit-status,
+  .cockpit.rail .cockpit-tools {
+    display: none;
+  }
+
+  .cockpit.rail .cockpit-msgs {
+    flex: 0 1 auto;
+    max-width: min(720px, 100%);
+  }
+
+  .cockpit.rail .cockpit-alert,
+  .cockpit.rail .cockpit-note,
+  .cockpit.rail .cockpit-ctrl-alert {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+  }
+
+  .cockpit.rail .cockpit-note {
+    background: rgba(11, 13, 16, .88);
+  }
+}
+
+.cockpit-rail .drive-state,
+.cockpit-rail .viewer-health {
+  justify-content: center;
+  text-align: center;
+  font-size: 11px;
+}
+
+.rail-battery {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.rail-check input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--orange);
+}
+
+.cockpit .rail-arm {
+  justify-content: center;
+  min-height: 38px;
+  font-weight: 800;
+}
+
+.cockpit .rail-arm.armed {
+  background: var(--orange);
+  border-color: var(--orange);
+}
+
+.cockpit .rail-stop {
+  min-height: 44px;
+  padding: 0;
+  font-size: 16px;
+}
+
+.rail-speedo {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 14px;
+}
+
+.rail-speedo .speedo {
+  width: 84px;
+  height: 50px;
+}
+
+.rail-speedo .speedo-v {
+  margin-top: 17px;
+  font-size: 18px;
+}
+
+.rail-who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.rail-who .ic {
+  width: 18px;
+  height: 18px;
+}
+
+.cockpit .rail-who[data-tone="ok"]   { color: var(--healthy); }
+
+.cockpit .rail-who[data-tone="you"]  { color: var(--orange); }
+
+.cockpit .rail-who[data-tone="warn"] { color: var(--degraded); }
+
+.cockpit .rail-who[data-tone="bad"]  { color: #ff6b60; }
+
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+}
+
+/* icon over a short word, the width of the rail */
+.cockpit .rail-btn {
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-height: 48px;
+  padding: 5px 2px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cockpit .rail-btn .ic {
+  width: 18px;
+  height: 18px;
+}
+
+.cockpit .rail-btn[aria-pressed="true"] {
+  background: rgba(255, 121, 0, .22);
+  border-color: var(--orange);
+  color: #fff;
+}
+
+.rail-fill {
+  flex: 1 0 4px;
+}
+
+.cockpit .rail-estop {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: auto;
+  min-height: 58px;
+  padding: 6px 2px;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.cockpit .rail-estop .ic {
+  width: 20px;
+  height: 20px;
+}
+
+/* the rail always shows the short name */
+.cockpit-rail .estop-long  { display: none; }
+
+.cockpit-rail .estop-short { display: inline; }
+
+/* Full screen on the Drive tab, Exit in full screen */
+.cockpit:not(.full) #railExit,
+.cockpit.full #railGoFull {
+  display: none;
+}
+
+/* a short rail: words go, the icons stay */
+@container (max-height: 840px) {
+
+  .cockpit.rail .cockpit-rail {
+    gap: 6px;
+  }
+
+  .cockpit .rail-btn {
+    min-height: 36px;
+  }
+
+  .cockpit .rail-stop {
+    min-height: 40px;
+  }
+
+  .cockpit .rail-estop {
+    min-height: 50px;
+  }
+
+  .cockpit .rail-btn span,
+  .rail-who span,
+  .cockpit .rail-btn:not(.recording) .btn-lbl {
+    display: none;
+  }
+
+  /* recording: the time stays */
+  .cockpit .rail-btn.recording .btn-lbl {
+    display: inline;
+  }
+}
+
+/* the shortest Drive tab view: only what drives and stops */
+@container (max-height: 660px) {
+
+  .cockpit-rail #railHealth,
+  .cockpit-rail .rail-who,
+  .cockpit-rail .speedo-max {
+    display: none;
+  }
+
+  .cockpit.rail .cockpit-rail {
+    gap: 5px;
+    padding: 8px 8px;
+  }
+
+  .cockpit .rail-btn,
+  .cockpit .rail-arm {
+    min-height: 32px;
+  }
+
+  .cockpit .rail-stop {
+    min-height: 36px;
+  }
+
+  .cockpit .rail-estop {
+    min-height: 44px;
+  }
+
+  .rail-check {
+    padding: 4px 6px;
+  }
+
+  .rail-speedo {
+    padding-bottom: 4px;
+  }
+
+  .rail-speedo .speedo {
+    width: 72px;
+    height: 42px;
+  }
+
+  .rail-speedo .speedo-v {
+    margin-top: 14px;
+    font-size: 16px;
+  }
+
+  .rail-group {
+    gap: 3px;
+    padding-top: 5px;
+  }
+}
+
+/* latency to the car: graded like the computer's numbers */
+.cockpit .latency-chip[data-tone="ok"]   { color: var(--healthy); }
+
+.cockpit .latency-chip[data-tone="warn"] { color: var(--degraded); }
+
+.cockpit .latency-chip[data-tone="bad"]  { color: #ff6b60; }
+
+.latency-chip[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------
+   14. RECORDING
+   ------------------------------------------------------------------ */
+
+/* Record in the bar: red while it runs, the time in it */
+.cockpit .top-btn.recording,
+.cockpit .rail-btn.recording {
+  background: rgba(239, 68, 68, .2);
+  border-color: var(--failed);
+  color: #fff;
+}
+
+.cockpit .top-btn.recording .ic,
+.cockpit .rail-btn.recording .ic {
+  color: #ff6b60;
+}
+
+.cockpit-record-btn .ic {
+  color: #ff6b60;
+}
+
+.cockpit .top-btn.recording .btn-lbl,
+.cockpit .rail-btn.recording .btn-lbl {
+  font-variant-numeric: tabular-nums;
+}
+
+/* the rail's button labels are its own spans; Record's comes from JS */
+.cockpit .rail-btn .btn-lbl {
+  display: inline;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+
+  /* phones: the icon, and the time while it runs */
+  .cockpit-record-btn:not(.recording) .btn-lbl {
+    display: none;
+  }
+
+  .cockpit-tools .cockpit-record-btn {
+    min-width: 44px;
+    justify-content: center;
+    padding: 0 10px;
+  }
+}
+
