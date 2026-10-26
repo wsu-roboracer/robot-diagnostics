@@ -1363,6 +1363,13 @@ Shows whether each topic is publishing as it should.
 to every topic in `TOPICS` at most 5 times a second, just to see messages arrive,
 and to `/diagnostics` on every message.
 
+The scan sends its calls one at a time. rosbridge answers a page's service calls
+in order and reads nothing else from that page while it waits, so the scan's
+20-odd calls sent together held the page's `/drive` commands back for about 1.2 s,
+and the [drive watchdog](#drive-watchdog) stopped the car every 5 seconds while
+driving from the page. One at a time, a drive command waits behind at most one
+call (holes up to about 0.2 s, measured on robot 6).
+
 **How it is judged.** On the page. Each topic has a class, and the class decides
 what silence means:
 
@@ -1551,6 +1558,14 @@ the cars.
   launch files, and rosbridge's already has `port`. Rosbridge took port 8000,
   lost it to the web server, and failed with "Address already in use" while
   nothing was on 9090. That is why the web server's is `dashboard_port`.
+- **Stopping the drive watchdog's false stops with rosbridge settings, Wi-Fi or a
+  longer delay.** The stops came every 5 seconds, from the page's graph scan (see
+  [Topics](#topics)). rosbridge's `call_services_in_new_thread` (its startup
+  warning suggests it) made each rosapi call take 0.6 to 1 s instead of about 50
+  ms on the cars' rosbridge 2.0.4, and some never answered: the latency chip read
+  about 2 s, and `/scan` and `/odom` showed `NODE_DOWN` while publishing. Turning
+  off the robot's Wi-Fi power saving and raising the watchdog to 0.5 s did not
+  stop them either.
 
 ## What was already on the robot, and what this project added
 
