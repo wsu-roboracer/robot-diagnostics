@@ -1,14 +1,10 @@
-<<<<<<< HEAD
-This is the hardware folder, which will hold the future hardware for the physical diagnostics system, and files pertaining to the PCB hat.
-
-- [pcb/](pcb/) — PCB hat design and gerber files.
-=======
 # Diagnostic hardware
 
 The physical side of the diagnostics system: a small PCB "hat" with LEDs and a display, on the Orin's 40-pin header. Why it is built this way is in [docs/hardware/physical-implementation.md](../docs/hardware/physical-implementation.md); the decision is [ADR 0002](../docs/adr/0002-physical-component-form.md).
 
 | File | What it is |
 |---|---|
+| [pcb/](pcb/) | The KiCad 10 design (`orin_hat_diag/`) and the student's original EasyEDA Pro project, kept for reference |
 | [PCB-Hat_Diagnostics.zip](PCB-Hat_Diagnostics.zip) | Gerber files: what you send to a board manufacturer |
 | [PCB Hat for Diagnostics_2026-10-14.epro](PCB%20Hat%20for%20Diagnostics_2026-10-14.epro) | The EasyEDA project the Gerbers were made from. Open this to change the board |
 | [designs/pcb-hat-recommended-layout.pdf](designs/pcb-hat-recommended-layout.pdf) | The recommended board layout |
@@ -18,4 +14,3 @@ The physical side of the diagnostics system: a small PCB "hat" with LEDs and a d
 | [images/](images/) | Reference pictures used by the hardware doc: the LED panel, the level shifter and the Orin NX GPIO layout |
 
 When the board changes, export new Gerbers into the zip and keep the `.epro` next to it, so the two always match.
->>>>>>> a1475428a24b309a55f786f1f1936d8243d29910
