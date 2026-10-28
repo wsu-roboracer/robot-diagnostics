@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+
+# KiCad: per-user state, lock files, local history and backups
+*.kicad_prl
+*.lck
+.history/
+*-backups/
+fp-info-cache
+_autosave-*

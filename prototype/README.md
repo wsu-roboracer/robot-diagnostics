@@ -15,6 +15,7 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
 | `verify_system.mjs` | Runs the page's real system panel and joystick-check code against sample messages. No robot needed: `node verify_system.mjs` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
+| `hat_leds.py` | Drives the diagnostics HAT's 74 WS2812B LEDs over SPI (header pin 19) and reads its button (pin 29). Pinout and LED index map: [diagnostic-hardware/pcb/orin_hat_diag](../diagnostic-hardware/pcb/orin_hat_diag/README.md). `python3 hat_leds.py --self-test` needs no hardware |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
 
 ### The scripts, in load order
