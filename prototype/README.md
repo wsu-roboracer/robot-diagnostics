@@ -16,6 +16,8 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 | `verify_system.mjs` | Runs the page's real system panel and joystick-check code against sample messages. No robot needed: `node verify_system.mjs` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
 | `hat_leds.py` | Drives the diagnostics HAT's 74 WS2812B LEDs over SPI (header pin 19) and reads its button (pin 29). Pinout and LED index map: [diagnostic-hardware/pcb/orin_hat_diag](../diagnostic-hardware/pcb/orin_hat_diag/README.md). `python3 hat_leds.py --self-test` needs no hardware |
+| `hat_battery.py` | **Skeleton, no hardware yet.** Will read the HAT's battery voltmeter over I2C7 (header pins 3/5) and show it on its 7-segment display, once that part of the board is designed. For now it only has the voltage-to-digits formatting, so it can be tested ahead of the hardware: `python3 hat_battery.py --self-test` |
+| `hat_obstacle_matrix.py` | **Skeleton.** Turns `/scan` into obstacles on the HAT's 8x8 LED matrix: nearest return per angular slice, coloured red/amber/green by the same distance bands as the web radar plot. Needs a sourced ROS 2 install and `hat_leds.py`'s hardware to run for real, neither for `python3 hat_obstacle_matrix.py --self-test` |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
 
 ### The scripts, in load order

@@ -10,7 +10,7 @@ A board that plugs into the Jetson Orin Nano dev kit's 40-pin header (J12). It h
 | `led_matrix.kicad_sch` | The 8×8 obstacle matrix |
 | `orin_hat_diag.kicad_pcb` | Board, 105 × 70 mm, 2 layers. Parts are placed but **not yet routed** |
 
-Driver code: [`prototype/hat_leds.py`](../../../prototype/hat_leds.py).
+Driver code: [`prototype/hat_leds.py`](../../../prototype/hat_leds.py). Battery voltmeter / 7-segment display driver (skeleton, no hardware chosen yet): [`prototype/hat_battery.py`](../../../prototype/hat_battery.py). Obstacle matrix driver, reading `/scan` onto the 8x8 grid (skeleton): [`prototype/hat_obstacle_matrix.py`](../../../prototype/hat_obstacle_matrix.py).
 
 ## Header pin assignments
 
@@ -74,5 +74,6 @@ Full white on all 74 LEDs draws roughly 3 A, which is more than the header's 5 V
 - [ ] **Measure the dev kit with calipers.** The outline, the J1 position and the M2.5 mounting holes are provisional. Check that the board clears the heatsink fan.
 - [ ] J1 is a 2×20 female socket on the **bottom** of the board, with LEDs on top. Confirm pin 1 lines up with the Orin's pin 1 once the outline is measured.
 - [ ] Route the board. The bottom layer is a GND pour, so route 5 V and data on top. The data chain runs D1→D10, then from D10 to D101 at the top-left of the matrix.
-- [ ] Battery voltmeter and 7-segment display: the boxed area on the `User.Drawings` layer is kept free for them.
+- [ ] Battery voltmeter and 7-segment display: the boxed area on the `User.Drawings` layer is kept free for them. Pick the ADC/fuel-gauge chip and the display driver chip, then fill in `BATTERY_I2C_ADDR` / `DISPLAY_I2C_ADDR` and the two stub methods in `hat_battery.py`.
 - [ ] Hardware bring-up: scope pin 19 and check the line idles low between frames. The driver sends a low byte first in case it doesn't.
+- [ ] Confirm the HAT's mounting orientation on the chassis (which way FRONT actually faces once installed). `hat_obstacle_matrix.py` only maps the forward 180 degrees of the LiDAR's 270 degree field for now; it needs this to cover the rest.
