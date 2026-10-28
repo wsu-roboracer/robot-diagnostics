@@ -61,9 +61,22 @@ const PAD_STEER_RATE = 20.0;    // rad per second: full lock in about 17 ms
    mux saw is "stop" rather than whatever was held */
 const STOP_BURST = 5;
 
+/* Gamepad sticks (Steam Deck, or any pad the browser maps as
+   "standard"): left stick up/down is speed, right stick left/right is
+   steering. Only standard-mapped pads are read, so the axis numbers
+   below mean what they say; B stops. Like the on-screen pad, the stick
+   is proportional and deflecting it is the dead-man: centre it and the
+   car stops. */
+const STICK_DEADZONE = 0.15;
+const STICK_AXIS_SPEED = 1;     // left stick, vertical
+const STICK_AXIS_STEER = 2;     // right stick, horizontal
+const STICK_BTN_STOP = 1;       // B
+
 let driveArmed = false;
 let driveSocket = null;
 let padHeld = false;
+let stickHeld = false;
+let stickKnobShown = false;
 let padVec = { x: 0, y: 0 };
 let cmdSpeed = 0;
 let cmdSteer = 0;
@@ -177,7 +190,7 @@ function armDrive() {
   driveArmed = true;
   driveSocket = ws;
 
-  setDriveNote("Armed. Hold the pad or a drive key to move.");
+  setDriveNote("Armed. Hold the pad, a drive key or a stick to move.");
   renderDriveControls();
 }
 
@@ -199,6 +212,7 @@ function disarmDrive(reason) {
   driveArmed = false;
   driveSocket = null;
   padHeld = false;
+  stickHeld = false;
   padVec = { x: 0, y: 0 };
   driveKeys.clear();
   cmdSpeed = 0;
@@ -234,6 +248,34 @@ function keyAxis(positive, negative) {
   return (has(positive) ? 1 : 0) - (has(negative) ? 1 : 0);
 }
 
+/* Rescale so the stick starts from 0 at the edge of the dead zone
+   rather than jumping to 0.15. */
+function stickDeadzone(value) {
+
+  if (!Number.isFinite(value) || Math.abs(value) < STICK_DEADZONE) return 0;
+
+  return Math.sign(value) * (Math.abs(value) - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+}
+
+/* x and y follow the on-screen pad: y grows downward, so forward is
+   negative. A pad that unplugs reads as centred, which is a stop. */
+function readSticks() {
+
+  const pad = navigator.getGamepads &&
+    [...navigator.getGamepads()].find(p =>
+      p && p.connected && p.mapping === "standard");
+
+  if (!pad) return { x: 0, y: 0, stop: false };
+
+  const stop = pad.buttons[STICK_BTN_STOP];
+
+  return {
+    x: stickDeadzone(pad.axes[STICK_AXIS_STEER]),
+    y: stickDeadzone(pad.axes[STICK_AXIS_SPEED]),
+    stop: Boolean(stop && stop.pressed)
+  };
+}
+
 function driveTick() {
 
   const now = performance.now();
@@ -249,6 +291,13 @@ function driveTick() {
     disarmDrive("the emergency stop is on");
   }
 
+  /* gamepad sticks are only read while armed */
+  const stick = driveArmed ? readSticks() : { x: 0, y: 0, stop: false };
+
+  if (stick.stop) disarmDrive("stop pressed on the controller");
+
+  stickHeld = driveArmed && (stick.x !== 0 || stick.y !== 0);
+
   let targetSpeed = 0;
   let targetSteer = 0;
 
@@ -259,19 +308,40 @@ function driveTick() {
     targetSpeed = -padVec.y * limitSpeed();
     targetSteer = -padVec.x * limitSteer();
 
+  } else if (stickHeld) {
+
+    targetSpeed = -stick.y * limitSpeed();
+    targetSteer = -stick.x * limitSteer();
+
   } else if (driveKeys.size) {
 
     targetSpeed = keyAxis(KEY_FWD, KEY_BACK) * limitSpeed();
     targetSteer = keyAxis(KEY_LEFT, KEY_RIGHT) * limitSteer();
   }
 
+  /* mirror the sticks on the on-screen knob, unless a finger has it */
+  if (stickHeld && !padHeld) {
+
+    const length = Math.max(1, Math.hypot(stick.x, stick.y));
+
+    placeKnob(stick.x / length, stick.y / length);
+    stickKnobShown = true;
+
+  } else if (stickKnobShown) {
+
+    if (!padHeld) placeKnob(0, 0);
+    stickKnobShown = false;
+  }
+
+  const proportional = padHeld || stickHeld;
+
   const active =
-    driveArmed && (padHeld || driveKeys.size > 0);
+    driveArmed && (proportional || driveKeys.size > 0);
 
   if (active) {
 
-    const accel = padHeld ? PAD_ACCEL : KEY_ACCEL;
-    const steerRate = padHeld ? PAD_STEER_RATE : KEY_STEER_RATE;
+    const accel = proportional ? PAD_ACCEL : KEY_ACCEL;
+    const steerRate = proportional ? PAD_STEER_RATE : KEY_STEER_RATE;
 
     cmdSpeed = towards(cmdSpeed, targetSpeed, accel * dt);
     cmdSteer = towards(cmdSteer, targetSteer, steerRate * dt);
@@ -706,7 +776,8 @@ function controlState() {
   const connected = socketOpen();
   const pubs = drivePublishers();
   const foreign = foreignDriveActive();
-  const active = driveArmed && (padHeld || driveKeys.size > 0);
+  const active =
+    driveArmed && (padHeld || stickHeld || driveKeys.size > 0);
 
   /* right after we disarm, rosbridge can still list us for a few
      seconds — do not call that "another dashboard" */
@@ -752,7 +823,7 @@ function controlState() {
   } else if (driveArmed) {
 
     hero = { tone: "you", icon: "joystick", title: "You're armed",
-             sub: "Hold the pad or a drive key to move." };
+             sub: "Hold the pad, a drive key or a stick to move." };
 
   } else if (mux === "autonomous") {
 
