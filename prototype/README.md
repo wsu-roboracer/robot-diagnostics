@@ -1,19 +1,20 @@
-# Diagnostics dashboard prototype
+# The dashboard
 
-Proof of concept from the ROS status spike (#2). Its only job was to show that a web page can display live robot health, so it is scrappy on purpose and not the final tool. The findings are in [docs/ros-status-spike-summary.md](../docs/ros-status-spike-summary.md).
+This folder is the working dashboard: the page, the services it needs on the car, the start script, tools for checking a car, and the tests. It started as the proof of concept from the ROS status spike (#2), which is why it is called `prototype/`; the spike's findings are in [docs/research/ros-status-spike-summary.md](../docs/research/ros-status-spike-summary.md).
 
-The page is read-only apart from one button, and changes nothing on the car. It shows which nodes are running, which topics are actually publishing, battery voltage, the mux's active control input, everything on `/diagnostics`, a live `/rosout` warning and error feed, and an OS-level system panel. Click a topic row to see its real message data.
+The page shows the car's health (battery, computer, subsystems, ROS nodes and topics, camera, LiDAR), drives the car from the Drive tab, and has an emergency stop. How to use each tab is in [docs/guides/](../docs/guides/); how it all works is in [docs/system-overview.md](../docs/system-overview.md).
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `dashboard.html` | The page's markup. It loads `css/dashboard.css` and the scripts in `js/`, in that order. No CDN, works with no internet |
-| `css/dashboard.css` | All of the page's styling |
+| `dashboard.html` | The page's markup. It loads the stylesheets in `css/` and the scripts in `js/`, in that order. No CDN, works with no internet |
+| `css/` | The page's styling, one file per area: `base`, `topbar`, `overview`, `drive`, `advanced`, `cockpit`. [css/README.md](css/README.md) says what is where |
 | `js/*.js` | The page's logic, split by job. They are plain scripts that share one scope, so **the load order in `dashboard.html` matters**: `config.js` first, `main.js` last. See the table below |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
+| `camera_http.py` | The camera's HTTP proxy: relays the GStreamer MJPEG stream to browsers, always the newest frame, so a slow link drops frames instead of lagging |
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
-| `verify_system.mjs` | Runs the page's real system panel and joystick-check code against sample messages. No robot needed: `node verify_system.mjs` |
+| `tests/` | Checks that need no robot. Run them all with `node tests/run.mjs`: LiDAR plot geometry, beam selection maths, the system list, joystick check and connection banners (all against the page's real `js/`), and the self-tests in `camera_http.py` and `system_diagnostics.py` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
 | `hat_leds.py` | Drives the diagnostics HAT's 74 WS2812B LEDs over SPI (header pin 19) and reads its button (pin 29). Pinout and LED index map: [diagnostic-hardware/pcb/orin_hat_diag](../diagnostic-hardware/pcb/orin_hat_diag/README.md). `python3 hat_leds.py --self-test` needs no hardware |
 | `hat_battery.py` | **Skeleton, no hardware yet.** Will read the HAT's battery voltmeter over I2C7 (header pins 3/5) and show it on its 7-segment display, once that part of the board is designed. For now it only has the voltage-to-digits formatting, so it can be tested ahead of the hardware: `python3 hat_battery.py --self-test` |
@@ -24,19 +25,24 @@ The page is read-only apart from one button, and changes nothing on the car. It 
 
 | Script | What is in it |
 |---|---|
-| `js/config.js` | Thresholds, timings, expected nodes and shared state. Change limits and node lists here |
+| `js/config.js` | Thresholds, timings, expected nodes, the robot list (`ROBOTS`) and shared state. Change limits and node lists here |
+| `js/icons.js` | The line icons used across the page (`icon("name")`, or `<i data-icon="name">` in the HTML) |
 | `js/helpers.js` | Small shared helper functions |
-| `js/connection.js` | The rosbridge connection, service calls and subscriptions, plus the scan handler and the radar geometry helpers (`isValidRange`, `polarToCanvas`) |
+| `js/connection.js` | The rosbridge connection, service calls and subscriptions, plus the scan handler and the LiDAR geometry helpers (`isValidRange`, `polarToCanvas`) |
 | `js/graph-data.js` | Reading the ROS graph, diagnostics, VESC data and the log; topic classification |
 | `js/health.js` | Subsystem health, overall health and the status banner |
 | `js/status-panels.js` | Diagnostic counts, battery, uptime, footer and the ROS Graph card |
 | `js/advanced-panels.js` | The Advanced tab: topic and node tables and the "Needs attention" list |
 | `js/system-tiles.js` | The Robot System list (every OS-level probe and its readings) |
-| `js/metrics.js` | Advanced diagnostics, priority metrics with 60 s trend lines, lidar readout and the radar plot |
-| `js/camera.js` | Camera stream and take-picture |
-| `js/checks.js` | Connection health and on-demand checks |
-| `js/drive.js` | The Drive tab's virtual controller |
-| `js/main.js` | Render loop, tabs, theme switch, buttons, connection form and startup. Must load last |
+| `js/metrics.js` | The Overview tiles (CPU, RAM, GPU, Temperature, Network) and their row details, LiDAR readouts, and the Lines view of the LiDAR plot |
+| `js/camera.js` | Camera stream, automatic reconnect, take-picture, and recording the camera to a video file |
+| `js/checks.js` | Connection health banners and the on-demand joystick check |
+| `js/lidar-select.js` | Select beams: picking a range of LiDAR beam indices |
+| `js/estop.js` | The Emergency stop button and banner |
+| `js/drive.js` | The driving logic: arming, the dead-man, limits, who's driving. Its own cards sit hidden under the driving view |
+| `js/cockpit.js` | The driving view on the Drive tab and in full screen: panes, floating controls, Settings, the side rail, thumb sticks, speedometer |
+| `js/radar.js` | The Detailed LiDAR view: the radar drawing, obstacle detection and its panel on the Overview card |
+| `js/main.js` | Render loop, tabs, theme switch, buttons, the connection form and robot picker, and startup. Must load last |
 
 ## Looking at it
 
@@ -146,18 +152,17 @@ Two readings show words instead of numbers on purpose:
 Chase-cam view: the car is the blue outline at the centre, drawn to scale, with forward up and left on the left.
 
 - **Status line** above the plot says what matters in one sentence, in plain words: *"All clear. Closest thing is 1.6 m away, to the left."*, *"Close: something 0.89 m ahead-right."*, or *"... Something ahead is getting closer (0.99 m)."* Its colour follows the same bands as the dots.
-- **View**: **Lines** (the default) is the original radar as first built - black screen, three green range rings, one continuous green outline, a scale that eases smoothly to fit (2 to 12 m) on Auto - with two additions: the **red (0.5 m) and amber (1 m) circles** around the car, labelled, and the **to-scale blue car**. **Detailed** is the second option: coloured dots, open space, danger circles and the 1 s movement trail. A range picked with the buttons or zoom applies to both. One choice for both plots, remembered per browser. The status sentence and the readouts under the plot work the same in both views; the plot details below are for Detailed.
+- **View**: **Lines** (the default) is the original radar as first built - black screen, three green range rings, one continuous green outline, a scale that eases smoothly to fit (2 to 12 m) on Auto - with two additions: the **red (0.5 m) and amber (1 m) circles** around the car, labelled, and the **to-scale blue car**. **Detailed** is the radar (`js/radar.js`): every return as a dot, walls drawn as outlines, the five nearest objects tagged with their distance, a status for each direction, and a **Sweep** button in the toolbar that turns its turning line on or off. A range picked with the buttons or zoom applies to both. One choice for both plots, remembered per browser. The status sentence works the same in both views; the plot details below are for Detailed.
 - **Danger circles (both views)**: a soft red circle 0.5 m around the car and an amber one at 1 m, each labelled, so "too close" is a place on the picture.
 - The point count, field of view and update age are under **Technical details**, closed by default.
 
-- **Dots (Detailed)** / **line pieces (Lines)** are returns, coloured by distance: red under 0.5 m, amber under 1 m, green beyond. The same colours are used by the readouts underneath and the Drive tab's "Nearest obstacle" vital (`LIDAR_NEAR` / `LIDAR_CLOSE` in `metrics.js`).
-- **Soft green area (Detailed)** is free space, where the car can go. A beam with no return counts as open to the edge of the plot.
-- **Faint grey dots (Detailed)** are the same scan from about 1 s ago. A gap between grey and colour is something moving. **White rings** mark returns that came 15 cm or more closer in that second.
-- **Dashed line and label** point at the nearest return.
+- **Line pieces (Lines)** are returns, coloured by distance: red under 0.5 m, amber under 1 m, green beyond (`LIDAR_NEAR` / `LIDAR_CLOSE` in `metrics.js`). The driving view's edge lights use the same bands.
+- **Objects (Detailed)**: neighbouring returns are grouped into objects; the nearest five get numbered tags, amber under 1 m and red under 0.3 m (`RADAR` in `radar.js`), with ▼ and a speed when one is getting closer. Point at the plot for an object's distance, direction and width.
+- **Dashed line** points at the nearest return.
 - **Shaded wedge at the back** is the blind spot (the Hokuyo sees 270°).
-- **Range / zoom**: Auto steps between 2 / 4 / 8 / 15 m. It zooms out within half a second and zooms in only after the smaller step has fitted for 2.5 s, so the rings do not keep resizing. Pick a number to pin it, **scroll on the plot** to zoom in and out, and **double-click** to go back to Auto. The Drive tab's plot starts at a fixed 4 m and has **− / + / Auto** buttons in its corner.
-- **Big view (Drive tab)**: **⤢ Enlarge** swaps the LiDAR into the large slot and shrinks the camera under it; the controls and vitals stay where they are. **⤡ Shrink** puts it back. The choice is remembered per browser.
-- **Readouts** under each plot: the closest return **Ahead** (±20°), **Left** and **Right** (60 to 120°), and **Closest** overall (with its bearing), as large numbers in the same colours as the dots. The badge under each says ▼ closer (amber) / ▲ farther (green) / steady over the last second; a 10 cm dead band keeps sensor noise from flickering it.
+- **Range / zoom**: Auto steps between 2 / 4 / 8 / 15 m. It zooms out within half a second and zooms in only after the smaller step has fitted for 2.5 s, so the rings do not keep resizing. Pick a number to pin it, **scroll on the plot** to zoom in and out, and **double-click** to go back to Auto. The driving view's LiDAR pane has the same range buttons in its own toolbar, and **Center** puts the car back in the middle.
+- **In the driving view** (Drive tab and full screen) the LiDAR is a pane: resize it with the divider, drag its title to move it, **Float** it over the camera, or close it with its **×**.
+- **Readouts** under the Lines plot: the closest return **Ahead** (±20°), **Left** and **Right** (60 to 120°), and **Closest** overall (with its bearing), as large numbers in the same colours as the dots. The badge under each says ▼ closer (amber) / ▲ farther (green) / steady over the last second; a 10 cm dead band keeps sensor noise from flickering it.
 - The plot is drawn at the screen's real pixel density and its text scales with the plot, so it stays sharp and readable at any size.
 
 ### The joystick check button
@@ -176,7 +181,7 @@ If the button reports that the service does not exist, `system_diagnostics.py` i
 
 ### The Drive tab (virtual controller)
 
-Drives the car from the browser, no gamepad needed. It publishes `ackermann_msgs/AckermannDriveStamped` on `/drive` - the `ackermann_mux` **navigation** input - at 20 Hz over the same websocket.
+Drives the car from the browser, no gamepad needed. It publishes `ackermann_msgs/AckermannDriveStamped` on `/drive` - the `ackermann_mux` **navigation** input - at 50 Hz over the same websocket, and at once whenever the input changes.
 
 - **Nothing is sent until you arm it**: tick "area is clear", press Arm.
 - **Dead-man**: commands go out only while the pad or a drive key (`W A S D` / arrows) is held. Letting go sends five zero-speed commands and then goes silent. Those zeros are what stop the car - `ackermann_mux` passes messages through one at a time and sends no zero of its own when an input goes quiet.
@@ -188,7 +193,7 @@ Drives the car from the browser, no gamepad needed. It publishes `ackermann_msgs
 - **Connected**: the status banner (on every tab) shows how many people have the dashboard open - "Just you", "3 people" - turning amber near rosbridge's 10-connection limit and red past it.
 - **The physical joystick wins.** It is the mux's higher-priority input, so holding its deadman overrides the page. The "Driving input" vital shows which input is driving.
 
-The tab is laid out so nothing you need while driving is off-screen: controls on the left, the camera in the middle with commanded / measured speed and steering drawn over it, and **Vitals** on the right - battery, link freshness, nearest LiDAR obstacle (amber under 1 m, red under 0.5 m, the same bands as the LiDAR plot), driving input, speed, temperature and CPU - with the LiDAR plot underneath. The camera is the same single MJPEG stream as the Overview card, moved into the Drive tab while it is open, so opening Drive does not double the Wi-Fi load.
+The tab is the driving view (`js/cockpit.js`): camera, LiDAR and controls as panes you can show, hide, resize and drag into place, with **Full screen** to cover the screen. Hiding the top bar on a computer moves the essentials into a side rail so the picture gets the whole height. The top bar shows **Latency**, the round trip to the car, and has **Record** for the camera. The camera is the same single MJPEG stream as the Overview card, moved into the view while it is open, so opening Drive does not double the Wi-Fi load. How to use all of it is in [docs/guides/drive-tab.md](../docs/guides/drive-tab.md).
 
 If the car does not move while "DRIVING" shows, check the Mux input readout: `Idle` means the mux is not taking `/drive` - look at `mux.yaml` on the robot for a lock or a different navigation topic.
 

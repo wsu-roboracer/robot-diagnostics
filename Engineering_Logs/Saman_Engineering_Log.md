@@ -33,6 +33,6 @@
 - Record any confusing parts or missing information.
 - Update the mockup based on the feedback.
 
-![UI MOCKUP](../Images/image.png)
+![UI MOCKUP](../Images/ui-mockup.png)
 
 ## Week 3

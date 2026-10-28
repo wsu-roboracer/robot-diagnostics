@@ -1,0 +1,28 @@
+# Runs the dashboard's no-robot checks and the docs link check on every
+# pull request and every push to main. Same commands as running locally.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Dashboard logic checks (no robot)
+        run: node prototype/tests/run.mjs
+
+      - name: Markdown links point at real files
+        run: python3 .github/scripts/check_links.py

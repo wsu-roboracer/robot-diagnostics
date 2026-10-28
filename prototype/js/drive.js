@@ -15,8 +15,8 @@
       stops the car: ackermann_mux forwards message by message and
       sends no zero of its own when an input goes quiet (see
       tools/estop_capture.py). If the link dies mid-drive, no zero
-      arrives and the motor holds the last command until the VESC's
-      own command timeout (~1 s, unconfirmed).
+      arrives from here; system_diagnostics.py's drive watchdog sends
+      the zeros instead, 0.3 s after /drive goes quiet.
    2. Priority. The physical joystick is the mux's higher-priority
       input, so holding its deadman always overrides this page.
    3. Disarm on anything unexpected: STOP / Space / Esc, leaving
@@ -31,13 +31,31 @@
 const DRIVE_TOPIC = "/drive";
 const DRIVE_TYPE = "ackermann_msgs/msg/AckermannDriveStamped";
 
-const DRIVE_HZ = 20;
+/* 50 commands a second while held, about the physical controller's
+   own rate (/joy measured at ~48 Hz). It was 20: up to 50 ms between
+   a thumb moving and the car hearing it, and visibly coarser steps. */
+const DRIVE_HZ = 50;
 
-/* Speed ramps rather than jumps, so a key press or a flick of
-   the pad does not ask the VESC for a step change. Releasing is
-   NOT ramped — stop is always immediate. */
-const DRIVE_ACCEL = 2.0;        // m/s per second
-const STEER_RATE = 2.5;         // rad per second
+/* An input change (a key, a press, a drag) sends at once instead of
+   waiting for the next tick - a release is a stop, and it should not
+   wait. Pointer moves come faster than any useful rate, so at most one
+   extra command per this many ms. */
+const DRIVE_NOW_MIN_MS = 10;
+
+/* Ramps. The keys are all or nothing, so their speed builds up rather
+   than asking the VESC for a jump from 0 to full in one message. The
+   pad and the thumb sticks are proportional, like the controller's
+   stick: your thumb is the ramp, and the page follows it almost at
+   once, only smoothing out jitter - the controller goes through no
+   ramp at all. Releasing is never ramped: stop is always immediate.
+
+   Was 5 m/s² and 2.5 rad/s for everything: 0.57 s to full speed and
+   0.13 s to full steering even on the pad, which read as lag next to
+   the controller. */
+const KEY_ACCEL = 8.0;          // m/s per second: 3 m/s in 0.38 s
+const KEY_STEER_RATE = 8.0;     // rad per second: full lock in about 40 ms
+const PAD_ACCEL = 20.0;         // m/s per second: 3 m/s in 0.15 s
+const PAD_STEER_RATE = 20.0;    // rad per second: full lock in about 17 ms
 
 /* zero-speed commands sent after release, so the last thing the
    mux saw is "stop" rather than whatever was held */
@@ -94,6 +112,12 @@ function limitSteer() {
 }
 
 function publishDrive(speed, steer) {
+
+  /* never send the car a number that is not one: anything odd is a stop */
+  if (!Number.isFinite(speed) || !Number.isFinite(steer)) {
+    speed = 0;
+    steer = 0;
+  }
 
   const now = Date.now();
 
@@ -194,7 +218,7 @@ function setDriveNote(text) {
   $("driveNote").textContent = text;
 }
 
-/* ---------- the 20 Hz loop ---------- */
+/* ---------- the 50 Hz loop ---------- */
 
 function towards(current, target, maxStep) {
 
@@ -246,8 +270,11 @@ function driveTick() {
 
   if (active) {
 
-    cmdSpeed = towards(cmdSpeed, targetSpeed, DRIVE_ACCEL * dt);
-    cmdSteer = towards(cmdSteer, targetSteer, STEER_RATE * dt);
+    const accel = padHeld ? PAD_ACCEL : KEY_ACCEL;
+    const steerRate = padHeld ? PAD_STEER_RATE : KEY_STEER_RATE;
+
+    cmdSpeed = towards(cmdSpeed, targetSpeed, accel * dt);
+    cmdSteer = towards(cmdSteer, targetSteer, steerRate * dt);
 
     publishDrive(cmdSpeed, cmdSteer);
 
@@ -265,6 +292,11 @@ function driveTick() {
   }
 
   renderDriveReadout(active);
+}
+
+/* An input just changed: send now rather than at the next tick. */
+function driveNow() {
+  if (performance.now() - lastDriveTick >= DRIVE_NOW_MIN_MS) driveTick();
 }
 
 /* ---------- rendering ---------- */
@@ -431,8 +463,8 @@ function renderDrive() {
   $("measSpeed").textContent =
     fresh ? robotSpeedMps.toFixed(2) + " m/s" : "—";
 
-  $("hudBattery").textContent =
-    "🔋 " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
+  $("hudBattery").innerHTML =
+    icon("battery") + " " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
 
   const rows = driveVitals();
 
@@ -511,6 +543,7 @@ $("drivePad").addEventListener("pointerdown", event => {
   padVec = padVector(event);
 
   placeKnob(padVec.x, padVec.y);
+  driveNow();
 });
 
 $("drivePad").addEventListener("pointermove", event => {
@@ -520,15 +553,19 @@ $("drivePad").addEventListener("pointermove", event => {
   padVec = padVector(event);
 
   placeKnob(padVec.x, padVec.y);
+  driveNow();
 });
 
 ["pointerup", "pointercancel", "lostpointercapture"].forEach(type =>
   $("drivePad").addEventListener(type, () => {
 
+    const was = padHeld;
+
     padHeld = false;
     padVec = { x: 0, y: 0 };
 
     placeKnob(0, 0);
+    if (was) driveNow();
   })
 );
 
@@ -561,12 +598,17 @@ window.addEventListener("keydown", event => {
 
   if (driveArmed && DRIVE_KEYS.has(key)) {
     event.preventDefault();
-    driveKeys.add(key);
+
+    /* the browser repeats a held key; only the first press is news */
+    if (!driveKeys.has(key)) {
+      driveKeys.add(key);
+      driveNow();
+    }
   }
 });
 
 window.addEventListener("keyup", event => {
-  driveKeys.delete(event.key.toLowerCase());
+  if (driveKeys.delete(event.key.toLowerCase())) driveNow();
 });
 
 /* ---------- everything that must stop the car ---------- */
@@ -585,8 +627,7 @@ window.addEventListener("pagehide", () => {
 
 $("stopBtn").onclick = () => disarmDrive("stop pressed");
 
-$("driveCamConnect").onclick =
-  () => connectCamera($("cameraUrl").value.trim());
+$("driveCamConnect").onclick = reconnectCamera;
 
 $("armBtn").onclick = () => {
 
@@ -623,7 +664,9 @@ function foreignDriveActive() {
 
   const now = performance.now();
 
-  return now - topic.last < 1000 && topic.last - lastOwnSend > 400;
+  /* the robot's drive watchdog stopping the car is not someone driving */
+  return now - topic.last < 1000 && topic.last - lastOwnSend > 400 &&
+    topic.last - lastWatchdogStop > 50;
 }
 
 function drivePublishers() {
@@ -634,13 +677,11 @@ function drivePublishers() {
   return {
     /* every web dashboard publishes through the rosbridge node */
     web: names.some(name => /rosbridge/.test(name)),
-    autonomous: names.filter(name => !/rosbridge/.test(name))
+    /* system_diagnostics publishes /drive only for the watchdog's zeros */
+    autonomous: names.filter(name => !/rosbridge|system_diagnostics/.test(name))
   };
 }
 
-/* One answer to "who has the car right now?", most urgent first,
-   plus the extras that matter: whether there is a physical backup
-   stop, and warnings only when something is actually going on. */
 /* Is a controller attached? true / false, or null with no
    system_diagnostics. Read from /dev/input/js*, which the robot lists
    every second and which vanishes the moment the pad disconnects -
@@ -657,6 +698,9 @@ function padLinkState() {
   return Boolean(js) && js !== "none";
 }
 
+/* One answer to "who has the car right now?", most urgent first,
+   plus the extras that matter: whether there is a physical backup
+   stop, and warnings only when something is actually going on. */
 function controlState() {
 
   const connected = socketOpen();
@@ -677,62 +721,66 @@ function controlState() {
 
   if (estopActive()) {
 
-    hero = { tone: "bad", icon: "🛑", title: "Emergency stop is on",
+    hero = { tone: "bad", icon: "octagonAlert", title: "Emergency stop is on",
              sub: "Nobody can drive the car until it is released at the top of the page." };
 
   } else if (!connected) {
 
-    hero = { tone: "none", icon: "⏸", title: "Not connected",
+    hero = { tone: "none", icon: "pause", title: "Not connected",
              sub: "Connect to the robot in the top bar." };
 
   } else if (foreign && pubs.autonomous.length && !pubs.web) {
 
-    hero = { tone: "bad", icon: "🤖", title: "Autonomous code is driving",
+    hero = { tone: "bad", icon: "bot", title: "Autonomous code is driving",
              sub: pubs.autonomous.join(", ") + " is sending drive commands." };
 
   } else if (foreign) {
 
-    hero = { tone: "bad", icon: "🖥️", title: "Someone else is driving",
+    hero = { tone: "bad", icon: "monitor", title: "Someone else is driving",
              sub: "Another dashboard is sending drive commands. You can't arm until they stop." };
 
   } else if (mux === "teleop") {
 
-    hero = { tone: "warn", icon: "🎮", title: "The controller is driving",
+    hero = { tone: "warn", icon: "gamepad", title: "The controller is driving",
              sub: "Someone is holding the controller's deadman. It overrides this page." };
 
   } else if (active) {
 
-    hero = { tone: "you", icon: "🕹️", title: "You are driving",
+    hero = { tone: "you", icon: "joystick", title: "You are driving",
              sub: "Let go to stop. STOP, Space or Esc disarms." };
 
   } else if (driveArmed) {
 
-    hero = { tone: "you", icon: "🕹️", title: "You're armed",
+    hero = { tone: "you", icon: "joystick", title: "You're armed",
              sub: "Hold the pad or a drive key to move." };
 
   } else if (mux === "autonomous") {
 
-    hero = { tone: "warn", icon: "🤖", title: "The car is following /drive",
+    hero = { tone: "warn", icon: "bot", title: "The car is following /drive",
              sub: "Something is sending drive commands." };
 
   } else {
 
-    hero = { tone: "ok", icon: "⏸", title: "Nobody is driving",
+    hero = { tone: "ok", icon: "pause", title: "Nobody is driving",
              sub: "The car is idle. Arm the controls to drive." };
   }
 
   /* ---- the backup stop ---- */
 
   const padLinked = padLinkState();
+  const pad = diag["system: Gamepad"];
 
   const chips = [
-    padLinked === null
-      ? { tone: "", text: "🎮 Controller: unknown",
+    padLinked && pad.level === 2
+      ? { tone: "bad", text: "Controller can't be read - no backup stop",
+          title: pad.message }
+      : padLinked === null
+      ? { tone: "", text: "Controller: unknown",
           title: "Needs system_diagnostics.py running on the robot" }
       : padLinked
-      ? { tone: "ok", text: "🎮 Controller connected",
+      ? { tone: "ok", text: "Controller connected",
           title: "The physical controller is your backup stop" }
-      : { tone: "warn", text: "🎮 No controller — no backup stop",
+      : { tone: "warn", text: "No controller — no backup stop",
           title: "Pair the PS4 controller so someone can take over" }
   ];
 
@@ -763,13 +811,13 @@ function renderControl() {
   const { hero, chips, alerts, padLinked } = controlState();
 
   $("controlHero").className = "control-hero tone-" + hero.tone;
-  $("controlIcon").textContent = hero.icon;
+  $("controlIcon").innerHTML = icon(hero.icon);
   $("controlTitle").textContent = hero.title;
   $("controlSub").textContent = hero.sub;
 
   $("controlChips").innerHTML =
     chips.map(chip =>
-      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.text)}</span>`
+      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${icon("gamepad")}${escapeHtml(chip.text)}</span>`
     ).join("");
 
   $("controlAlerts").innerHTML =
@@ -820,8 +868,8 @@ function renderPadDisconnect(padLinked) {
 
   button.hidden = !padLinked;
   button.disabled = padDisconnectBusy || held;
-  button.textContent =
-    padDisconnectBusy ? "Disconnecting…" : "🎮 Disconnect controller";
+  button.innerHTML =
+    padDisconnectBusy ? "Disconnecting…" : icon("gamepad") + " Disconnect controller";
   button.title =
     held
       ? "Someone is holding L1/R1 — they must let go first, or press E-STOP"
@@ -893,8 +941,8 @@ function setHighSpeed(on) {
     slider.value = NORMAL_MAX_SPEED;
   }
 
-  $("speedUnlockBtn").textContent =
-    on ? "Lock back to 3 m/s" : "⚠ Unlock high speed (up to 5 m/s)";
+  $("speedUnlockBtn").innerHTML =
+    on ? "Lock back to 3 m/s" : icon("alert") + " Unlock high speed (up to 5 m/s)";
 
   $("speedUnlockBtn").classList.toggle("unlocked", on);
   $("speedMode").hidden = !on;
@@ -915,8 +963,8 @@ function setFullSteer(on) {
     slider.value = NORMAL_MAX_STEER;
   }
 
-  $("steerUnlockBtn").textContent =
-    on ? "Lock back to 19°" : "⚠ Unlock full steering (up to 23°)";
+  $("steerUnlockBtn").innerHTML =
+    on ? "Lock back to 19°" : icon("alert") + " Unlock full steering (up to 23°)";
 
   $("steerUnlockBtn").classList.toggle("unlocked", on);
   $("steerMode").hidden = !on;
@@ -1002,7 +1050,8 @@ function setLidarBig(big) {
 
   $("driveGrid").dataset.lidar = big ? "big" : "normal";
 
-  $("lidarBigBtn").textContent = big ? "⤡ Shrink" : "⤢ Enlarge";
+  $("lidarBigBtn").innerHTML =
+    icon(big ? "minimize" : "maximize") + (big ? " Shrink" : " Enlarge");
   $("lidarBigBtn").setAttribute("aria-pressed", String(big));
 
   try {

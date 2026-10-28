@@ -30,9 +30,20 @@ const CLIENT_LIMIT = 10;
    needs a different fix, so it gets its own banner. */
 const PUBLISH_STALE_MS = 8000;
 
-const BATT_WARN = 11.1;
-const BATT_ERR = 10.5;
+/* Battery lines signed off with the professor (issue #6,
+   docs/meetings/instructor-interview.md). Yellow below 11.6 V is a buffer: the
+   pack still runs fine, get a replacement ready. Red below 11.1 V (3.7 V
+   per cell) means replace the pack soon - a run-down test showed the
+   pack falls off a cliff below about 10 V. The % estimate runs from
+   BATT_ERR (0%, replace the pack) to BATT_FULL (100%). */
+const BATT_WARN = 11.6;
+const BATT_ERR = 11.1;
 const BATT_FULL = 12.6;
+
+/* The voltage sags 0.1 to 0.2 V within a second under throttle, so it
+   is judged (and shown) as the median of this window, not per sample;
+   per sample, a pack near a line flickers between colours. */
+const BATT_WINDOW_MS = 5000;
 
 /* VESC FET temperature. Measured idle 31.4 °C; the controller's
    own OVER_TEMP_FET fault trips near 85 °C. */
@@ -44,10 +55,28 @@ const FET_ERR = 80;
    "no sensor", never a temperature. */
 const MOTOR_ABSENT = -20;
 
+/* Wi-Fi ranges signed off in #6 (conventions; measured -41 to -43 dBm,
+   0% loss, 1.4 to 3.2 ms round trip to the gateway). */
+const WIFI_SIGNAL_WARN = -67;   // dBm: yellow below, red below WIFI_SIGNAL_ERR
+const WIFI_SIGNAL_ERR = -75;
+const WIFI_LOSS_WARN = 1;       // % packet loss to the gateway
+const WIFI_LOSS_ERR = 5;
+const WIFI_RTT_WARN = 30;       // ms round trip to the gateway
+const WIFI_RTT_ERR = 100;
+
+/* The camera stream runs at 30 fps; under half of that is yellow, and no
+   frame for CAMERA_NO_FRAME_S seconds is red (#6). From camera_http /stats. */
+const CAMERA_MIN_FPS = 15;
+const CAMERA_NO_FRAME_S = 3;
+
+/* header.frame_id on the robot's drive watchdog zeros */
+const DRIVE_WATCHDOG_FRAME = "drive_watchdog";
+
 const SYS_PREFIX = "system: ";
 
 const SYS_ORDER = [
   "E-stop",
+  "Drive watchdog",
   "Thermal",
   "Power",
   "CPU",
@@ -106,7 +135,8 @@ const TOPICS = {
   "/odom": {
     cls: CONTINUOUS,
     owner: "/vesc_to_odom_node",
-    sub: "S-15"
+    sub: "S-15",
+    waitsForSteer: true
   },
 
   "/sensors/core": {
@@ -130,7 +160,8 @@ const TOPICS = {
   "/tf": {
     cls: CONTINUOUS,
     owner: "/vesc_to_odom_node",
-    sub: "S-20"
+    sub: "S-20",
+    waitsForSteer: true
   },
 
   "/diagnostics": {
@@ -271,6 +302,10 @@ const SCAN_GHOST_MS = 1000;
 
 let lastAnything = 0;
 
+/* When the robot's drive watchdog last sent zeros on /drive, so the page
+   does not mistake them for someone else driving. */
+let lastWatchdogStop = -Infinity;
+
 /* Tracked apart from lastAnything, which service responses also
    refresh — see PUBLISH_STALE_MS. */
 let lastPublish = 0;
@@ -288,3 +323,13 @@ const rowEls = new Map();       // topic -> the row's live elements
 let tableKey = "";              // rebuild the table only when the
                                 // topic set itself changes
 
+/* ==========================================================
+   ROBOTS - the connect dropdown in the top bar
+   Each car's rosbridge. Change a name or address here; the
+   address box beside the dropdown also takes any other one.
+========================================================== */
+
+const ROBOTS = Array.from({ length: 12 }, (_, i) => ({
+  name: `F1-WSU-${i + 1}`,
+  url: `ws://192.168.1.${201 + i}:9090`
+}));

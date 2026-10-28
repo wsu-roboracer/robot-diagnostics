@@ -6,15 +6,25 @@
    GRAPH SCAN
 ========================================================== */
 
+/* One call at a time, never all at once. rosbridge answers a page's
+   service calls in order and reads nothing else from that page while it
+   waits, so firing the scan's 20-odd calls together held the Drive tab's
+   /drive commands back for about 1.2 s every scan, and the robot's drive
+   watchdog stopped the car mid-drive. One at a time, a command waits for
+   at most one call (measured on robot 6: holes up to about 0.2 s).
+   A slow scan is never overlapped by the next one, or the calls would
+   pile up again. */
+let scanRunning = false;
+
 async function scan() {
+
+  if (scanRunning) return;
+  scanRunning = true;
 
   try {
 
-    const [topicList, nodeList] =
-      await Promise.all([
-        call("/rosapi/topics"),
-        call("/rosapi/nodes")
-      ]);
+    const topicList = await call("/rosapi/topics");
+    const nodeList = await call("/rosapi/nodes");
 
     runningNodes =
       new Set(nodeList.nodes || []);
@@ -64,31 +74,31 @@ async function scan() {
         }
       });
 
-    await Promise.all(
-      [...topics.keys()]
-        .filter(name => topics.get(name).present)
-        .map(async name => {
+    for (const name of [...topics.keys()]
+      .filter(name => topics.get(name).present)) {
 
-          try {
+      try {
 
-            const result =
-              await call("/rosapi/publishers", {
-                topic: name
-              });
+        const result =
+          await call("/rosapi/publishers", {
+            topic: name
+          });
 
-            topics.get(name).pubs =
-              result.publishers.length;
+        topics.get(name).pubs =
+          result.publishers.length;
 
-            /* names too: the Drive tab tells a web dashboard
-               (published via rosbridge) from autonomous code */
-            topics.get(name).publishers =
-              result.publishers;
+        /* names too: the Drive tab tells a web dashboard
+           (published via rosbridge) from autonomous code */
+        topics.get(name).publishers =
+          result.publishers;
 
-          } catch (error) {}
-        })
-    );
+      } catch (error) {}
+    }
 
-  } catch (error) {}
+  } catch (error) {
+  } finally {
+    scanRunning = false;
+  }
 }
 
 /* ==========================================================
@@ -139,6 +149,9 @@ function onDiagnostics(message) {
    VESC
 ========================================================== */
 
+/* Recent battery readings, for the median in onVesc (BATT_WINDOW_MS). */
+const battSamples = [];
+
 function onVesc(message) {
 
   const state = message.state;
@@ -148,13 +161,29 @@ function onVesc(message) {
   const fault =
     Number(state.fault_code) || 0;
 
-  const voltage =
-    Number(state.voltage_input);
+  const now = performance.now();
+  const reading = Number(state.voltage_input);
+
+  if (Number.isFinite(reading)) battSamples.push({ at: now, v: reading });
+
+  while (battSamples.length && now - battSamples[0].at > BATT_WINDOW_MS) {
+    battSamples.shift();
+  }
+
+  const sorted = battSamples.map(s => s.v).sort((a, b) => a - b);
+
+  /* everything that shows or judges the battery reads this median */
+  const voltage = sorted.length ? sorted[Math.floor(sorted.length / 2)] : reading;
 
   vesc = {
     voltage,
+    voltageNow: reading,
     fault,
-    tempFet: Number(state.temp_fet),
+    /* Exactly 0.0 is the unassigned default on cars whose vesc_driver
+       lacks the temperature patch, never a reading: a constant is not
+       a reading. Treated as missing, with fetMissing saying why. */
+    tempFet: Number(state.temp_fet) === 0 ? NaN : Number(state.temp_fet),
+    fetMissing: Number(state.temp_fet) === 0,
     tempMotor: Number(state.temp_motor)
   };
 }
@@ -280,7 +309,12 @@ function classifyTopic(topic) {
   }
 
   if (topic.last === null) {
-    return "SILENT";
+
+    /* vesc_to_odom publishes /odom and /tf from one callback that
+       returns early until the first servo command (health.js) */
+    return spec.waitsForSteer && odomWaitingForSteer()
+      ? "IDLE"
+      : "SILENT";
   }
 
   if (!fresh) {
@@ -312,7 +346,9 @@ function topicReason(topic, state) {
         : "publishing";
 
     case "IDLE":
-      return "no input right now, normal at rest";
+      return spec.waitsForSteer
+        ? "starts after the first steering command, normal at rest"
+        : "no input right now, normal at rest";
 
     case "INPUT":
       return "subscribed by the stack, nothing publishes it";

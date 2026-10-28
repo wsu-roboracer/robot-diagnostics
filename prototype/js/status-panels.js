@@ -71,7 +71,7 @@ function renderBattery() {
       "var(--failed)";
 
     $("batteryNote").textContent =
-      "Critical — stop driving";
+      "Replace the pack soon";
   }
 
   else if (
@@ -82,13 +82,13 @@ function renderBattery() {
       "var(--warn-ink)";
 
     $("batteryNote").textContent =
-      "Low battery — swap soon";
+      "Low - get a spare pack ready";
   }
 
   else {
 
     $("batteryVoltage").style.color =
-      "var(--orange)";
+      "var(--healthy)";
 
     $("batteryNote").textContent =
       "3S LiPo voltage";
@@ -231,7 +231,9 @@ function topicTone(state) {
   if (
     state === "MISSING" ||
     state === "NODE_DOWN" ||
-    state === "SILENT"
+    state === "SILENT" ||
+    state === "STALE" ||
+    state === "NOT_ADVERTISED"
   ) return "bad";
 
   if (BAD_TOPIC_STATES.has(state)) return "warn";

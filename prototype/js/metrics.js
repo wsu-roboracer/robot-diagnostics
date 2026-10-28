@@ -143,14 +143,40 @@ function networkRows(values) {
   const rows = [];
 
   if (wifiUp !== null) {
+
+    /* signal, loss and round trip to the gateway, each graded on its own
+       (#6), the row takes the worst; a value not measured yet is left out */
+    const loss = numberOr(values["wifi loss %"]);
+    const rtt = numberOr(values["wifi rtt ms"]);
+
+    const grades = [
+      Number.isFinite(signal)
+        ? signal < WIFI_SIGNAL_ERR ? "bad" : signal < WIFI_SIGNAL_WARN ? "warn" : "ok"
+        : null,
+      Number.isFinite(loss) ? gradeValue(loss, WIFI_LOSS_WARN, WIFI_LOSS_ERR) : null,
+      Number.isFinite(rtt) ? gradeValue(rtt, WIFI_RTT_WARN, WIFI_RTT_ERR) : null
+    ].filter(Boolean);
+
+    const parts = [
+      Number.isFinite(signal) ? signal + " dBm" : "",
+      Number.isFinite(loss) ? loss + "% loss" : "",
+      Number.isFinite(rtt) ? Math.round(rtt) + " ms" : ""
+    ].filter(Boolean);
+
     rows.push({
       label: "Wi-Fi",
-      value:
-        !wifiUp ? "down" : Number.isFinite(signal) ? signal + " dBm" : "up",
+      value: !wifiUp ? "down" : parts.length ? parts.join(" · ") : "up",
       pct:
         !wifiUp ? 0 : Number.isFinite(signal) ? (signal + 90) / 60 * 100 : 100,
-      grade: wifiUp ? "ok" : "bad",
-      hint: "The robot's Wi-Fi link, which carries this page."
+      grade: !wifiUp
+        ? "bad"
+        : grades.includes("bad") ? "bad" : grades.includes("warn") ? "warn" : "ok",
+      hint:
+        "The robot's Wi-Fi link, which carries this page. Signal: " +
+        `${WIFI_SIGNAL_WARN} dBm or better is good, below ${WIFI_SIGNAL_ERR} is bad. ` +
+        `Packet loss and round trip are to the router: under ${WIFI_LOSS_WARN}% and ` +
+        `${WIFI_RTT_WARN} ms is good, ${WIFI_LOSS_ERR}% or more, or over ` +
+        `${WIFI_RTT_ERR} ms, is bad.`
     });
   }
 
@@ -505,12 +531,11 @@ function metricTiles() {
               " (1 min)"
             : "",
 
+        /* graded on the robot by load average (signed off in #6),
+           so the numbers live in one place: cpu() in
+           system_diagnostics.py */
         grade:
-          gradeValue(
-            usage,
-            80,
-            95
-          )
+          gradeFromLevel(cpu.level)
       });
 
     } else if (
@@ -547,11 +572,7 @@ function metricTiles() {
           "% of cores",
 
         grade:
-          gradeValue(
-            ratio,
-            100,
-            200
-          )
+          gradeFromLevel(cpu.level)
       });
 
     } else {
@@ -633,13 +654,8 @@ function metricTiles() {
                 : "waiting for system_diagnostics"
             ),
 
-      grade:
-        gradeValue(
-          available,
-          20,
-          10,
-          false
-        )
+      /* graded on the robot: MEM_WARN / MEM_ERR */
+      grade: memory ? gradeFromLevel(memory.level) : "unknown"
     });
   }
 
@@ -690,13 +706,10 @@ function metricTiles() {
               .filter(Boolean).join(" · ")
           : gpu.message,
 
+      /* graded on the robot: GPU_WARN, sustained (#6) */
       grade:
         gpu
-          ? gradeValue(
-              usage,
-              85,
-              97
-            )
+          ? gradeFromLevel(gpu.level)
           : "unknown"
     });
   }
@@ -757,6 +770,16 @@ function metricTiles() {
               "under hard driving, and the VESC cuts motor power if they " +
               "overheat."
           }
+        : vesc && vesc.fetMissing
+        ? {
+            label: "FET (VESC)",
+            value: "no reading",
+            pct: 0,
+            grade: "unknown",
+            hint:
+              "This car's VESC driver does not report the FET temperature; it " +
+              "needs the two-line temperature patch in vesc_driver.cpp."
+          }
         : null
     ].filter(Boolean);
     const GRADE_RANK = { bad: 3, warn: 2, ok: 1, unknown: 0 };
@@ -772,7 +795,7 @@ function metricTiles() {
 
       label: "Temperature",
 
-      sub: rows.length ? "hover for details" : "",
+      sub: rows.length ? TILE_TIP_HINT : "",
 
       rows:
         rows.length
@@ -813,7 +836,7 @@ function metricTiles() {
 
       label: "Network",
 
-      sub: rows.length ? "hover for details" : "",
+      sub: rows.length ? TILE_TIP_HINT : "",
 
       rows:
         rows.length
@@ -922,17 +945,22 @@ function sparkline(id) {
    sparkline/history for these - there's no single value to trend. */
 function rowsBody(tile) {
 
+  /* every cell of a row carries where its details live: the row itself
+     is display: contents, so it has no box of its own to point at */
+  const tip = (row, i) =>
+    row.hint ? ` data-tip-tile="${escapeHtml(tile.id)}" data-tip-row="${i}"` : "";
+
   return `
     <div class="metric-rows">
       ${tile.rows
         .map(
-          row => `
-            <div class="metric-row"${row.hint ? ` title="${escapeHtml(row.hint)}"` : ""}>
-              <span class="row-label">${escapeHtml(row.label)}</span>
-              <div class="row-bar">
+          (row, i) => `
+            <div class="metric-row${row.hint ? " has-tip" : ""}">
+              <span class="row-label"${tip(row, i)}>${escapeHtml(row.label)}</span>
+              <div class="row-bar"${tip(row, i)}>
                 <i class="g-${row.grade}" style="width:${clampPct(row.pct)}%"></i>
               </div>
-              <span class="row-value g-${row.grade}">${escapeHtml(row.value)}</span>
+              <span class="row-value g-${row.grade}"${tip(row, i)}>${escapeHtml(row.value)}</span>
             </div>
           `
         )
@@ -940,6 +968,110 @@ function rowsBody(tile) {
     </div>
   `;
 }
+
+/* ==========================================================
+   TILE DETAILS - the card for a Temperature / Network row
+   Point at a row (or tap it on a touch screen): its name, its live
+   value and what it means. Looked up fresh from metricTiles() on
+   every refresh, so it never shows a stale number while open.
+========================================================== */
+
+const TILE_TIP_TOUCH = window.matchMedia("(hover: none)").matches;
+const TILE_TIP_HINT = TILE_TIP_TOUCH ? "tap a row for details" : "point at a row for details";
+
+let tileTipAt = null;             // { tile, row, x, y } while a card shows
+
+function tileTipEl() {
+
+  let el = document.getElementById("tileTip");
+
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "tileTip";
+    el.className = "tile-tip";
+    el.setAttribute("role", "tooltip");
+    el.hidden = true;
+    document.body.appendChild(el);
+  }
+
+  return el;
+}
+
+function renderTileTip() {
+
+  const el = tileTipEl();
+
+  if (!tileTipAt) {
+    el.hidden = true;
+    return;
+  }
+
+  const tile = metricTiles().find(t => t.id === tileTipAt.tile);
+  const row = tile && tile.rows && tile.rows[tileTipAt.row];
+
+  if (!row || !row.hint) {
+    tileTipAt = null;
+    el.hidden = true;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="tt-head">
+      <span class="tt-name">${escapeHtml(tile.label)} · ${escapeHtml(row.label)}</span>
+      <span class="tt-value g-${row.grade}">${escapeHtml(row.value)}</span>
+    </div>
+    <div class="tt-text">${escapeHtml(row.hint).replace(/\n/g, "<br>")}</div>`;
+  el.hidden = false;
+
+  /* beside the pointer, kept on screen */
+  const pad = 14;
+  const r = el.getBoundingClientRect();
+  let x = tileTipAt.x + pad;
+  let y = tileTipAt.y + pad;
+
+  if (x + r.width > innerWidth - 8) x = Math.max(8, tileTipAt.x - r.width - pad);
+  if (y + r.height > innerHeight - 8) y = Math.max(8, tileTipAt.y - r.height - pad);
+
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+}
+
+function tileTipTarget(event) {
+  const cell = event.target.closest && event.target.closest("[data-tip-row]");
+  return cell ? { tile: cell.dataset.tipTile, row: Number(cell.dataset.tipRow) } : null;
+}
+
+if (!TILE_TIP_TOUCH) {
+
+  $("metricTiles").addEventListener("mousemove", event => {
+    const hit = tileTipTarget(event);
+    tileTipAt = hit ? { ...hit, x: event.clientX, y: event.clientY } : null;
+    renderTileTip();
+  });
+
+  $("metricTiles").addEventListener("mouseleave", () => {
+    tileTipAt = null;
+    renderTileTip();
+  });
+
+} else {
+
+  /* touch: tap a row to open its card, tap it again (or anywhere) to close */
+  document.addEventListener("click", event => {
+    const hit = tileTipTarget(event);
+    const same = hit && tileTipAt && hit.tile === tileTipAt.tile && hit.row === tileTipAt.row;
+    tileTipAt = hit && !same ? { ...hit, x: event.clientX, y: event.clientY } : null;
+    renderTileTip();
+  });
+}
+
+/* the page scrolled under a pointer-placed card: drop it */
+window.addEventListener("scroll", () => {
+  if (tileTipAt) {
+    tileTipAt = null;
+    renderTileTip();
+  }
+}, { passive: true });
 
 function singleBody(tile, now) {
 
@@ -1020,6 +1152,8 @@ function renderMetrics() {
           </div>
         `)
       .join("");
+
+  if (tileTipAt) renderTileTip();
 }
 
 /* ==========================================================
@@ -1373,8 +1507,8 @@ function setLidarView(view) {
     button.setAttribute("aria-pressed", String(button.dataset.lidarView === lidarView))
   );
 
-  document.querySelectorAll(".lidar-legend").forEach(legend => {
-    legend.dataset.view = lidarView;
+  document.querySelectorAll(".lidar-legend, .lidar-card, .viewer-radar").forEach(el => {
+    el.dataset.view = lidarView;
   });
 }
 
@@ -1700,6 +1834,12 @@ function drawScanCanvas(canvas, scaleState, selLo, selHi) {
 
   if (lidarView === "lines") {
     drawClassicScan(canvas, scaleState, selLo, selHi);
+    return;
+  }
+
+  /* Detailed is the radar (radar.js) */
+  if (typeof drawRadarScan === "function") {
+    drawRadarScan(canvas, scaleState, selLo, selHi);
     return;
   }
 
@@ -2063,7 +2203,38 @@ function drawHoverReadout(ctx, ranges, g, scale, P, hover, font) {
     }
   }
 
-  if (best < 0) return;
+  /* empty space: say where that spot is, from the car */
+  if (best < 0) {
+    const o = P(0, 0);
+    const ppm = Math.hypot(P(0, 1).x - o.x, P(0, 1).y - o.y);
+    const forward = (o.y - hover.y) / ppm;
+    const left = (o.x - hover.x) / ppm;
+    const at = Math.atan2(left, forward);
+    const d = Math.round(at * 180 / Math.PI);
+    const blind = at > g.angleMax || at < g.angleMin;
+    const words =
+      `${Math.hypot(forward, left).toFixed(2)} m · ` +
+      (d === 0 ? "ahead" : `${Math.abs(d)}° ${d > 0 ? "left" : "right"}`) +
+      (blind ? " · blind area" : " · nothing here");
+
+    ctx.font = `bold ${font}px sans-serif`;
+    const pad = 7 * RU;
+    const boxW = ctx.measureText(words).width + pad * 2;
+    const boxH = font * 1.7;
+    const x = Math.max(4 * RU, Math.min(hover.x + 12 * RU, ctx.canvas.width - boxW - 4 * RU));
+    const y = Math.max(4 * RU, hover.y - boxH - 10 * RU);
+
+    ctx.fillStyle = "rgba(11, 13, 16, 0.92)";
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 1 * RU;
+    ctx.strokeRect(x, y, boxW, boxH);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(words, x + pad, y + boxH / 2);
+    return;
+  }
 
   const angle = g.angleMin + best * g.angleInc;
   const p = P(angle, ranges[best]);
