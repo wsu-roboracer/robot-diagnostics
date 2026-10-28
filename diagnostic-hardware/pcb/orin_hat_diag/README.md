@@ -10,7 +10,7 @@ A board that plugs into the Jetson Orin Nano dev kit's 40-pin header (J12). It h
 | `led_matrix.kicad_sch` | The 8×8 obstacle matrix |
 | `orin_hat_diag.kicad_pcb` | Board, 105 × 70 mm, 2 layers. Parts are placed but **not yet routed** |
 
-Driver code: [`prototype/hat_leds.py`](../../../prototype/hat_leds.py). Battery voltmeter / 7-segment display driver (skeleton, no hardware chosen yet): [`prototype/hat_battery.py`](../../../prototype/hat_battery.py). Obstacle matrix driver, reading `/scan` onto the 8x8 grid (skeleton): [`prototype/hat_obstacle_matrix.py`](../../../prototype/hat_obstacle_matrix.py).
+Driver code: [`prototype/hat_leds.py`](../../../prototype/hat_leds.py). Battery voltmeter / 7-segment display driver (skeleton, no hardware chosen yet): [`prototype/hat_battery.py`](../../../prototype/hat_battery.py). Obstacle matrix driver, reading `/scan` onto the 8x8 grid (skeleton): [`prototype/hat_obstacle_matrix.py`](../../../prototype/hat_obstacle_matrix.py). Status LED driver, reading `/diagnostics` onto LEDs 0-5 (skeleton): [`prototype/hat_status_leds.py`](../../../prototype/hat_status_leds.py).
 
 ## Header pin assignments
 
@@ -39,7 +39,7 @@ So the code needs one SPI pin, and it addresses LEDs by their **position in the 
 
 | Chain index | Parts | What it is |
 |---|---|---|
-| 0–9 | D1–D10 (5050 size) | Status LEDs, numbered 0–9 on the silkscreen. Each one is free to assign to a system |
+| 0–9 | D1–D10 (5050 size) | Status LEDs, numbered 0–9 on the silkscreen. LEDs 0–5 are assigned to LiDAR, Camera, Network, VESC, Battery and Gamepad from `/diagnostics` (see [`prototype/hat_status_leds.py`](../../../prototype/hat_status_leds.py)); 6–9 are free for later use |
 | 10–73 | D101–D164 (2020 size) | Obstacle matrix. `index = 10 + row*8 + col`. Row 0 is the row marked **FRONT**, column 0 is on the left |
 
 ```
