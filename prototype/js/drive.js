@@ -77,6 +77,7 @@ let driveSocket = null;
 let padHeld = false;
 let stickHeld = false;
 let stickKnobShown = false;
+let stickStatus = "";
 let padVec = { x: 0, y: 0 };
 let cmdSpeed = 0;
 let cmdSteer = 0;
@@ -261,18 +262,29 @@ function stickDeadzone(value) {
    negative. A pad that unplugs reads as centred, which is a stop. */
 function readSticks() {
 
-  const pad = navigator.getGamepads &&
-    [...navigator.getGamepads()].find(p =>
-      p && p.connected && p.mapping === "standard");
+  const pads = navigator.getGamepads
+    ? [...navigator.getGamepads()].filter(p => p && p.connected)
+    : [];
 
-  if (!pad) return { x: 0, y: 0, stop: false };
+  const pad = pads.find(p => p.mapping === "standard");
+
+  /* what the page can see, shown in the drive note while armed: a
+     pad Firefox cannot see or map is otherwise a silent failure */
+  const status = pad
+    ? "Gamepad ready: " + pad.id
+    : pads.length
+    ? "Gamepad found but not mapped as standard (" + pads[0].id + ") - sticks off"
+    : "No gamepad detected - press a button on it. Sticks off";
+
+  if (!pad) return { x: 0, y: 0, stop: false, status };
 
   const stop = pad.buttons[STICK_BTN_STOP];
 
   return {
     x: stickDeadzone(pad.axes[STICK_AXIS_STEER]),
     y: stickDeadzone(pad.axes[STICK_AXIS_SPEED]),
-    stop: Boolean(stop && stop.pressed)
+    stop: Boolean(stop && stop.pressed),
+    status
   };
 }
 
@@ -292,9 +304,17 @@ function driveTick() {
   }
 
   /* gamepad sticks are only read while armed */
-  const stick = driveArmed ? readSticks() : { x: 0, y: 0, stop: false };
+  const stick = driveArmed
+    ? readSticks()
+    : { x: 0, y: 0, stop: false, status: "" };
 
   if (stick.stop) disarmDrive("stop pressed on the controller");
+
+  if (driveArmed && stick.status !== stickStatus) {
+    setDriveNote("Armed. " + stick.status);
+  }
+
+  stickStatus = driveArmed ? stick.status : "";
 
   stickHeld = driveArmed && (stick.x !== 0 || stick.y !== 0);
 
@@ -858,6 +878,14 @@ function controlState() {
   /* ---- warnings, only when true ---- */
 
   const alerts = [];
+
+  /* the sticks' status stays up while armed, in the full-screen view too */
+  if (driveArmed && stickStatus) {
+    alerts.push({
+      tone: stickStatus.startsWith("Gamepad ready") ? "" : "warn",
+      text: stickStatus
+    });
+  }
 
   if (connected && otherArmed && !foreign) {
     alerts.push({ tone: "warn",
