@@ -1246,9 +1246,12 @@ Drives the car from a browser, through the same input an autonomous stack uses.
 
 **Where it comes from.** The driving view's controls (the pad, the keys, a
 phone's thumb sticks, or a controller on the device itself, such as a Steam Deck,
-read through the browser's Gamepad API in `js/controller.js`) set what the Drive
-tab's controller sends. A controller on the device drives like the car's own:
-hold L1, left stick for speed, right stick to steer, B to stop and disarm. It publishes
+read through the browser's Gamepad API) set what the Drive tab's controller
+sends. A standard-mapped gamepad on the device drives with its sticks directly
+(`readSticks()` in `js/drive.js`: left stick speed, right stick steer, a 0.15
+dead zone, pushing a stick is the deadman, B stops and disarms). Holding L1 with
+the sticks drives too, through the Controller tab's mapping (`deckDriveInput()`
+in `js/controller.js`), which also covers a pad not mapped as standard. It publishes
 `ackermann_msgs/AckermannDriveStamped` on `/drive`, the mux's navigation input, 50
 times a second while armed and while the pad, a key or a stick is held, and at once
 whenever the input changes (a press, a drag, a release). The

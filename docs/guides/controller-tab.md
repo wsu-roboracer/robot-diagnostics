@@ -96,20 +96,23 @@ Switch the tab to **Steam Deck (this browser)** to see the controller of the dev
 
 ### Driving with it
 
-The Deck drives the car the way the car's own controller does:
+The Deck drives the car with its sticks:
 
 | Control | Does |
 |---|---|
-| **L1**, held | Deadman: the car moves only while it is held |
-| **Left stick**, up and down | Speed, forward and reverse |
+| **Left stick**, up and down | Speed, forward and reverse. Pushing a stick is the deadman, like the on-screen pad: centre both and the car stops |
 | **Right stick**, left and right | Steering |
+| **L1**, held | Also drives with the sticks, the way the car's own controller does. This is what works on a controller the browser does not map as "standard", read through this tab's mapping |
+| **R1**, held | Starts an autonomous run when **Hold R1 to run** is on ([Drive guide](drive-tab.md#hold-r1-to-run)) |
 | **B** | Stop and disarm |
 
-You still **arm on the Drive tab** first (tick the safety box, press Arm), and every rule the page has still applies: letting go of L1 stops the car at once, leaving the tab or the window disarms, and the physical PS4 controller still overrides. The speed and steering limits are the Drive tab's. A small dead zone means a stick resting a little off centre does not creep the car.
+While armed, the drive note and the Controls card say which gamepad the page sees, or why the sticks are off (*No gamepad detected - press a button on it*, or *not mapped as standard*). The on-screen knob follows the sticks.
+
+You still **arm on the Drive tab** first (tick the safety box, press Arm), and every rule the page has still applies: centring the sticks stops the car at once, leaving the tab or the window disarms, and the physical PS4 controller still overrides. The speed and steering limits are the Drive tab's. A small dead zone means a stick resting a little off centre does not creep the car.
 
 ![The driving view with a Steam Deck connected](images/controller-tab/08-steam-deck-driving.jpg)
 
-The driving view shows **Steam Deck: hold L1 to drive · B stops** in its top bar while a controller is connected.
+The driving view shows **Steam Deck: sticks drive · B stops** in its top bar while a controller is connected.
 
 ### Setting up the Deck
 

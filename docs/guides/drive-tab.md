@@ -98,7 +98,7 @@ Pick whichever is easiest; they all do the same thing.
 - **The pad**: press and drag the knob. Up is forward, down is reverse, left and right steer. How far you drag sets how fast and how hard.
 - **The keyboard**: hold **W A S D** or the **arrow keys**.
 - **On a phone**: the two thumb sticks (see [On a phone](#on-a-phone)).
-- **On a Steam Deck** (or a controller plugged into your computer): hold **L1** and use the sticks, like the car's own controller; **B** stops and disarms. Setting it up is in [the Controller guide](controller-tab.md#steam-deck-drive-from-its-browser).
+- **On a Steam Deck** (or a controller plugged into your computer): the left stick is speed and the right stick steers; pushing a stick is the deadman, so centring them stops the car. **B** stops and disarms. Holding **L1** with the sticks works too, and is what drives a controller the browser does not map as standard. Setting it up is in [the Controller guide](controller-tab.md#steam-deck-drive-from-its-browser).
 
 **The car only moves while you hold.** Let go and it stops at once: the page sends a burst of zero-speed commands immediately, without ramping down.
 

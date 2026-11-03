@@ -311,7 +311,8 @@ function jpReadDeck() {
   return msg;
 }
 
-/* drive.js asks every tick: hold L1 to drive, left stick for speed, right
+/* drive.js asks every tick (its readSticks() drives a standard pad without
+   L1; this is the mapped fallback, and R1): hold L1 to drive, left stick for speed, right
    stick to steer, B to stop and disarm - the car's own controller's
    layout, read through the Deck's mapping */
 let jpDeckStopWas = false;

@@ -61,6 +61,17 @@ const PAD_STEER_RATE = 20.0;    // rad per second: full lock in about 17 ms
    mux saw is "stop" rather than whatever was held */
 const STOP_BURST = 5;
 
+/* Gamepad sticks (Steam Deck, or any pad the browser maps as
+   "standard"): left stick up/down is speed, right stick left/right is
+   steering. Only standard-mapped pads are read, so the axis numbers
+   below mean what they say; B stops. Like the on-screen pad, the stick
+   is proportional and deflecting it is the dead-man: centre it and the
+   car stops. */
+const STICK_DEADZONE = 0.15;
+const STICK_AXIS_SPEED = 1;     // left stick, vertical
+const STICK_AXIS_STEER = 2;     // right stick, horizontal
+const STICK_BTN_STOP = 1;       // B
+
 let driveArmed = false;
 
 /* An autonomous run from this page: drive at a set speed and steering with
@@ -82,6 +93,9 @@ let r1Tried = false;            // this hold has already tried to start
 let r1Last = null;              // the tick's last r1Input(), for the panel
 let driveSocket = null;
 let padHeld = false;
+let stickHeld = false;
+let stickKnobShown = false;
+let stickStatus = "";
 let padVec = { x: 0, y: 0 };
 let cmdSpeed = 0;
 let cmdSteer = 0;
@@ -196,9 +210,7 @@ function armDrive() {
   driveArmed = true;
   driveSocket = ws;
 
-  setDriveNote(typeof jpDeckConnected === "function" && jpDeckConnected()
-    ? "Armed. Hold the pad, a drive key, or L1 on the controller to move."
-    : "Armed. Hold the pad or a drive key to move.");
+  setDriveNote("Armed. Hold the pad, a drive key or a stick to move.");
   renderDriveControls();
 }
 
@@ -227,6 +239,7 @@ function disarmDrive(reason) {
   driveArmed = false;
   driveSocket = null;
   padHeld = false;
+  stickHeld = false;
   padVec = { x: 0, y: 0 };
   driveKeys.clear();
   cmdSpeed = 0;
@@ -262,6 +275,45 @@ function keyAxis(positive, negative) {
   return (has(positive) ? 1 : 0) - (has(negative) ? 1 : 0);
 }
 
+/* Rescale so the stick starts from 0 at the edge of the dead zone
+   rather than jumping to 0.15. */
+function stickDeadzone(value) {
+
+  if (!Number.isFinite(value) || Math.abs(value) < STICK_DEADZONE) return 0;
+
+  return Math.sign(value) * (Math.abs(value) - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+}
+
+/* x and y follow the on-screen pad: y grows downward, so forward is
+   negative. A pad that unplugs reads as centred, which is a stop. */
+function readSticks() {
+
+  const pads = navigator.getGamepads
+    ? [...navigator.getGamepads()].filter(p => p && p.connected)
+    : [];
+
+  const pad = pads.find(p => p.mapping === "standard");
+
+  /* what the page can see, shown in the drive note while armed: a
+     pad Firefox cannot see or map is otherwise a silent failure */
+  const status = pad
+    ? "Gamepad ready: " + pad.id
+    : pads.length
+    ? "Gamepad found but not mapped as standard (" + pads[0].id + ") - sticks off"
+    : "No gamepad detected - press a button on it. Sticks off";
+
+  if (!pad) return { x: 0, y: 0, stop: false, status };
+
+  const stop = pad.buttons[STICK_BTN_STOP];
+
+  return {
+    x: stickDeadzone(pad.axes[STICK_AXIS_STEER]),
+    y: stickDeadzone(pad.axes[STICK_AXIS_SPEED]),
+    stop: Boolean(stop && stop.pressed),
+    status
+  };
+}
+
 function driveTick() {
 
   const now = performance.now();
@@ -277,12 +329,29 @@ function driveTick() {
     disarmDrive(estopObstacle() || "the emergency stop is on");
   }
 
+  /* gamepad sticks are only read while armed */
+  const stick = driveArmed
+    ? readSticks()
+    : { x: 0, y: 0, stop: false, status: "" };
+
+  if (stick.stop) disarmDrive("stop pressed on the controller");
+
+  if (driveArmed && stick.status !== stickStatus) {
+    setDriveNote("Armed. " + stick.status);
+  }
+
+  stickStatus = driveArmed ? stick.status : "";
+
+  stickHeld = driveArmed && (stick.x !== 0 || stick.y !== 0);
+
   let targetSpeed = 0;
   let targetSteer = 0;
 
-  /* a controller on this device (a Steam Deck), through the browser:
-     the car's own layout - hold L1, left stick speed, right stick steer,
-     B stops and disarms (controller.js deckDriveInput) */
+  /* a controller on this device (a Steam Deck), through the Controller
+     tab's mapping: the car's own layout - hold L1, left stick speed, right
+     stick steer, B stops and disarms (controller.js deckDriveInput). The
+     sticks above drive a standard-mapped pad without L1; this also covers a
+     pad that is not mapped as standard, and gives R1 to Hold R1 to run. */
   const deck = typeof deckDriveInput === "function" ? deckDriveInput() : null;
   let deckActive = false;
   let autoActive = false;
@@ -322,6 +391,11 @@ function driveTick() {
     targetSpeed = -padVec.y * limitSpeed();
     targetSteer = -padVec.x * limitSteer();
 
+  } else if (stickHeld) {
+
+    targetSpeed = -stick.y * limitSpeed();
+    targetSteer = -stick.x * limitSteer();
+
   } else if (driveKeys.size) {
 
     targetSpeed = keyAxis(KEY_FWD, KEY_BACK) * limitSpeed();
@@ -344,14 +418,29 @@ function driveTick() {
     autoActive = true;
   }
 
+  /* mirror the sticks on the on-screen knob, unless a finger has it */
+  if (stickHeld && !padHeld) {
+
+    const length = Math.max(1, Math.hypot(stick.x, stick.y));
+
+    placeKnob(stick.x / length, stick.y / length);
+    stickKnobShown = true;
+
+  } else if (stickKnobShown) {
+
+    if (!padHeld) placeKnob(0, 0);
+    stickKnobShown = false;
+  }
+
+  /* the pad, the sticks and a controller here are all proportional; an
+     autonomous run starts gently, like the keys */
+  const proportional = padHeld || stickHeld || deckActive;
+
   const active =
-    driveArmed && (padHeld || driveKeys.size > 0 || deckActive || autoActive);
+    driveArmed && (proportional || driveKeys.size > 0 || autoActive);
 
   if (active) {
 
-    /* the pad, the sticks and a controller here are all proportional */
-    /* an autonomous run starts gently, like the keys */
-    const proportional = (padHeld || deckActive) && !autoActive;
     const accel = proportional ? PAD_ACCEL : KEY_ACCEL;
     const steerRate = proportional ? PAD_STEER_RATE : KEY_STEER_RATE;
 
@@ -1168,7 +1257,8 @@ function controlState() {
   const connected = socketOpen();
   const pubs = drivePublishers();
   const foreign = foreignDriveActive();
-  const active = driveArmed && (padHeld || driveKeys.size > 0);
+  const active =
+    driveArmed && (padHeld || stickHeld || driveKeys.size > 0);
 
   /* right after we disarm, rosbridge can still list us for a few
      seconds — do not call that "another dashboard" */
@@ -1221,7 +1311,7 @@ function controlState() {
   } else if (driveArmed) {
 
     hero = { tone: "you", icon: "joystick", title: "You're armed",
-             sub: "Hold the pad or a drive key to move." };
+             sub: "Hold the pad, a drive key or a stick to move." };
 
   } else if (mux === "autonomous") {
 
@@ -1256,6 +1346,14 @@ function controlState() {
   /* ---- warnings, only when true ---- */
 
   const alerts = [];
+
+  /* the sticks' status stays up while armed, in the full-screen view too */
+  if (driveArmed && stickStatus) {
+    alerts.push({
+      tone: stickStatus.startsWith("Gamepad ready") ? "" : "warn",
+      text: stickStatus
+    });
+  }
 
   if (connected && otherArmed && !foreign) {
     alerts.push({ tone: "warn",
