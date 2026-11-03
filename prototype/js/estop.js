@@ -70,6 +70,14 @@ function estopActive() {
   return item ? item.level === 2 : estopLocal;
 }
 
+/* what tripped it, when the robot's obstacle stop did: "obstacle stop:
+   something 0.62 m ahead at 2.40 m/s (needs 1.40 m to stop)", or "" */
+function estopObstacle() {
+  const item = estopDiag();
+  const action = estopActive() && item && item.values ? item.values["action"] || "" : "";
+  return /^obstacle stop:/.test(action) ? action.split(" - ")[0] : "";
+}
+
 function estopFailureText(error) {
 
   if (/not connected/i.test(error.message)) {
@@ -158,8 +166,14 @@ function renderEstop() {
   bar.hidden = !active && !estopError;
   bar.classList.toggle("error-only", !active && Boolean(estopError));
 
+  const obstacle = estopObstacle();
+
   $("estopText").innerHTML =
-    active
+    active && obstacle
+      ? "<strong>Obstacle stop.</strong> The car stopped itself: " +
+        escapeHtml(obstacle.replace(/^obstacle stop:\s*/, "")) +
+        ". Clear the way, then allow driving again."
+      : active
       ? "<strong>Emergency stop is on.</strong> " +
         "The car will not move for anyone — controller, this page or autonomous code."
       : escapeHtml(estopError);

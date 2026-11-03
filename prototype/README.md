@@ -13,7 +13,8 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `js/*.js` | The page's logic, split by job. They are plain scripts that share one scope, so **the load order in `dashboard.html` matters**: `config.js` first, `main.js` last. See the table below |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
 | `camera_http.py` | The camera's HTTP proxy: relays the GStreamer MJPEG stream to browsers, always the newest frame, so a slow link drops frames instead of lagging |
-| `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
+| `restart_stack.py` | Restarts everything `start_diagnostics.sh` runs, for the dashboard's **Restart the dashboard on the car** button: reached through `system_diagnostics.py`'s `~/restart_stack` service, or `camera_http.py`'s `POST /restart` when rosbridge does not answer. Logs to `/tmp/f1tenth-diag/restart.log` |
+| `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics`, and runs the emergency stop, the drive watchdog and the **obstacle stop** (LiDAR ahead while `/drive` drives forward) |
 | `tests/` | Checks that need no robot. Run them all with `node tests/run.mjs`: LiDAR plot geometry, beam selection maths, the system list, joystick check and connection banners (all against the page's real `js/`), and the self-tests in `camera_http.py` and `system_diagnostics.py` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
@@ -36,6 +37,7 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `js/checks.js` | Connection health banners and the on-demand joystick check |
 | `js/lidar-select.js` | Select beams: picking a range of LiDAR beam indices |
 | `js/estop.js` | The Emergency stop button and banner |
+| `js/controller.js` | The Controller tab: the PS4 controller drawn live from `/joy`, or a Steam Deck (any controller on this device) through the browser's Gamepad API, which can also drive (`deckDriveInput`, read by `drive.js`); the deadman check, the battery, and Map buttons |
 | `js/drive.js` | The driving logic: arming, the dead-man, limits, who's driving. Its own cards sit hidden under the driving view |
 | `js/cockpit.js` | The driving view on the Drive tab and in full screen: panes, floating controls, Settings, the side rail, thumb sticks, speedometer |
 | `js/radar.js` | The Detailed LiDAR view: the radar drawing, obstacle detection and its panel on the Overview card |
