@@ -379,8 +379,10 @@ already running.
 
 **Restarting from the page.** When the page lags or stops updating, the
 Advanced tab's **Restart the dashboard on the car** (also on the red "NO DATA
-FROM THE ROBOT" bar) does what `./start_diagnostics.sh --stop &&
-./start_diagnostics.sh` does, with the same options the run was started with.
+FROM THE ROBOT" bar) stops and starts again every node on the car (bringup,
+rosbridge, the camera, the page's server), with the same options the run was
+started with. By hand on the car, when debugging, the same is
+`./start_diagnostics.sh --stop && ./start_diagnostics.sh`.
 `restart_stack.py` does the work, reached two ways, because what has hung is
 usually rosbridge: `system_diagnostics`' `~/restart_stack` service, which
 refuses while the emergency stop is on, a deadman is held or a dashboard is

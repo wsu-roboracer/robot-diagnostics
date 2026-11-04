@@ -1058,10 +1058,11 @@
             </button>
 
             <span class="check-note">
-              Page lagging or stopped updating? This does what
-              <span class="mono">./start_diagnostics.sh --stop &amp;&amp; ./start_diagnostics.sh</span>
-              does on the car: stops and starts again bringup, rosbridge, the camera and
-              this page's server. About a minute. The car must be stopped.
+              Page lagging or stopped updating? This stops and starts again every
+              node on the car: bringup, rosbridge, the camera and this page's server.
+              About a minute. The car must be stopped. (Debugging on the car itself,
+              the same by hand is
+              <span class="mono">./start_diagnostics.sh --stop &amp;&amp; ./start_diagnostics.sh</span>.)
             </span>
           </div>
         </div>

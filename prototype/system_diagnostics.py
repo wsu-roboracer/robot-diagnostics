@@ -760,6 +760,7 @@ class SystemDiagnostics(Node):
         if deadman_held(self.joy_buttons, time.time() - self.joy_at):
             response.success = False
             response.message = "someone is holding L1/R1 - let go first"
+            self.get_logger().warn(f"emergency stop release refused: {response.message}")
             return response
         resumed, gone = [], []
         for pid in self.estop_pids:
