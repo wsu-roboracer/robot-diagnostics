@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Restart everything the dashboard runs on, on request from the dashboard.
+"""
+Restart everything the dashboard runs on, on request from the dashboard.
 
 What that means depends on how the car was started:
 
@@ -65,9 +66,12 @@ def script_path(here):
 
 
 def script_run(pgrep_out):
-    """The options the running start_diagnostics.sh was started with, from
-    `pgrep -af 'bash [^ ]*start_diagnostics\\.sh'`, or None when there is no
-    run. Only real runs count: a --stop or --status in progress is not one."""
+    r"""
+    Return the options the running start_diagnostics.sh was started with.
+
+    From `pgrep -af 'bash [^ ]*start_diagnostics\.sh'`; None when there is
+    no run. Only real runs count: a --stop or --status in progress is not one.
+    """
     for line in (pgrep_out or "").splitlines():
         m = _RUN.match(line.strip())
         if not m:
@@ -88,13 +92,16 @@ def script_run(pgrep_out):
 
 
 def run_options(pgrep_out):
-    """script_run, with [] for no run."""
+    """Return script_run, with [] for no run."""
     return script_run(pgrep_out) or []
 
 
 def bringup_run(pgrep_out):
-    """(pid, its name:=value arguments) of the running bringup launch, from
-    `pgrep -af 'ros2 launch f1tenth_stack bringup_launch'`, or None."""
+    """
+    Return (pid, its name:=value arguments) of the running bringup launch.
+
+    From `pgrep -af 'ros2 launch f1tenth_stack bringup_launch'`; None if none.
+    """
     for line in (pgrep_out or "").splitlines():
         m = _BRINGUP.match(line.strip())
         if m:
@@ -103,7 +110,7 @@ def bringup_run(pgrep_out):
 
 
 def recently_started(now, mark_time):
-    """A restart started this recently is still going; do not start another."""
+    """Tell whether a restart started this recently is still going."""
     return mark_time is not None and 0 <= now - mark_time < RESTART_GAP_S
 
 
@@ -154,16 +161,21 @@ def restart(here):
 
 
 def _restart_bringup(pid, args):
-    """Stop the bringup launch (INT, as Ctrl+C), sweep what it left, start it
-    again with the same arguments. The pattern goes in through the
-    environment: in the shell's own command line, pkill -f would match the
-    shell and kill it."""
+    """
+    Stop the bringup launch, sweep what it left, start it again.
+
+    Stopped with INT, as Ctrl+C would; started with the same arguments. The
+    pattern goes in through the environment: in the shell's own command
+    line, pkill -f would match the shell and kill it.
+    """
     env = dict(os.environ, BRINGUP_PID=str(pid), BRINGUP_LEFTOVERS=BRINGUP_LEFTOVERS,
                BRINGUP_STOP_S=str(BRINGUP_STOP_S))
     shell = ('sleep 1; kill -INT "$BRINGUP_PID"; '
-             'for _ in $(seq 1 "$BRINGUP_STOP_S"); do kill -0 "$BRINGUP_PID" 2>/dev/null || break; sleep 1; done; '
+             'for _ in $(seq 1 "$BRINGUP_STOP_S"); do '
+             'kill -0 "$BRINGUP_PID" 2>/dev/null || break; sleep 1; done; '
              'kill -KILL "$BRINGUP_PID" 2>/dev/null; '
-             'pkill -TERM -f "$BRINGUP_LEFTOVERS"; sleep 2; pkill -KILL -f "$BRINGUP_LEFTOVERS"; sleep 1; '
+             'pkill -TERM -f "$BRINGUP_LEFTOVERS"; sleep 2; '
+             'pkill -KILL -f "$BRINGUP_LEFTOVERS"; sleep 1; '
              'exec ros2 launch f1tenth_stack bringup_launch.py "$@"')
     _start(["bash", "-c", shell, "restart-bringup", *args], env,
            f"stop bringup (pid {pid}), then ros2 launch f1tenth_stack bringup_launch.py "
@@ -194,7 +206,8 @@ def self_test():
     assert run_options(sample) == ["--no-camera", "--port", "8080"], run_options(sample)
     assert run_options("4500 bash ./start_diagnostics.sh --stop\n") == [], "a --stop is not a run"
     assert run_options("77 /bin/bash ./start_diagnostics.sh\n") == []
-    assert run_options("77 /usr/bin/bash /home/x/diag/start_diagnostics.sh --no-bringup\n") == ["--no-bringup"]
+    assert run_options("77 /usr/bin/bash /home/x/diag/start_diagnostics.sh --no-bringup\n") == \
+        ["--no-bringup"]
     assert run_options("12 nvim start_diagnostics.sh\n") == [], "an editor is not a run"
     assert run_options("12 bash -c sleep 1; ./start_diagnostics.sh --stop\n") == [], \
         "the restart's own shell is not a run"
@@ -209,7 +222,8 @@ def self_test():
 
     line = ("3058 /usr/bin/python3 /opt/ros/humble/bin/ros2 launch f1tenth_stack "
             "bringup_launch.py use_camera:=false dashboard_port:=8000\n")
-    assert bringup_run(line) == (3058, ["use_camera:=false", "dashboard_port:=8000"]), bringup_run(line)
+    assert bringup_run(line) == (3058, ["use_camera:=false", "dashboard_port:=8000"]), \
+        bringup_run(line)
     assert bringup_run("3058 /usr/bin/python3 /opt/ros/humble/bin/ros2 launch f1tenth_stack "
                        "bringup_launch.py\n") == (3058, [])
     assert bringup_run("12 nvim bringup_launch.py\n") is None, "an editor is not a bringup"
