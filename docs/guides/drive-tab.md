@@ -378,7 +378,7 @@ flowchart LR
   pad["Physical controller<br/>deadman L1 / R1"] --> mux
   mux --> a2v["ackermann_to_vesc"] --> vesc["VESC motor<br/>controller"] --> motor(("Motor and<br/>steering"))
   wd["Robot watchdog<br/>system_diagnostics.py"] -. "zero speed if /drive<br/>goes quiet 0.3 s" .-> mux
-  es["Emergency stop"] -. "freezes it, holds<br/>the motor at 0" .-> a2v
+  es["Emergency stop"] -. "locks the mux,<br/>holds the motor at 0" .-> mux
 ```
 
 The page publishes `ackermann_msgs/AckermannDriveStamped` on `/drive`, the mux's navigation input, over the same rosbridge connection the rest of the dashboard uses. The details, every safety rule and the code map are in [design/dashboard-drive-control.md](../design/dashboard-drive-control.md).

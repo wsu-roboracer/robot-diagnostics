@@ -181,6 +181,8 @@ function connectCamera(url, auto = false) {
 
   const image = $("cameraImage");
 
+  cameraPaused = false;                // syncCameraPause pauses it again if hidden
+
   clearTimeout(cameraRetryTimer);
   cameraRetryTimer = null;
 
@@ -264,6 +266,54 @@ function connectCamera(url, auto = false) {
       ? url + (url.indexOf("?") < 0 ? "?" : "&") + "t=" + Date.now()
       : url;
 }
+
+/* ==========================================================
+   PAUSED WHILE NOT ON SCREEN
+
+   The stream is the heaviest thing on the car's Wi-Fi (30 fps of JPEG),
+   and it used to keep coming while no tab or pane showed it - one viewer
+   at 30 fps on camera_http's /stats with the Camera pane closed. Once a
+   second: if the picture is not on screen (its pane is closed, another tab
+   is showing, or the browser tab is in the background), the stream is
+   closed; when it is back on screen, it opens again. A recording keeps it,
+   since it draws every frame.
+========================================================== */
+
+let cameraPaused = false;
+
+function cameraOnScreen() {
+  const box = $("cameraImage").parentElement;
+  return document.visibilityState === "visible" &&
+    Boolean(box) && box.getClientRects().length > 0;
+}
+
+function syncCameraPause() {
+
+  const image = $("cameraImage");
+
+  if (recording || cameraOnScreen()) {
+    if (cameraPaused) {
+      cameraPaused = false;
+      connectCamera(cameraUrlNow, cameraAuto);
+    }
+    return;
+  }
+
+  if (cameraPaused || !image.getAttribute("src")) return;
+
+  cameraPaused = true;
+  clearTimeout(cameraRetryTimer);
+  cameraRetryTimer = null;
+  image.onload = image.onerror = null;
+  image.removeAttribute("src");        // closes the stream
+  image.hidden = true;
+  $("camMessage").textContent = "Paused while not on screen";
+  $("camMessage").hidden = false;
+  setCameraStatus("PAUSED", "var(--muted)");
+}
+
+setInterval(syncCameraPause, 1000);
+document.addEventListener("visibilitychange", syncCameraPause);
 
 /* ==========================================================
    TAKE PICTURE
