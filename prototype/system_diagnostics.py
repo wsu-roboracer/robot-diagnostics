@@ -708,7 +708,7 @@ class SystemDiagnostics(Node):
     # ---------- restarting the stack ----------
 
     def restart_stack(self, _request, response):
-        """start_diagnostics.sh --stop, then start it again (restart_stack.py).
+        """Restart everything: start_diagnostics.sh, or bringup (restart_stack.py).
         Refused while the car could be moving, or while the emergency stop is
         on: the restart brings the drive chain it froze back up running."""
         why = restart_refusal(self.estop_active,
@@ -718,11 +718,14 @@ class SystemDiagnostics(Node):
             response.success, response.message = False, why
             return response
         try:
-            import restart_stack
+            import restart_stack                            # next to this file (~/diag)
         except ImportError:
-            response.success = False
-            response.message = "restart_stack.py is missing next to system_diagnostics.py"
-            return response
+            try:
+                from f1tenth_stack import restart_stack     # installed with bringup
+            except ImportError:
+                response.success = False
+                response.message = "restart_stack.py is missing next to system_diagnostics.py"
+                return response
         response.success, response.message = restart_stack.restart(
             os.path.dirname(os.path.abspath(__file__)))
         self.get_logger().warn(f"restart_stack: {response.message}")

@@ -130,11 +130,17 @@ class CameraHandler(BaseHTTPRequestHandler):
             ok, msg = False, 'send "restart" as the body to confirm'
         else:
             try:
-                import restart_stack
+                import restart_stack                        # next to this file (~/diag)
+            except ImportError:
+                try:
+                    from f1tenth_stack import restart_stack  # installed with bringup
+                except ImportError:
+                    restart_stack = None
+            if restart_stack is None:
+                ok, msg = False, "restart_stack.py is missing next to camera_http.py"
+            else:
                 import os
                 ok, msg = restart_stack.restart(os.path.dirname(os.path.abspath(__file__)))
-            except ImportError:
-                ok, msg = False, "restart_stack.py is missing next to camera_http.py"
         reply = json.dumps({"ok": ok, "message": msg}).encode()
         self.send_response(200 if ok else 409)
         self.send_header("Content-Type", "application/json")
