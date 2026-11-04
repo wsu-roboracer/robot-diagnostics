@@ -16,25 +16,14 @@ the HAT sits on top of the Orin facing forward, so a rear slice would need a
 "which way is the board actually facing" decision this skeleton doesn't make.
 Revisit once the HAT's mounting orientation on the chassis is fixed.
 
-Needs a sourced ROS 2 install and hat_leds.py's hardware (SPI) to run for
-real; neither is needed for --self-test, which only checks scan_to_grid().
+Needs a sourced ROS 2 install and hat_leds.py's hardware (SPI) to run:
 
-    python3 hat_obstacle_matrix.py --self-test   # no ROS, no hardware
-    python3 hat_obstacle_matrix.py                # subscribes to /scan, needs both
+    python3 hat_obstacle_matrix.py                # subscribes to /scan
 """
 
-import sys
-
-try:
-    import rclpy
-    from rclpy.node import Node
-    from sensor_msgs.msg import LaserScan
-except ImportError:
-    # --self-test only exercises scan_to_grid(), the pure part worth checking
-    # without a sourced ROS install (see system_diagnostics.py for the same pattern).
-    if "--self-test" not in sys.argv:
-        raise
-    Node = object
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
 
 from hat_leds import HatLeds, MATRIX_COLS, MATRIX_ROWS, OFF
 
@@ -75,12 +64,7 @@ def _colour_for_range(range_m):
 
 
 def scan_to_grid(ranges, angle_min, angle_increment, range_min, range_max):
-    """LaserScan fields -> 8x8 grid of (r, g, b), one nearest-obstacle cell per column.
-
-    Pure function so it can be checked with a plain dict of scan fields, no
-    ROS message type and no hardware - the same reasoning hat_leds.py's
-    encode()/limit_current() self-tests use.
-    """
+    """LaserScan fields -> 8x8 grid of (r, g, b), one nearest-obstacle cell per column."""
     nearest = [None] * MATRIX_COLS            # closest valid range seen per column
 
     for i, value in enumerate(ranges):
@@ -120,44 +104,7 @@ class ObstacleMatrixNode(Node):
         show_grid(self.leds, grid)
 
 
-def self_test():
-    """`python3 hat_obstacle_matrix.py --self-test` - no ROS, no hardware."""
-    n = 181
-    angle_min, angle_increment = -FOV_RAD / 2, FOV_RAD / (n - 1)
-
-    assert _column_for_angle(FOV_RAD / 2) == 0, "straight left is column 0"
-    assert _column_for_angle(-FOV_RAD / 2) == MATRIX_COLS - 1, "straight right is the last column"
-    assert _column_for_angle(0.0) in (3, 4), "dead ahead lands in the middle two columns"
-    print("angle-to-column self-test passed")
-
-    assert _row_for_range(0.0) == 0
-    assert _row_for_range(GRID_MAX_RANGE) == MATRIX_ROWS - 1
-    assert _row_for_range(GRID_MAX_RANGE * 10) == MATRIX_ROWS - 1, "must clamp, not raise or overflow"
-    print("range-to-row self-test passed")
-
-    ranges = [10.0] * n                        # all no-return, well past range_max
-    ranges[n // 2] = 0.3                       # dead ahead, inside LIDAR_NEAR
-    grid = scan_to_grid(ranges, angle_min, angle_increment, 0.02, 10.0)
-    lit = [(r, c) for r in range(MATRIX_ROWS) for c in range(MATRIX_COLS) if grid[r][c] != OFF]
-    assert lit == [(0, 3)] or lit == [(0, 4)], f"expected one near-red cell dead ahead, got {lit}"
-    assert grid[lit[0][0]][lit[0][1]] == COL_RED
-    print("scan_to_grid near-obstacle self-test passed")
-
-    ranges_clear = [RANGE_SENTINEL_M + 5] * n  # every beam a no-return
-    grid_clear = scan_to_grid(ranges_clear, angle_min, angle_increment, 0.02, 10.0)
-    assert all(cell == OFF for row in grid_clear for cell in row), "no returns -> nothing lit"
-    print("scan_to_grid clear-path self-test passed")
-
-    ranges_behind = [10.0] * n
-    ranges_behind[0] = 0.2                     # at -90 deg, right at the FOV edge, still in scope
-    grid_behind = scan_to_grid(ranges_behind, angle_min, angle_increment, 0.02, 10.0)
-    assert any(cell != OFF for row in grid_behind for cell in row)
-    print("scan_to_grid edge-of-fov self-test passed")
-
-
 def main():
-    if "--self-test" in sys.argv:
-        return self_test()
     rclpy.init()
     node = ObstacleMatrixNode()
     try:

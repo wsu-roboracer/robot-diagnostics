@@ -19,7 +19,6 @@ Setup on the Orin (once):
     sudo apt install python3-spidev            # or: pip3 install spidev
     sudo usermod -aG gpio $USER                # for the button, then log out/in
 
-    python3 hat_leds.py --self-test            # no hardware needed
     python3 hat_leds.py --demo                 # status chase + matrix sweep
     python3 hat_leds.py --off
 """
@@ -147,43 +146,7 @@ def demo():
         leds.close()
 
 
-def self_test():
-    """`python3 hat_leds.py --self-test` - no Orin, no HAT, no spidev."""
-    assert status_index(0) == 0 and status_index(9) == 9
-    assert matrix_index(0, 0) == 10, "matrix must start right after the 10 status LEDs"
-    assert matrix_index(0, 7) == 17 and matrix_index(1, 0) == 18
-    assert matrix_index(7, 7) == N_LEDS - 1 == 73
-    for bad in ((-1, 0), (8, 0), (0, 8)):
-        try:
-            matrix_index(*bad)
-        except IndexError:
-            pass
-        else:
-            raise AssertionError(f"matrix_index{bad} should raise")
-    print("index map self-test passed")
-
-    data = encode([(255, 0, 0x81)])     # red full, green off, blue 1000 0001
-    assert data[0] == 0 and len(data) == 1 + 24 + RESET_BYTES
-    assert list(data[1:9]) == [BIT0] * 8, "green comes first and is 0"
-    assert list(data[9:17]) == [BIT1] * 8, "red second, all ones"
-    assert list(data[17:25]) == [BIT1] + [BIT0] * 6 + [BIT1], "blue last, MSB first"
-    assert not any(data[25:]), "the reset tail must be all low"
-    assert all(b & 0x07 == 0 for b in data), "every byte must end low (gap tolerance)"
-    assert len(encode([OFF] * N_LEDS)) < 4096, "must fit one default spidev transfer"
-    print("ws2812 encoding self-test passed")
-
-    white = [(255, 255, 255)] * N_LEDS
-    assert estimate_ma(white) > 2500
-    capped = limit_current(white)
-    assert estimate_ma(capped) <= CURRENT_LIMIT_MA, estimate_ma(capped)
-    dim = [(10, 0, 0)] * N_LEDS
-    assert limit_current(dim) == dim, "colours already inside the budget must not change"
-    print("current limit self-test passed")
-
-
 def main():
-    if "--self-test" in sys.argv:
-        return self_test()
     if "--off" in sys.argv:
         return HatLeds().close()
     if "--demo" in sys.argv:

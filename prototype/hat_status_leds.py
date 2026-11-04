@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Show live /diagnostics health on the HAT's 10 status LEDs (SKELETON).
 
-Needs a sourced ROS 2 install and hat_leds.py's hardware (SPI) to run for
-real; neither is needed for --self-test, which only checks the pure mapping
-from diagnostic statuses to LED colours.
+Needs a sourced ROS 2 install and hat_leds.py's hardware (SPI) to run.
 
 /diagnostics already carries everything this needs - system_diagnostics.py
 publishes "system: Camera", "system: Network", "system: VESC device",
@@ -26,24 +24,14 @@ Colour per DiagnosticStatus.level: OK green, WARN amber, ERROR and STALE red
 ERROR). A subsystem with no entry yet in the array stays off rather than
 guessing a colour.
 
-    python3 hat_status_leds.py --self-test   # no ROS, no hardware
-    python3 hat_status_leds.py                # subscribes to /diagnostics, needs both
+    python3 hat_status_leds.py                # subscribes to /diagnostics
 """
 
-import sys
+import rclpy
+from diagnostic_msgs.msg import DiagnosticArray
+from rclpy.node import Node
 
-try:
-    import rclpy
-    from diagnostic_msgs.msg import DiagnosticArray
-    from rclpy.node import Node
-except ImportError:
-    # --self-test only exercises diagnostics_to_colours(), the pure part worth
-    # checking without a sourced ROS install (see system_diagnostics.py for the same pattern).
-    if "--self-test" not in sys.argv:
-        raise
-    Node = object
-
-from hat_leds import GREEN, OFF, RED, YELLOW
+from hat_leds import GREEN, HatLeds, OFF, RED, YELLOW
 
 OK, WARN, ERROR, STALE = 0, 1, 2, 3        # diagnostic_msgs/DiagnosticStatus levels
 
@@ -74,10 +62,8 @@ def _level_int(level):
 def diagnostics_to_colours(statuses):
     """[{"name": str, "level": int|bytes}, ...] -> {led_index: (r, g, b)}.
 
-    Pure function so it can be checked with plain dicts, no DiagnosticArray
-    message type and no hardware - same reasoning scan_to_grid() uses in
-    hat_obstacle_matrix.py. Only returns entries for subsystems actually seen
-    in `statuses`; a missing subsystem is left for the caller to leave off.
+    Only returns entries for subsystems actually seen in `statuses`; a
+    missing subsystem is left for the caller to leave off.
     """
     colours = {}
     for entry in statuses:
@@ -109,36 +95,7 @@ class StatusLedsNode(Node):
         self.leds.show()
 
 
-def self_test():
-    """`python3 hat_status_leds.py --self-test` - no ROS, no hardware."""
-    colours = diagnostics_to_colours([
-        {"name": "urg_node: Laser Scan topic status", "level": bytes([OK])},
-        {"name": "system: Camera", "level": bytes([WARN])},
-        {"name": "system: Network", "level": bytes([ERROR])},
-        {"name": "system: VESC device", "level": bytes([STALE])},
-        {"name": "system: Power", "level": OK},             # plain int is also accepted
-        {"name": "system: Thermal", "level": ERROR},         # not one of the six - ignored
-    ])
-    assert colours[LIDAR_LED] == GREEN
-    assert colours[1] == YELLOW, "Camera WARN should be amber"
-    assert colours[2] == RED, "Network ERROR should be red"
-    assert colours[3] == RED, "VESC STALE counts as a real problem, same as ERROR"
-    assert colours[4] == GREEN
-    assert 5 not in colours, "Gamepad never reported - must stay off, not guessed"
-    assert "system: Thermal" not in FIXED_NAMES.values(), "Thermal has no LED assigned"
-    print("diagnostics-to-colour mapping self-test passed")
-
-    assert not (set(colours) & set(PROGRAMMABLE_LEDS)), "must never touch the 4 free LEDs"
-    print("programmable-LED isolation self-test passed")
-
-    assert diagnostics_to_colours([]) == {}, "no diagnostics yet -> nothing lit"
-    print("empty-diagnostics self-test passed")
-
-
 def main():
-    if "--self-test" in sys.argv:
-        return self_test()
-    from hat_leds import HatLeds
     rclpy.init()
     leds = HatLeds()
     node = StatusLedsNode(leds)

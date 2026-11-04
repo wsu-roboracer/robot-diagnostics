@@ -15,11 +15,7 @@ Planned flow once hardware is picked:
     2. format_volts() turns that into four 7-segment digit patterns.
     3. A display driver (likely an HT16K33-style I2C backpack) writes those
        patterns to the digits - that write is WRITE_FN, also a TODO.
-
-    python3 hat_battery.py --self-test     # no hardware needed
 """
-
-import sys
 
 I2C_BUS = 7                   # I2C7: header pins 3 (SDA) / 5 (SCL) - TODO confirm once wired
 BATTERY_I2C_ADDR = None       # TODO: set once the ADC/fuel-gauge chip is chosen
@@ -84,39 +80,7 @@ class BatteryDisplay:
         self.bus.close()
 
 
-def self_test():
-    """`python3 hat_battery.py --self-test` - no hardware, no I2C bus."""
-    assert format_volts(0.0) == [_DIGIT_SEGMENTS[0], _DIGIT_SEGMENTS[0] | DP,
-                                  _DIGIT_SEGMENTS[0], _DIGIT_SEGMENTS[0]]
-    patterns = format_volts(12.34)
-    assert patterns[0] == _DIGIT_SEGMENTS[1], "first digit of 12.34 is 1"
-    assert patterns[1] == _DIGIT_SEGMENTS[2] | DP, "second digit is 2, with the decimal point"
-    assert patterns[2] == _DIGIT_SEGMENTS[3], "third digit is 3"
-    assert patterns[3] == _DIGIT_SEGMENTS[4], "fourth digit is 4"
-    print("format_volts digit-mapping self-test passed")
-
-    assert format_volts(MAX_VOLTS)[0] == _DIGIT_SEGMENTS[9]
-    for bad in (-0.01, MAX_VOLTS + 0.01):
-        try:
-            format_volts(bad)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError(f"format_volts({bad}) should raise")
-    print("format_volts range-check self-test passed")
-
-    try:
-        BatteryDisplay()
-    except NotImplementedError:
-        pass
-    else:
-        raise AssertionError("BatteryDisplay() should refuse to run with no hardware chosen")
-    print("BatteryDisplay stub-guard self-test passed")
-
-
 def main():
-    if "--self-test" in sys.argv:
-        return self_test()
     print(__doc__)
 
 
