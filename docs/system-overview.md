@@ -377,6 +377,21 @@ cd ~/diag
 Logs are in `/tmp/f1tenth-diag/`. A second run refuses to start while one is
 already running.
 
+**Restarting from the page.** When the page lags or stops updating, the
+Advanced tab's **Restart the dashboard on the car** (also on the red "NO DATA
+FROM THE ROBOT" bar) does what `./start_diagnostics.sh --stop &&
+./start_diagnostics.sh` does, with the same options the run was started with.
+`restart_stack.py` does the work, reached two ways, because what has hung is
+usually rosbridge: `system_diagnostics`' `~/restart_stack` service, which
+refuses while the emergency stop is on, a deadman is held or a dashboard is
+driving; and, when rosbridge does not answer, `camera_http.py`'s `POST /restart`
+on port 8082 (the body must be `restart`). The restart runs in its own session
+so it survives the `--stop` it starts, and logs to
+`/tmp/f1tenth-diag/restart.log`; a second request within 90 s is the same
+restart. The page waits for rosbridge and the page itself to come back, then
+reloads. A car started by `bringup` (the f1tenth_stack version) has no
+`start_diagnostics.sh`, and the restart says so.
+
 To work on the page without copying it to the robot each time, serve
 `prototype/` from your laptop and point it at a running robot:
 
@@ -1229,8 +1244,14 @@ browser or device starts from the defaults.
 
 Drives the car from a browser, through the same input an autonomous stack uses.
 
-**Where it comes from.** The driving view's controls (the pad, the keys, or a
-phone's thumb sticks) set what the Drive tab's controller sends. It publishes
+**Where it comes from.** The driving view's controls (the pad, the keys, a
+phone's thumb sticks, or a controller on the device itself, such as a Steam Deck,
+read through the browser's Gamepad API) set what the Drive tab's controller
+sends. A standard-mapped gamepad on the device drives with its sticks directly
+(`readSticks()` in `js/drive.js`: left stick speed, right stick steer, a 0.15
+dead zone, pushing a stick is the deadman, B stops and disarms). Holding L1 with
+the sticks drives too, through the Controller tab's mapping (`deckDriveInput()`
+in `js/controller.js`), which also covers a pad not mapped as standard. It publishes
 `ackermann_msgs/AckermannDriveStamped` on `/drive`, the mux's navigation input, 50
 times a second while armed and while the pad, a key or a stick is held, and at once
 whenever the input changes (a press, a drag, a release). The
@@ -1265,6 +1286,41 @@ always overrides the page.
   100 ms or more when a packet is lost and resent. The page's own share is now
   small (a key reaches a command in about 6 ms, measured in the browser); the
   **Latency** chip shows the rest.
+- **Autonomous driving.** The status banner's **Autonomous** fact, and a chip in
+  the driving view, say whether autonomous code is driving (`autonomousState()` in
+  `js/drive.js`): **Driving** when a `/drive` publisher that is neither a dashboard
+  (they all publish through rosbridge) nor the drive watchdog is sending commands,
+  **Standby** when such a node is up but quiet, **Off** otherwise. The mux's
+  "navigation unmasked" alone cannot say it: every dashboard drives through that
+  same input. The publishers come from rosapi and from the Drive watchdog row's
+  `publishers` value, which `system_diagnostics` reads from the ROS graph itself,
+  so a `ros2 topic pub` (a hidden `_ros2cli_<pid>` node) is seen too. **Stop**
+  calls `~/stop_autonomous`: it SIGINTs each `_ros2cli_<pid>` (SIGKILL after
+  1.5 s), sends 10 zero-speed commands, and names any other publisher without
+  killing it.
+- **Autonomous run.** The Controls card's **Autonomous run** mode publishes a set
+  speed and steering through the same 50 Hz loop, with nothing held, until
+  stopped or a time limit (`autoRun` in `js/drive.js`). Every disarm ends it, and
+  if the page goes, the drive watchdog stops the car.
+  **Full speed** uses the Max speed limit. With **Hold R1 to run**, R1 is the
+  run's deadman: down 0.5 s to start (`R1_HOLD_MS`), any reading of it up,
+  or `/joy` quiet for 250 ms (`R1_FRESH_MS`), stops it. R1 is read with the
+  Controller tab's mapping, an R1 that changed 6 times in 2 s cannot start it
+  (`jpUnsettled`), and `/joy` is at full rate while the mode is on.
+- **Obstacle stop.** `system_diagnostics.py` subscribes to `/scan` and, from
+  every scan, every `/drive` message and the 20 Hz watchdog, asks
+  `obstacle_verdict()`: is a fresh forward `/drive` command (not the page's
+  hold-to-drive, frame `dashboard_manual`; not while L1 is held) heading into
+  something closer than `stop_distance()` = margin + 0.15 s × v + v² / (2 × 4)?
+  The distance ahead is `nearest_ahead()`: the third-closest return in a
+  0.4 m corridor, so a stray return does not count. A trip calls the same
+  `engage_estop()` as the button, with the reason in the e-stop's `action`,
+  publishes the two statuses at once, queues zeros for after the release, and
+  stops any `ros2 topic pub`. A scan older than 0.5 s while driving forward
+  trips it too. The page marks its commands `dashboard_auto` /
+  `dashboard_manual`, reads `system: Obstacle stop`, sets the two parameters
+  through `/system_diagnostics/set_parameters`, and draws the zone
+  (`drawObstacleZone` in `js/radar.js`).
 - **Who is driving.** The page reads `/drive`'s publishers from rosapi and the
   messages' `header.frame_id`, so it can tell another page or an autonomous stack
   from itself, and ignore the watchdog's zeros (marked `"drive_watchdog"`).
@@ -1656,8 +1712,9 @@ Almost everything added only reads. The exceptions:
 
 | File | What it does |
 |---|---|
-| `system_diagnostics.py` | the health node, emergency stop, drive watchdog, joystick check and controller disconnect. Services: `/system_diagnostics/emergency_stop`, `emergency_release`, `joystick_check`, `controller_disconnect` |
-| `camera_http.py` | relays the camera stream from port 8081 to 8082, with `/stats` |
+| `system_diagnostics.py` | the health node, emergency stop, drive watchdog, joystick check, controller disconnect, the restart, and stopping autonomous code. Services: `/system_diagnostics/emergency_stop`, `emergency_release`, `joystick_check`, `controller_disconnect`, `restart_stack`, `stop_autonomous`. Parameters `obstacle_stop`, `obstacle_margin` (the obstacle stop) |
+| `camera_http.py` | relays the camera stream from port 8081 to 8082, with `/stats`, and `POST /restart` for when rosbridge does not answer |
+| `restart_stack.py` | restarts everything `start_diagnostics.sh` runs (the dashboard's Restart button) |
 | `start_diagnostics.sh` | development only: starts and stops everything |
 | `launch/bringup_launch.py` (in `f1tenth_stack`) | starts everything on a robot |
 | `setup.py` (in `f1tenth_stack`) | installs the node, the relay and the page when you run `colcon build` |

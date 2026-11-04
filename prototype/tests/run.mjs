@@ -12,6 +12,7 @@ const checks = [
   ['System list, joystick check, connection banners', 'node', [here('verify_system.mjs')]],
   ['Camera proxy: newest-frame relay', 'python3', [here('../camera_http.py'), '--self-test']],
   ['Robot side: e-stop, joystick, parsers, disconnect', 'python3', [here('../system_diagnostics.py'), '--self-test']],
+  ['Restart: reading the run, refusing a second one', 'python3', [here('../restart_stack.py'), '--self-test']],
 ];
 
 let failed = 0;

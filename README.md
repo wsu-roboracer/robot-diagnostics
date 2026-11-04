@@ -24,8 +24,11 @@ Every part of the car reports one of four states: **Healthy**, **Degraded**, **F
 - **ROS graph:** which of the 12 expected nodes run and whether the key topics are flowing. Topics that only publish while someone drives are not flagged as broken at rest.
 - **Live camera and LiDAR.** The LiDAR has a radar view that tags the nearest objects and says when something is getting closer.
 - **Driving** from the browser, with a dead-man, speed and steering limits, edge warning lights, a full-screen first-person view, and thumb sticks on a phone. The physical controller always has priority.
+- **Autonomous runs** from the page: a set speed and steering (or full speed), started with a button or by holding R1 on the controller, with an indicator and a Stop for anything autonomous on the car.
+- **Obstacle stop:** while anything drives the car forward through `/drive`, the car watches its LiDAR ahead and stops itself before it hits something.
 - **Emergency stop** for everyone: this page, other dashboards, the controller and autonomous code.
 - **Troubleshooting tools:** a "Needs attention" list, every raw reading from the car's own checks, live topic messages, a joystick check, and the ROS warning log.
+- **Controller tab:** a PS4 controller drawn live from `/joy`, with what is pressed lit up, the sticks and triggers moving, and the deadman buttons checked.
 - **Robot picker** for F1-WSU-1 to F1-WSU-12, phone layout, and light and dark modes.
 
 ## Quick start
@@ -104,6 +107,7 @@ Why each piece is built this way, and which file to change for each check, is in
 | [Overview guide](docs/guides/overview-tab.md) | Read the first page: every card, colour and threshold |
 | [Drive guide](docs/guides/drive-tab.md) | Drive a car from the dashboard safely |
 | [Advanced guide](docs/guides/advanced-tab.md) | Find out why something is wrong |
+| [Controller guide](docs/guides/controller-tab.md) | See live what the car hears from the PS4 controller |
 | [System overview](docs/system-overview.md) | Understand how it works, run it, and change any check |
 | [Drive control design](docs/design/dashboard-drive-control.md) | See how a command gets from the browser to the motors, and every safety rule |
 | [Emergency stop design](docs/design/emergency-stop.md) | See what the emergency stop does on the car |
