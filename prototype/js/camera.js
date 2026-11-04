@@ -280,6 +280,9 @@ function connectCamera(url, auto = false) {
 ========================================================== */
 
 let cameraPaused = false;
+let cameraHeldUntil = 0;               // cameraWake: stay open until then
+const CAMERA_WAKE_MS = 5000;           // how long a wake waits for a frame
+const CAMERA_HOLD_MS = 10000;          // and keeps the stream open after
 
 function cameraOnScreen() {
   const box = $("cameraImage").parentElement;
@@ -291,7 +294,7 @@ function syncCameraPause() {
 
   const image = $("cameraImage");
 
-  if (recording || cameraOnScreen()) {
+  if (recording || cameraOnScreen() || performance.now() < cameraHeldUntil) {
     if (cameraPaused) {
       cameraPaused = false;
       connectCamera(cameraUrlNow, cameraAuto);
@@ -313,6 +316,27 @@ function syncCameraPause() {
 }
 
 setInterval(syncCameraPause, 1000);
+
+/* Take Picture and Record from a pane that does not show the picture: open
+   the stream (if it was paused), wait for a frame, keep it open a little.
+   True once there is a live frame. */
+async function cameraWake() {
+
+  if (cameraLive()) return true;
+  if (!cameraUrlNow) return false;
+
+  cameraHeldUntil = performance.now() + CAMERA_HOLD_MS;
+  if (cameraPaused || !$("cameraImage").getAttribute("src")) {
+    connectCamera(cameraUrlNow, cameraAuto);
+  }
+
+  const end = performance.now() + CAMERA_WAKE_MS;
+  while (performance.now() < end) {
+    if (cameraLive()) return true;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return cameraLive();
+}
 document.addEventListener("visibilitychange", syncCameraPause);
 
 /* ==========================================================
@@ -329,11 +353,13 @@ function showCameraHint(text) {
   $("cameraHint").hidden = !text;
 }
 
-function takePicture() {
+async function takePicture() {
 
   const image = $("cameraImage");
 
-  if (image.hidden || !image.naturalWidth) {
+  if (!cameraLive() && cameraPaused) showCameraHint("Opening the camera…");
+
+  if (!(await cameraWake()) || image.hidden || !image.naturalWidth) {
 
     showCameraHint(
       "No live frame to capture — connect the camera first.");
@@ -445,7 +471,7 @@ function reportRecording(text) {
   if (typeof cockpitOpen !== "undefined" && cockpitOpen) setCockpitNote(text);
 }
 
-function startRecording() {
+async function startRecording() {
 
   if (recording) return;
 
@@ -457,10 +483,14 @@ function startRecording() {
     return;
   }
 
-  if (!cameraLive()) {
+  if (!cameraLive() && cameraPaused) reportRecording("Opening the camera…");
+
+  if (!(await cameraWake())) {
     reportRecording("No live picture to record. Connect the camera first.");
     return;
   }
+
+  if (recording) return;               // a second click while waiting
 
   const canvas = document.createElement("canvas");
   canvas.width = image.naturalWidth;
