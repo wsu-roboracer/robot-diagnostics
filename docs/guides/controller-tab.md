@@ -116,12 +116,9 @@ The driving view shows **Steam Deck: sticks drive · B stops** in its top bar wh
 
 ### Setting up the Deck
 
-A browser sees the Deck's controls only when Steam gives them to it as a controller. On the Deck's desktop they move the mouse instead.
+A browser sees the Deck's controls only when Steam gives them to it as a controller. On the Deck's desktop they move the mouse instead. The full, tested setup (a Steam shortcut that opens the right car in Firefox, the gamepad permissions and the **Gamepad** layout) is in the [Steam Deck setup guide](steam-deck-setup.md). Once it is running, press any button once: browsers only show a controller after a button has been pressed on the page.
 
-1. In **Desktop Mode**, install a browser (Chrome works best; it also shows the battery).
-2. In Steam, **Add a Non-Steam Game** and pick the browser. Open its **Properties**, and in **Launch options** add the dashboard's address, for example `http://192.168.1.202:8000/dashboard.html`.
-3. In the browser's **Controller settings**, pick a **gamepad** layout (Gamepad with Joystick Trackpad, or the Web Browser template's gamepad option), not keyboard and mouse.
-4. Launch it from **Game Mode**. Press any button once: browsers only show a controller after a button has been pressed on the page.
+Use **Map buttons** and **Remap one** here the same way as for the PS4 controller. The Deck keeps its own mapping, separate from the PS4's, saved in that browser.
 
 The back grips (L4, L5, R4, R5) have no standard place, so they show only if Steam's layout sends them as buttons; **Map buttons** learns where they went. The trackpads are drawn but not read: a browser does not get them as a controller.
 

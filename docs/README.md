@@ -10,6 +10,7 @@ Start with **[system-overview.md](system-overview.md)**: what the dashboard is, 
 | [guides/drive-tab.md](guides/drive-tab.md) | Driving the car from the dashboard, with screenshots: arming, the controls, what stops the car, full screen, the LiDAR and warnings, arranging the view, recording, autonomous runs (full speed, hold R1 to run), the obstacle stop, limits, and driving on a phone |
 | [guides/advanced-tab.md](guides/advanced-tab.md) | Finding out why something is wrong: needs attention, the car's own checks, nodes, topics and their states, the joystick check, and the warning log |
 | [guides/controller-tab.md](guides/controller-tab.md) | The PS4 controller live: what is pressed, the sticks and triggers, the deadman buttons, mapping a controller that numbers its buttons differently; and driving with a Steam Deck from its browser |
+| [guides/steam-deck-setup.md](guides/steam-deck-setup.md) | Setting up a Steam Deck: the launcher, Firefox and gamepad permissions, the Steam shortcut and layout, and testing it on the Controller tab |
 
 ## Design: how parts of the dashboard work
 
