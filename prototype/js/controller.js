@@ -33,18 +33,21 @@ const JP_DEVICES = {
       touchpad: "Touchpad click", up: "D-pad up", down: "D-pad down",
       left: "D-pad left", right: "D-pad right"
     },
-    /* the usual Linux numbering: L1 at buttons[4], R1 at [5], as the
-       car's joy_teleop.yaml expects */
+    /* what /joy carries on the cars, measured on F1-WSU-2: the Jetson
+       kernel has no Sony driver, so the pad is a generic HID device
+       (not the hid-playstation layout a laptop shows: Cross at 0, L2 on
+       axis 2, right stick on 3 / 4). L1 at buttons[4], R1 at [5], the
+       right stick's X on axes[2], as joy_teleop.yaml expects. */
     map: {
       buttons: {
-        cross: 0, circle: 1, triangle: 2, square: 3,
+        square: 0, cross: 1, circle: 2, triangle: 3,
         l1: 4, r1: 5, l2: 6, r2: 7,
-        share: 8, options: 9, ps: 10, l3: 11, r3: 12, touchpad: null
+        share: 8, options: 9, l3: 10, r3: 11, ps: 12, touchpad: 13
       },
       axes: {
         lx: { i: 0, s: 1 }, ly: { i: 1, s: 1 },
-        rx: { i: 3, s: 1 }, ry: { i: 4, s: 1 },
-        l2: { i: 2, s: 1 }, r2: { i: 5, s: 1 }
+        rx: { i: 2, s: 1 }, ry: { i: 5, s: 1 },
+        l2: { i: 3, s: 1 }, r2: { i: 4, s: 1 }
       },
       dpad: { kind: "axes", x: { i: 6, s: 1 }, y: { i: 7, s: 1 } }
     },
@@ -155,12 +158,11 @@ function jpAxis(axes, a) {
   return Number.isFinite(v) ? v * (a.s || 1) : 0;
 }
 
-/* A trigger rests at +1 and reads -1 fully squeezed. An axis only counts
-   as one after it has been seen resting near +1: on a controller that
-   numbers its axes differently, the "trigger" axis may really be a stick
-   that sits a little off centre, which would read as a trigger half in.
-   (That was the R2 lit with nothing pressed.) ROS joy also reports 0
-   until a trigger is first touched. */
+/* A trigger rests at +1 and reads -1 fully squeezed; ROS joy reports 0
+   until it is first touched. Read through the map as it is: an axis seen
+   near +1 is NOT proof of a trigger (a stick pushed fully left or up
+   reads +1 too, and its drift at centre then lit L2 or R2 by itself), so
+   jpTriggerRest only feeds the "does not read like a trigger" hint. */
 const jpTriggerRest = { ps4: {}, deck: {} };
 
 function jpTrigger(device, axes, buttons, which) {
@@ -170,7 +172,6 @@ function jpTrigger(device, axes, buttons, which) {
   if (!a || a.i === null || axes[a.i] === undefined) return pressed ? 1 : 0;
   const v = jpAxis(axes, a);
   if (v >= 0.9) jpTriggerRest[device][a.i] = true;
-  if (!jpTriggerRest[device][a.i]) return pressed ? 1 : 0;
   if (v === 0 && !pressed) return 0;
   return Math.max(0, Math.min(1, (1 - v) / 2));
 }
@@ -544,7 +545,7 @@ function jpRenderSide(st, live) {
 
   jpHTML($("jpRawButtons"), live ? chips(st.buttons, n => n === 1, flicker) : "—");
   jpHTML($("jpRawAxes"), live
-    ? chips(st.axes, (n, i) => triggerAxes.includes(i) && jpTriggerRest[jpDevice][i]
+    ? chips(st.axes, (n, i) => triggerAxes.includes(i)
         ? n < 0.9 && n !== 0 : Math.abs(n) > 0.1)
     : "—");
 
@@ -561,7 +562,7 @@ function jpRenderSide(st, live) {
       ? "Using your mapping, saved in this browser."
       : deck
         ? "Using the browser's standard layout. If the wrong button lights up, use Map buttons."
-        : "Using the usual Linux PS4 mapping. If the wrong button lights up, use Map buttons."));
+        : "Using the cars' PS4 mapping. If the wrong button lights up, use Map buttons."));
   $("jpMapNote").classList.toggle("warn", !justDone && oddTriggers.length > 0);
   $("jpMapNote").classList.toggle("done", Boolean(justDone));
   $("jpMapReset").hidden = !jpCustom[jpDevice] || Boolean(jpWizard);

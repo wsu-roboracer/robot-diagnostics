@@ -46,7 +46,7 @@ If nothing arrives on `/joy` for a second, the drawing greys out under **No cont
 
 ## Map buttons
 
-Which number is which button depends on the driver the car uses. The tab starts with the usual Linux PS4 numbering, which puts L1 at `buttons[4]` and R1 at `buttons[5]`, as the car's `joy_teleop.yaml` expects. If the wrong button lights up when you press one, map it:
+Which number is which button depends on the driver the car uses. The tab starts with the numbering the cars' `/joy` uses (measured on F1-WSU-2): the Jetson's kernel has no Sony driver, so the controller is read as a generic gamepad. Square, Cross, Circle, Triangle are `buttons[0]` to `[3]`, L1 and R1 are `[4]` and `[5]` (as `joy_teleop.yaml` expects), L2 and R2 are `[6]` and `[7]` and also `axes[3]` and `[4]`, Share, Options, L3, R3, PS and the touchpad are `[8]` to `[13]`; the right stick is `axes[2]` (left and right, the axis the car steers from) and `axes[5]` (up and down). A laptop with a newer kernel numbers the same controller differently. If the wrong button lights up when you press one, map it: If the wrong button lights up when you press one, map it:
 
 ![Map buttons asking for Cross, which pulses blue on the drawing](images/controller-tab/03-map-buttons.jpg)
 
@@ -59,7 +59,7 @@ The mapping is saved in this browser; **Use the default** goes back to the usual
 
 ![L2 and R2 do not read like triggers: a hint to map the buttons](images/controller-tab/06-numbering-note.jpg)
 
-The tab also notices when the numbering is probably wrong. A real trigger rests at +1 on its axis; if L2's or R2's axis never does, the tab does not light the trigger from it (it could be a stick resting slightly off centre, which once made R2 look pressed when it was not), and after a few seconds it says so, with a nudge to **Map buttons**.
+The tab also notices when the numbering is probably wrong. A real trigger rests at +1 on its axis; if L2's or R2's axis has not been seen there after a few seconds, the tab says so, with a nudge to **Map buttons** (with the wrong numbering, a stick resting slightly off centre reads as a trigger partly squeezed).
 
 ### Remap just one
 

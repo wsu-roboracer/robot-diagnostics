@@ -2812,8 +2812,9 @@ body:has(.cockpit.full:not([hidden])) {
   .cockpit .auto-chip[data-state="on"] { animation: none; }
 }
 
-/* in the rail: under who is driving */
-.cockpit .rail-auto {
+/* in the rail: under who is driving (as specific as it takes to outweigh
+   .cockpit button.auto-chip's font: inherit, which made it 16px) */
+.cockpit button.rail-auto.auto-chip {
   display: flex;
   flex-direction: column;
   align-items: center;

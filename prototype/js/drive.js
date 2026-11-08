@@ -367,6 +367,13 @@ function driveTick() {
     disarmDrive("stop pressed on the controller");
   }
 
+  /* a controller on the car holds the mux until R1 is held (joy_teleop's
+     default command sends zero speed with every /joy message), so a run
+     that needs nothing held cannot drive: end it and say why */
+  if (autoRun.on && !autoRun.byR1 && padOnCar()) {
+    endR1Run("a controller connected to the car, so the run needs R1 held");
+  }
+
   /* hold R1 to run, let go to stop */
   const r1 = r1Enabled() ? r1Input(deck) : null;
   r1Last = r1;
@@ -961,6 +968,24 @@ function autoSpeed() {
   const max = limitSpeed();
   if ($("autoFull").checked) return max;
   return Math.max(-max, Math.min(max, parseFloat($("autoSpeed").value) || 0));
+}
+
+/* Hold R1 to run: what you chose, unless a controller is connected to the
+   car - then it is on, whatever you chose. With a controller connected,
+   joy_teleop's default command sends zero speed on /teleop with every /joy
+   message, and the mux gives /teleop priority over /drive, so the car takes
+   /drive only while R1 (the autonomous deadman) is held. */
+let autoR1Choice = false;
+
+function syncAutoR1() {
+  const forced = padOnCar();
+  const box = $("autoR1");
+  const want = forced || autoR1Choice;
+  if (box.checked !== want) box.checked = want;
+  box.disabled = forced;
+  $("autoR1Sub").textContent = forced
+    ? "On while a controller is connected to the car: it holds the car still until R1 is held."
+    : "Hold R1 on the controller for half a second to start; let go to stop.";
 }
 
 /* Hold R1 to run: on in the Autonomous run mode only */
@@ -1696,6 +1721,7 @@ $("autoGuardOn").addEventListener("change", e =>
 $("autoGuardMargin").addEventListener("change", e =>
   setObstacleGuard($("autoGuardOn").checked, parseFloat(e.target.value)));
 $("autoR1").addEventListener("change", e => {
+  autoR1Choice = e.target.checked;
   r1Tried = true;                      // only a fresh hold starts a run
   if (typeof jpSubscribe === "function") jpSubscribe();
   if (!e.target.checked) driveNow();
@@ -1705,5 +1731,5 @@ document.querySelectorAll("[data-auto-stop]").forEach(button => {
   button.onclick = stopAutonomous;
 });
 
-setInterval(renderAutoPanel, 100);
+setInterval(() => { syncAutoR1(); renderAutoPanel(); }, 100);
 

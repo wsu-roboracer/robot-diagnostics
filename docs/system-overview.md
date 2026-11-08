@@ -269,14 +269,22 @@ command. Only something on the robot can notice the silence, so
 mid-drive. It waits 0.3 s, longer than the mux's own 0.2 s cut-off for a quiet
 input (`mux.yaml`), so it can never interrupt a publisher that is still working.
 
-### The emergency stop freezes one node
+### The emergency stop locks the mux
 
-Picked over: publishing stop commands.
+Picked over: publishing stop commands, and freezing a node.
 
 The physical controller has the highest priority in the mux, so a stop sent from
-the page would lose to someone holding the controller. Every input reaches the
-motor through `ackermann_to_vesc_node`, so freezing that one process stops all of
-them, and the node then holds the motor at speed 0 itself.
+the page would lose to someone holding the controller. The mux has its own
+answer: a lock (`locks:` in `mux.yaml`), a `std_msgs/Bool` topic that, while
+true, blocks every input below its priority. The e-stop's lock,
+`/emergency_stop`, has priority 255, above everything, so the mux forwards
+nothing and the node holds the motor at speed 0 itself.
+
+The first version froze `ackermann_to_vesc_node` (`SIGSTOP`), the one node every
+input passes through. Measured on F1-WSU-2 on 2026-11-04: after a long freeze
+that node sometimes came back deaf, publishing nothing, so the car could not
+drive at all until bringup restarted. A car whose `mux.yaml` has no lock still
+gets the freeze, as a fallback.
 
 ### It starts with bringup, inside f1tenth_system
 
@@ -379,8 +387,10 @@ already running.
 
 **Restarting from the page.** When the page lags or stops updating, the
 Advanced tab's **Restart the dashboard on the car** (also on the red "NO DATA
-FROM THE ROBOT" bar) does what `./start_diagnostics.sh --stop &&
-./start_diagnostics.sh` does, with the same options the run was started with.
+FROM THE ROBOT" bar) stops and starts again every node on the car (bringup,
+rosbridge, the camera, the page's server), with the same options the run was
+started with. By hand on the car, when debugging, the same is
+`./start_diagnostics.sh --stop && ./start_diagnostics.sh`.
 `restart_stack.py` does the work, reached two ways, because what has hung is
 usually rosbridge: `system_diagnostics`' `~/restart_stack` service, which
 refuses while the emergency stop is on, a deadman is held or a dashboard is
@@ -1369,15 +1379,29 @@ Stops the car for everyone (the controller, any page, autonomous code) until
 someone releases it.
 
 **How it works.** The button calls the service `/system_diagnostics/emergency_stop`.
-On the robot, the node finds `ackermann_to_vesc_node` with `pgrep` and freezes it
-(`SIGSTOP`). Every input reaches the motor through that one node. The node then
-publishes speed 0 on `/commands/motor/speed` 50 times a second. Release calls
-`/system_diagnostics/emergency_release`, which unfreezes the node (`SIGCONT`); it
-is refused, on the page and on the robot, while anyone holds L1 or R1, so the car
-never resumes into a live command.
+On the robot, the node publishes `true` on `/emergency_stop`, the mux lock in
+`mux.yaml` (priority 255), so the mux forwards no input at all, and publishes
+speed 0 on `/commands/motor/speed` 50 times a second (the lock again with each,
+so a mux that restarts mid-stop is locked again). Release calls
+`/system_diagnostics/emergency_release`, which publishes `false`; it is refused,
+on the page and on the robot, while anyone holds L1 or R1, so the car never
+resumes into a live command. A car whose `mux.yaml` has no such lock (nothing
+subscribes to `/emergency_stop`) gets the old way: `ackermann_to_vesc_node`
+frozen with `SIGSTOP` and unfrozen with `SIGCONT`.
+
+The lock, in `f1tenth_stack/config/mux.yaml` under `ackermann_mux.ros__parameters`:
+
+```yaml
+locks:
+  emergency_stop:
+    topic   : emergency_stop
+    timeout : 0.0       # never expires: only true locks it
+    priority: 255
+```
 
 **What is sent.** Report `system: E-stop`: level 2 while on, with keys `since` and
-`action` (what the robot did, such as "froze ackermann_to_vesc_node (pid 1234)").
+`action` (what the robot did, such as "locked the mux (/emergency_stop)") and
+`method` (`mux lock` or `SIGSTOP`).
 
 **On the page.** The red Emergency stop banner, on every open page, from that
 report.
@@ -1671,8 +1695,9 @@ Outside any repo, the login user on each car has to be in the `input` group (see
 
 Almost everything added only reads. The exceptions:
 
-- **Emergency stop** freezes `ackermann_to_vesc_node` and holds the motor at
-  speed 0 until Release.
+- **Emergency stop** locks the mux (`/emergency_stop`) and holds the motor at
+  speed 0 until Release; on a car without the lock it freezes
+  `ackermann_to_vesc_node` instead.
 - **The drive watchdog** sends zero-speed commands on `/drive` when the page's
   commands stop mid-drive.
 - **Driving from the page** publishes on `/drive`, the input an autonomous stack

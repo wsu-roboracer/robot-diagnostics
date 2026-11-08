@@ -255,6 +255,8 @@ does on the car, but from the page.
 
 It starts gently, like the keys. The pad, the keys or a controller held still take over while they are held.
 
+**With a controller connected to the car, a run needs R1 held.** While the car's controller is connected, its teleop node sends zero speed with every controller message, and the car's command mux puts the controller ahead of `/drive`, so the car only takes a run's commands while R1 (the autonomous deadman) is held. The panel shows this: **Hold R1 to run** is switched on and cannot be turned off while the controller is connected, and says why. Unplug or turn off the controller and the switch is yours again. A run started with nothing held ends, with that reason, if a controller connects during it.
+
 ### Hold R1 to run
 
 Turn on **Hold R1 to run** and R1 on the controller becomes the run's deadman, the way L1 is for driving by hand:
@@ -265,7 +267,7 @@ Turn on **Hold R1 to run** and R1 on the controller becomes the run's deadman, t
 - The safety box must be ticked. A hold arms the controls by itself if they are not armed.
 - R1 uses the Controller tab's mapping. An R1 that has flickered on and off by itself in the last 2 s cannot start a run, and the panel says so.
 - If `/joy` goes quiet while R1 is held, the car stops, as if R1 were let go.
-- The switch is off again after a reload. It works only in the Autonomous run mode, and only on the Drive tab.
+- The switch is off again after a reload (and on, locked, whenever a controller is connected to the car). It works only in the Autonomous run mode, and only on the Drive tab.
 
 Run for does not apply here: the hold is the limit.
 
@@ -378,7 +380,7 @@ flowchart LR
   pad["Physical controller<br/>deadman L1 / R1"] --> mux
   mux --> a2v["ackermann_to_vesc"] --> vesc["VESC motor<br/>controller"] --> motor(("Motor and<br/>steering"))
   wd["Robot watchdog<br/>system_diagnostics.py"] -. "zero speed if /drive<br/>goes quiet 0.3 s" .-> mux
-  es["Emergency stop"] -. "freezes it, holds<br/>the motor at 0" .-> a2v
+  es["Emergency stop"] -. "locks the mux,<br/>holds the motor at 0" .-> mux
 ```
 
 The page publishes `ackermann_msgs/AckermannDriveStamped` on `/drive`, the mux's navigation input, over the same rosbridge connection the rest of the dashboard uses. The details, every safety rule and the code map are in [design/dashboard-drive-control.md](../design/dashboard-drive-control.md).

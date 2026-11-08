@@ -207,8 +207,10 @@ async function runJoyCheck() {
 /* ==========================================================
    RESTART THE DASHBOARD ON THE CAR
 
-   What `./start_diagnostics.sh --stop && ./start_diagnostics.sh` does on
-   the car, from the page - for when it lags or stops updating. Two
+   Stops and starts again every node on the car (bringup, rosbridge, the
+   camera, the page's server), from the page - for when it lags or stops
+   updating. By hand on the car, when debugging, the same is
+   `./start_diagnostics.sh --stop && ./start_diagnostics.sh`. Two
    routes, because the thing that has hung is usually rosbridge itself:
 
    1. system_diagnostics' ~/restart_stack, over rosbridge. It refuses
