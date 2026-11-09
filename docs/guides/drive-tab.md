@@ -269,6 +269,20 @@ Turn on **Hold R1 to run** and R1 on the controller becomes the run's deadman, t
 
 Run for does not apply here: the hold is the limit.
 
+### Steer away from obstacles
+
+With **Steer away from obstacles** on (the default, just above **Obstacle stop** in the autonomous panel), the run turns away from something in its path instead of driving straight at it. It uses the same LiDAR scan as the plot.
+
+- **When it acts:** something is within ±20° of straight ahead and closer than the look-ahead distance, which grows with speed: 0.8 m plus 0.8 m for every m/s. That is about 1.6 m at 1 m/s and 3.2 m at 3 m/s.
+- **Which way:** it compares the nearest point on the left (8° to 75°) with the nearest on the right, and turns toward the side with more room. It keeps that side until the way ahead is clear by a quarter more than the trigger distance, so it does not flip between left and right at a symmetrical obstacle.
+- **How hard:** half of full lock at the trigger distance, rising to full lock at 0.4 m. It never goes past **Max steering**.
+- **What it replaces:** while it is turning, it overrides the panel's **Steering**; once the way is clear, **Steering** is back in charge. It never changes the speed.
+- **While it turns**, the status line reads *Avoiding: obstacle 0.90 m ahead, steering left*.
+- **When it does nothing:** the switch is off, the run is in reverse (the LiDAR can't see behind the car), or the last scan is more than 0.5 s old. A dead LiDAR means no steering from it, not a guess.
+- **It is not a stop.** It cannot get the car out of a dead end or around something wider than the turn allows. [Obstacle stop](#obstacle-stop) is still the last line of defence, and every kill switch below still works.
+- It applies to this page's autonomous run only, not to a `ros2 topic pub` on the car or your own node. The setting is on the page and is back on after a reload.
+- The logic is `lidarAvoid()` in `js/avoid.js`; the numbers are the `AVOID` constants at the top of that file.
+
 ### Obstacle stop
 
 ![The stop zone on the LiDAR: red, because a wall 1.5 m ahead is inside the 1.9 m needed at 3 m/s](images/drive-tab/25-obstacle-stop-zone.jpg)

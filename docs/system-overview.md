@@ -1307,6 +1307,16 @@ always overrides the page.
   or `/joy` quiet for 250 ms (`R1_FRESH_MS`), stops it. R1 is read with the
   Controller tab's mapping, an R1 that changed 6 times in 2 s cannot start it
   (`jpUnsettled`), and `/joy` is at full rate while the mode is on.
+- **Steer away from obstacles.** In the autonomous branch of the same loop,
+  `lidarAvoid()` (`js/avoid.js`, a pure function of the latest `LaserScan`, the
+  speed and the steering limit) replaces the run's steering when something is
+  within ±20° ahead and closer than `0.8 m + 0.8 m per m/s`. It turns toward the
+  side with more room (nearest point in 8°–75° left against right), holds that
+  side until clear by 25% extra, and steers half of full lock at the trigger
+  distance up to full lock at 0.4 m. It leaves the speed alone, does nothing in
+  reverse, and ignores a scan older than 500 ms (`AVOID_SCAN_MAX_AGE_MS`). It runs
+  in the page, so it only affects this page's run; the obstacle stop on the car
+  is separate and still applies. Checked by `tests/verify_avoid.mjs`.
 - **Obstacle stop.** `system_diagnostics.py` subscribes to `/scan` and, from
   every scan, every `/drive` message and the 20 Hz watchdog, asks
   `obstacle_verdict()`: is a fresh forward `/drive` command (not the page's
@@ -1334,6 +1344,8 @@ always overrides the page.
 | Ramping | `js/drive.js` | `KEY_ACCEL = 8.0`, `KEY_STEER_RATE = 8.0` (keys); `PAD_ACCEL = 20.0`, `PAD_STEER_RATE = 20.0` (pad and sticks) |
 | Command rate, stop burst | `js/drive.js` | `DRIVE_HZ = 50`, `DRIVE_NOW_MIN_MS = 10`, `STOP_BURST = 5` |
 | Keys | `js/drive.js` | `KEY_FWD`, `KEY_BACK`, `KEY_LEFT`, `KEY_RIGHT` |
+| Steer-away distances and strength | `js/avoid.js` | `AVOID`: `frontHalfAngle` 20°, `sideNear` 8°, `sideFar` 75°, `lookaheadBase` 0.8 m, `lookaheadPerMs` 0.8, `hardStop` 0.4 m, `releaseFactor` 1.25, `minTurn` 0.5 |
+| Steer-away scan age limit | `js/drive.js` | `AVOID_SCAN_MAX_AGE_MS = 500` |
 | When closing the controls disarms | `js/cockpit.js` | the start of `applyPanes()` |
 
 ### Drive watchdog
