@@ -66,7 +66,8 @@ Firefox only offers the gamepad to pages loaded over `https` or `localhost`. The
    ```
    192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205,192.168.1.206,192.168.1.207,192.168.1.208,192.168.1.209,192.168.1.210,192.168.1.211,192.168.1.212
    ```
-5. Close Firefox.
+5. While you are in `about:config`, also set `dom.allow_scripts_to_close_windows` to `true` (a boolean; toggle it if it exists, or add it). This lets the dashboard's **Close** button quit Firefox. Without it the button does nothing.
+6. Close Firefox.
 
 ## 4. Add the Steam shortcut
 
@@ -120,7 +121,7 @@ Put the car's **wheels off the ground** and have someone hold the paired PS4 con
 ## Everyday use
 
 - **Launch:** the shortcut. If two cars are on, a pick list appears when `zenity` is installed; otherwise the lowest number opens. To choose, run `~/open_dashboard.sh 6` for car 6.
-- **Exit:** kiosk mode has no close button. Press the Steam button and choose **Exit Game**.
+- **Exit:** touch **Close** in the dashboard's top bar (in full screen driving, beside **Exit**), then confirm. It disarms the car first. The button only appears on the Deck: the launcher opens the page with `?deck=1`. If it does nothing, `dom.allow_scripts_to_close_windows` is not set (step 3); press the Steam button and choose **Exit Game** instead, which always works.
 - **A normal window instead of full screen:** `KIOSK=0 ~/open_dashboard.sh`.
 
 ## When the dashboard code changes
