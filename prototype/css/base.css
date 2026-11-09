@@ -167,6 +167,13 @@ html {
 html.deck {
   user-select: none;
   -moz-user-select: none;
+  -webkit-touch-callout: none;    /* no press-and-hold popup */
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.deck img,
+html.deck canvas {
+  -webkit-user-drag: none;
 }
 
 html.deck input,
