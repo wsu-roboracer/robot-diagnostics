@@ -11,6 +11,222 @@
 		(comment 1 "Jetson Orin Nano 40-pin diagnostics HAT")
 	)
 	(lib_symbols
+		(symbol "Connector_Generic:Conn_01x04"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J"
+				(at 0 5.08 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Conn_01x04"
+				(at 0 -7.62 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Conn_01x04_1_1"
+				(rectangle
+					(start -1.27 3.81)
+					(end 1.27 -6.35)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(rectangle
+					(start -1.27 2.667)
+					(end 0 2.413)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 0.127)
+					(end 0 -0.127)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -2.413)
+					(end 0 -2.667)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -4.953)
+					(end 0 -5.207)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 2.54 0)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -2.54 0)
+					(length 3.81)
+					(name "Pin_3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -5.08 0)
+					(length 3.81)
+					(name "Pin_4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector_Generic:Conn_02x20_Odd_Even"
 			(pin_names
 				(offset 1.016)
@@ -3246,9 +3462,26 @@
 			)
 		)
 	)
-	(no_connect
-		(at 71.12 81.28)
-		(uuid "a8200105-9fd4-4ab8-9e8c-9907c50697b5")
+	(wire
+		(pts
+			(xy 71.12 81.28)
+			(xy 63.5 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7935d962-569f-43e6-9d1c-d90b695a1520")
+	)
+	(label "I2C7_SDA"
+		(at 63.5 81.28 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "ee08c02c-9a47-4521-bf79-3325a614add6")
 	)
 	(wire
 		(pts
@@ -3326,9 +3559,26 @@
 			)
 		)
 	)
-	(no_connect
-		(at 71.12 83.82)
-		(uuid "93e78692-fa38-4ff4-b855-31f74e71543c")
+	(wire
+		(pts
+			(xy 71.12 83.82)
+			(xy 63.5 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "cf96cc29-bd76-44f5-8be3-e3f8fe70d2e0")
+	)
+	(label "I2C7_SCL"
+		(at 63.5 83.82 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "a6bdaa18-95a4-475d-a024-2c03c4d0718c")
 	)
 	(wire
 		(pts
@@ -3406,9 +3656,26 @@
 			)
 		)
 	)
-	(no_connect
-		(at 71.12 86.36)
-		(uuid "bd3a8f96-349a-4739-8d96-86cad467788c")
+	(wire
+		(pts
+			(xy 71.12 86.36)
+			(xy 63.5 86.36)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3762680e-da86-4476-802d-e54638107471")
+	)
+	(label "BTN6"
+		(at 63.5 86.36 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "98584517-f1db-427e-a349-1de94427ea1d")
 	)
 	(no_connect
 		(at 83.82 86.36)
@@ -3494,17 +3761,68 @@
 		(at 83.82 88.9)
 		(uuid "17cfdde8-047e-4090-9cfa-3b3fcfbba5c3")
 	)
-	(no_connect
-		(at 71.12 91.44)
-		(uuid "3c5cbfc4-390a-4506-8f79-77934bb0f349")
+	(wire
+		(pts
+			(xy 71.12 91.44)
+			(xy 63.5 91.44)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c82f40ec-669f-41b3-af2a-1abab2ffa0d5")
 	)
-	(no_connect
-		(at 83.82 91.44)
-		(uuid "985ebcd8-1645-49b4-afd2-66e14df85930")
+	(label "BTN5"
+		(at 63.5 91.44 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "92181144-dbb8-442e-a5d2-83fc332f8434")
 	)
-	(no_connect
-		(at 71.12 93.98)
-		(uuid "c9e5e6fe-5c3a-4620-8707-c1689b168ad5")
+	(wire
+		(pts
+			(xy 83.82 91.44)
+			(xy 91.44 91.44)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "52fd23fa-6911-4553-b22a-040c2d94ac72")
+	)
+	(label "BTN4"
+		(at 91.44 91.44 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b355ff4d-0c3d-421e-b810-45026dd4bc67")
+	)
+	(wire
+		(pts
+			(xy 71.12 93.98)
+			(xy 63.5 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9e6d8ae7-cb88-42b6-bd84-c2b636b86cbd")
+	)
+	(label "BTN3"
+		(at 63.5 93.98 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "a2c98112-d8b2-495f-9cfb-73bf7ec51ade")
 	)
 	(wire
 		(pts
@@ -3582,9 +3900,26 @@
 			)
 		)
 	)
-	(no_connect
-		(at 71.12 96.52)
-		(uuid "ac1b5308-c881-467c-a144-033a26cef904")
+	(wire
+		(pts
+			(xy 71.12 96.52)
+			(xy 63.5 96.52)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8c1c0a79-15ca-40c1-b798-cfc8867b2e5d")
+	)
+	(label "BTN2"
+		(at 63.5 96.52 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "59e03896-2dde-4999-8e48-7faef63e99d1")
 	)
 	(no_connect
 		(at 83.82 96.52)
@@ -4152,7 +4487,7 @@
 		(at 83.82 127)
 		(uuid "f7fb6523-67a6-4274-800a-d9f6cd29e2a5")
 	)
-	(text "J1: female 2x20 socket, 2.54 mm. Mount on BOTTOM side of the HAT."
+	(text "J1: female 2x20 socket on the BOTTOM of the L arm. Plugs straight onto the Orin header (40-pin stacking risers set the >25 mm height)."
 		(exclude_from_sim no)
 		(at 50.8 68.58 0)
 		(effects
@@ -4163,7 +4498,7 @@
 		)
 		(uuid "c37c85f2-f4a4-4fd9-97d8-e6bd75610f14")
 	)
-	(text "I2C7 (pins 3/5) reserved for the battery voltmeter MCU (future)."
+	(text "User buttons: SW1 pin 29, SW2 pin 15, SW3 pin 13, SW4 pin 12, SW5 pin 11, SW6 pin 7."
 		(exclude_from_sim no)
 		(at 50.8 72.39 0)
 		(effects
@@ -4174,7 +4509,7 @@
 		)
 		(uuid "c90a8940-71c1-424c-b151-4aaa166b6cac")
 	)
-	(text "Orin Nano J12 unused pins (NC):\n 3  I2C7_SDA\n 5  I2C7_SCL\n 7  GPIO09\n 8  UART1_TXD\n10  UART1_RXD\n11  UART1_RTS\n12  I2S0_SCLK\n13  SPI1_SCK\n15  GPIO12\n16  SPI1_CS1\n18  SPI1_CS0\n21  SPI0_MISO\n22  SPI1_MISO\n23  SPI0_SCK\n24  SPI0_CS0\n26  SPI0_CS1\n27  I2C1_SDA\n28  I2C1_SCL\n31  GPIO11\n32  GPIO07\n33  GPIO13\n35  I2S0_FS\n36  UART1_CTS\n37  SPI1_MOSI\n38  I2S0_DIN\n40  I2S0_DOUT"
+	(text "Orin Nano J12 unused pins (NC):\n 8  UART1_TXD\n10  UART1_RXD\n16  SPI1_CS1\n18  SPI1_CS0\n21  SPI0_MISO\n22  SPI1_MISO\n23  SPI0_SCK\n24  SPI0_CS0\n26  SPI0_CS1\n27  I2C1_SDA\n28  I2C1_SCL\n31  GPIO11\n32  GPIO07\n33  GPIO13\n35  I2S0_FS\n36  UART1_CTS\n37  SPI1_MOSI\n38  I2S0_DIN\n40  I2S0_DOUT"
 		(exclude_from_sim no)
 		(at 104.14 78.74 0)
 		(effects
@@ -5411,7 +5746,7 @@
 		)
 		(uuid "f4130db9-feaa-4b52-9c7a-d119cd38f0d3")
 	)
-	(text "User button -> GPIO01 (pin 29), active low, RC debounced."
+	(text "User button 1 -> GPIO01 (pin 29), active low, RC debounced."
 		(exclude_from_sim no)
 		(at 152.4 35.56 0)
 		(effects
@@ -6273,7 +6608,7 @@
 		)
 		(uuid "66d34611-7121-425d-8615-f9dc9aa808e2")
 	)
-	(text "Status LEDs D1-D10: user-defined 'system live' indicators (chain index 0-9)."
+	(text "Status LEDs D1-D10 (chain index 0-9). Row 1: LiDAR, Camera, Network, VESC, Gamepad. Row 2: user-defined."
 		(exclude_from_sim no)
 		(at 152.4 152.4 0)
 		(effects
@@ -11276,6 +11611,3359 @@
 				)
 			)
 		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 261.62 45.72 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "acda9656-871a-4068-a3fa-ed8fe2fe6a71")
+		(property "Reference" "R5"
+			(at 263.652 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 261.62 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 259.842 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 261.62 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "7dfacee8-2873-4072-a727-b0d083a44c88")
+		)
+		(pin "2"
+			(uuid "85317f73-846b-4e94-9ad3-e4f76d305fa7")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 261.62 41.91)
+			(xy 261.62 39.37)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6c6c7fbc-69d4-4d79-b8cf-4aacbaa0dccc")
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 261.62 39.37 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "caf7ad08-c2b0-4602-bfbf-55cedce231f6")
+		(property "Reference" "#PWR0070"
+			(at 261.62 43.18 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 261.62 35.814 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 261.62 39.37 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 39.37 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 261.62 39.37 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c37bb40d-7626-4614-a45b-b9bcaf1db818")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0070")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 261.62 49.53)
+			(xy 261.62 52.07)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "422b56d3-5887-47f6-ab9d-ebffe5f94547")
+	)
+	(label "BTN2_SW"
+		(at 261.62 52.07 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e0bc3c97-8c0a-4073-ad73-cccb0068627b")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 281.94 60.96 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "6e92fbd5-b898-4033-a7d3-35bd5b5a79cd")
+		(property "Reference" "SW2"
+			(at 283.21 58.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "USER_BTN"
+			(at 281.94 62.484 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
+			(at 281.94 55.88 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 281.94 55.88 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 281.94 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e5b1047d-4b98-4ab7-aff9-75cfb291bd10")
+		)
+		(pin "2"
+			(uuid "b16f9e7c-3904-4875-9e7b-1373d1eae83b")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "SW2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 276.86 60.96)
+			(xy 274.32 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "334d957e-fece-46c9-8e24-74e456b19ddf")
+	)
+	(label "BTN2_SW"
+		(at 274.32 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "cdc47f0a-e708-4f13-ab93-f9d8d6b39f46")
+	)
+	(wire
+		(pts
+			(xy 287.02 60.96)
+			(xy 289.56 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7a02a57f-1f9f-493a-811b-b9576f3ed38a")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 289.56 60.96 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a5f4e918-6b97-4eb4-ba8c-7e205606da60")
+		(property "Reference" "#PWR0071"
+			(at 295.91 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 293.37 60.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 289.56 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 289.56 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 289.56 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "ae9c6ca9-4ec0-418b-b9ae-fd5b2a498b79")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0071")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 302.26 63.5 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "9fd795c7-dfcd-421d-8258-78fa09754f18")
+		(property "Reference" "C4"
+			(at 302.895 60.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 302.895 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 303.225 67.31 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 302.26 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 302.26 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "044b0abd-15a3-4245-b2ab-4c5bd368e0be")
+		)
+		(pin "2"
+			(uuid "eeaf2283-1abf-4295-8932-ef85fc7eab16")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "C4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 302.26 59.69)
+			(xy 302.26 57.15)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1443f249-c516-4104-9c2c-27988808201b")
+	)
+	(label "BTN2_SW"
+		(at 302.26 57.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1d1d1f78-99be-4017-a92b-9ad66554c9c9")
+	)
+	(wire
+		(pts
+			(xy 302.26 67.31)
+			(xy 302.26 69.85)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "558baa25-9a77-4988-bf86-8113d9305af1")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 302.26 69.85 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a1f34b41-2cf2-4c44-93ff-69f46a08e977")
+		(property "Reference" "#PWR0072"
+			(at 302.26 76.2 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 302.26 73.66 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 302.26 69.85 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 302.26 69.85 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 302.26 69.85 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "26377158-e05f-43fc-8385-b697385d3614")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0072")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 320.04 63.5 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "1bb75f1b-34d8-43b6-9c64-8fa7a0b355b4")
+		(property "Reference" "R10"
+			(at 322.072 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 320.04 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 318.262 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 320.04 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 320.04 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "d9f3b665-cadd-4927-ad90-a07697c7384c")
+		)
+		(pin "2"
+			(uuid "2db06f71-ffe5-4952-baff-b5257e29299d")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 320.04 59.69)
+			(xy 320.04 57.15)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ed48ca1c-5ebb-4055-baa0-e2cb708109a6")
+	)
+	(label "BTN2_SW"
+		(at 320.04 57.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1b464c03-36b6-46fe-9d02-b90fbf850a1b")
+	)
+	(wire
+		(pts
+			(xy 320.04 67.31)
+			(xy 320.04 69.85)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e1b095e3-27d7-4408-8788-406e5232bd89")
+	)
+	(label "BTN2"
+		(at 320.04 69.85 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "c268e1be-39c8-40c6-b098-59272d28112e")
+	)
+	(text "User button 2 -> GPIO12 (pin 15), active low, RC debounced."
+		(exclude_from_sim no)
+		(at 254 35.56 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "597357dd-88f0-48fa-aa6a-54b1d48810ed")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 337.82 45.72 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "eff3b8f0-a68b-42ad-9c1a-0869f0494358")
+		(property "Reference" "R6"
+			(at 339.852 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 337.82 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 336.042 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 337.82 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 337.82 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "48844070-24e1-4497-8ae6-5fa1ba28cdd6")
+		)
+		(pin "2"
+			(uuid "b8e3752a-d218-4aeb-ac66-db440f28bd73")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 337.82 41.91)
+			(xy 337.82 39.37)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "40ffadf4-625c-4b2e-9826-94f11b6e6da0")
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 337.82 39.37 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "395882c6-0820-4d49-b865-b09aedabf1e8")
+		(property "Reference" "#PWR0073"
+			(at 337.82 43.18 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 337.82 35.814 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 337.82 39.37 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 337.82 39.37 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 337.82 39.37 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "05860c4f-a3bd-4711-8434-8392f7dadd41")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0073")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 337.82 49.53)
+			(xy 337.82 52.07)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8d00aa46-3f8f-4d38-a12c-195e7b9c150a")
+	)
+	(label "BTN3_SW"
+		(at 337.82 52.07 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "c59ff6f0-13ad-4ec0-adef-8435fcc58fdd")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 358.14 60.96 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f5fc0118-8758-485b-899d-5a3e5518f266")
+		(property "Reference" "SW3"
+			(at 359.41 58.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "USER_BTN"
+			(at 358.14 62.484 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
+			(at 358.14 55.88 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 358.14 55.88 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 358.14 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "f6082298-1d73-41c6-a5f7-944e038d7819")
+		)
+		(pin "2"
+			(uuid "df06dde5-09a1-4fbe-8a9b-f38eeab62f4f")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "SW3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 353.06 60.96)
+			(xy 350.52 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e719a2db-7c8f-4af7-92e0-a1dcfd069025")
+	)
+	(label "BTN3_SW"
+		(at 350.52 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "b8ef4477-42a1-4b0b-849e-2cf1707ac00a")
+	)
+	(wire
+		(pts
+			(xy 363.22 60.96)
+			(xy 365.76 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c2623c81-9872-45c4-9c56-0a752cd18ec3")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 365.76 60.96 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d2e25b6a-681d-4892-b73e-69f422951200")
+		(property "Reference" "#PWR0074"
+			(at 372.11 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 369.57 60.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 365.76 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 365.76 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 365.76 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "460f0f95-7182-4ab9-adb9-fb666e4ab648")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0074")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 378.46 63.5 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "4967e73b-c7e4-476a-862b-c4e1e5a95bf1")
+		(property "Reference" "C5"
+			(at 379.095 60.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 379.095 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 379.425 67.31 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 378.46 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 378.46 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c183657a-9a24-4aa3-a37d-8db1fb9eb0db")
+		)
+		(pin "2"
+			(uuid "9245859f-feb2-4893-b163-50a84ffac536")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "C5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 378.46 59.69)
+			(xy 378.46 57.15)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5516d60e-2a3e-4184-af35-0bca1dce7465")
+	)
+	(label "BTN3_SW"
+		(at 378.46 57.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "4232260c-e205-4078-8735-7d2d33797947")
+	)
+	(wire
+		(pts
+			(xy 378.46 67.31)
+			(xy 378.46 69.85)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "282d951f-8507-4649-9a18-e508469084e2")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 378.46 69.85 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "1d00a806-689f-478a-8ed4-ea68626ef68e")
+		(property "Reference" "#PWR0075"
+			(at 378.46 76.2 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 378.46 73.66 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 378.46 69.85 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 378.46 69.85 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 378.46 69.85 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "61906c79-1cd2-4725-8b19-c1339c99a0bb")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0075")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 396.24 63.5 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e15d034c-4a90-484a-8c0c-e443131a0270")
+		(property "Reference" "R11"
+			(at 398.272 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 396.24 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 394.462 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 396.24 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 396.24 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6104b957-2288-42b1-aaed-cae2956d85e6")
+		)
+		(pin "2"
+			(uuid "7f7d09f0-481d-4871-833e-de2a02076dba")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 396.24 59.69)
+			(xy 396.24 57.15)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "dd8a1043-f2c6-46a8-8b38-612ee8e57fa6")
+	)
+	(label "BTN3_SW"
+		(at 396.24 57.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e9784c47-f555-4be9-a469-aeb837048449")
+	)
+	(wire
+		(pts
+			(xy 396.24 67.31)
+			(xy 396.24 69.85)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d528985f-2c5d-480d-b66f-c0dbc7916329")
+	)
+	(label "BTN3"
+		(at 396.24 69.85 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "8435b96e-1ac2-4cc7-93be-73f8c8e3c311")
+	)
+	(text "User button 3 -> SPI1_SCK (pin 13), active low, RC debounced."
+		(exclude_from_sim no)
+		(at 330.2 35.56 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "ec587339-7369-4287-86a7-567ce55602f8")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 261.62 83.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d1b060b1-7966-40f1-9312-a919c763b0f7")
+		(property "Reference" "R7"
+			(at 263.652 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 261.62 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 259.842 83.82 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 83.82 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 261.62 83.82 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "858bb519-ac84-45f7-95e6-dc76a8365687")
+		)
+		(pin "2"
+			(uuid "ced8fba9-5697-4552-9b74-1dad6233c9f7")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 261.62 80.01)
+			(xy 261.62 77.47)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "719595ef-4c91-4a21-a365-0b25da8d2578")
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 261.62 77.47 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "45ce2545-f733-481a-85f6-51830c516ac1")
+		(property "Reference" "#PWR0076"
+			(at 261.62 81.28 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 261.62 73.914 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 261.62 77.47 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 77.47 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 261.62 77.47 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "39cab55c-fc22-4f2f-bdb6-ed99cb2c6143")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0076")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 261.62 87.63)
+			(xy 261.62 90.17)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "de193633-4e12-440d-9310-9c1e2198719d")
+	)
+	(label "BTN4_SW"
+		(at 261.62 90.17 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e040b01f-b399-44c7-b07e-5c536f2276fb")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 281.94 99.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "17c1626e-cdee-4acc-b197-bfbd02cf5ef4")
+		(property "Reference" "SW4"
+			(at 283.21 96.52 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "USER_BTN"
+			(at 281.94 100.584 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
+			(at 281.94 93.98 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 281.94 93.98 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 281.94 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "447b98df-3503-4d57-b219-138c1eccfe51")
+		)
+		(pin "2"
+			(uuid "ac625c3c-d492-4638-bf27-a133f6a5592d")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "SW4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 276.86 99.06)
+			(xy 274.32 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5f921caf-e205-4f61-872b-6999e2be5529")
+	)
+	(label "BTN4_SW"
+		(at 274.32 99.06 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "515c4001-5836-4e9e-ab69-8df2d81e2bcf")
+	)
+	(wire
+		(pts
+			(xy 287.02 99.06)
+			(xy 289.56 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e310e1ca-425f-4ca5-84d3-ce7647893d68")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 289.56 99.06 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "fcb5914b-9b4c-4f44-b5f6-fb06cab06382")
+		(property "Reference" "#PWR0077"
+			(at 295.91 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 293.37 99.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 289.56 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 289.56 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 289.56 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "25fe3a24-70d7-4fc2-be93-1801e067d5d7")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0077")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 302.26 101.6 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "3ac1e40a-ddcf-43b1-b4a7-261c05b64124")
+		(property "Reference" "C6"
+			(at 302.895 99.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 302.895 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 303.225 105.41 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 302.26 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 302.26 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "8381b683-a353-4882-8c13-b515faf9615f")
+		)
+		(pin "2"
+			(uuid "f893be2e-6730-462b-9177-a6e22a9d4acc")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "C6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 302.26 97.79)
+			(xy 302.26 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2d9bb14a-d059-4110-99a6-87241a559d5c")
+	)
+	(label "BTN4_SW"
+		(at 302.26 95.25 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "396acafb-e178-4ce4-bd49-e05511de2c88")
+	)
+	(wire
+		(pts
+			(xy 302.26 105.41)
+			(xy 302.26 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13cffff2-b819-4d31-bd5a-edfe40935308")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 302.26 107.95 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ea4c70dc-fe48-4990-99e9-f1381a7df1b9")
+		(property "Reference" "#PWR0078"
+			(at 302.26 114.3 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 302.26 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 302.26 107.95 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 302.26 107.95 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 302.26 107.95 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "0b933c7b-ce4d-4270-9cce-3de9807d74bc")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0078")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 320.04 101.6 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d2ff8e4e-aa49-4534-82a6-d030f1c9795f")
+		(property "Reference" "R12"
+			(at 322.072 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 320.04 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 318.262 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 320.04 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 320.04 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "135b63ea-6e0f-4a88-9365-676f02c45b96")
+		)
+		(pin "2"
+			(uuid "3ecc5505-93b4-48d8-853c-b64c52aa060e")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R12")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 320.04 97.79)
+			(xy 320.04 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "88b7c5bd-1276-4e3c-a5ef-1cc803682be8")
+	)
+	(label "BTN4_SW"
+		(at 320.04 95.25 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "d81d63ea-200f-4731-aa21-efafa15af1da")
+	)
+	(wire
+		(pts
+			(xy 320.04 105.41)
+			(xy 320.04 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "504d1ead-fac2-4fbe-ae2d-01aec7e8acbb")
+	)
+	(label "BTN4"
+		(at 320.04 107.95 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "f0d8e744-f074-4406-9199-d57dc167f0ae")
+	)
+	(text "User button 4 -> I2S0_SCLK (pin 12), active low, RC debounced."
+		(exclude_from_sim no)
+		(at 254 73.66 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "5fc6321e-1dc0-4912-a1a7-5e92b4f5ce89")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 337.82 83.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c039fe9d-f729-419a-80d0-aeea9099414b")
+		(property "Reference" "R8"
+			(at 339.852 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 337.82 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 336.042 83.82 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 337.82 83.82 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 337.82 83.82 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a553982d-00b1-414e-bbdf-8f8fae5c6b6d")
+		)
+		(pin "2"
+			(uuid "a3713fe9-8cf9-45d4-8da0-98f934894eab")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 337.82 80.01)
+			(xy 337.82 77.47)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9351e3b7-9cf8-40a1-ae08-d377f61cdd42")
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 337.82 77.47 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b0899aa4-7067-4852-a80c-a0c1991abe51")
+		(property "Reference" "#PWR0079"
+			(at 337.82 81.28 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 337.82 73.914 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 337.82 77.47 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 337.82 77.47 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 337.82 77.47 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "86ee597e-bc80-4c7e-b90c-a3ce3ea2c8b8")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0079")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 337.82 87.63)
+			(xy 337.82 90.17)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "17083001-bf33-474c-9511-c4c4a838c2df")
+	)
+	(label "BTN5_SW"
+		(at 337.82 90.17 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "cbe52846-0511-4096-9434-fd9598cdcc5f")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 358.14 99.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a9779d70-7951-498e-8135-fc2a3921bfca")
+		(property "Reference" "SW5"
+			(at 359.41 96.52 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "USER_BTN"
+			(at 358.14 100.584 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
+			(at 358.14 93.98 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 358.14 93.98 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 358.14 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "3f3013ae-bd97-4aa3-96e7-3906048f3442")
+		)
+		(pin "2"
+			(uuid "dfa4d2d9-b9b1-466f-9833-ebebebfb238f")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "SW5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 353.06 99.06)
+			(xy 350.52 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3331178b-fcc0-4aee-aa75-b2ebb6ef91f8")
+	)
+	(label "BTN5_SW"
+		(at 350.52 99.06 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e9113a47-4e94-4960-be87-b01aa808680f")
+	)
+	(wire
+		(pts
+			(xy 363.22 99.06)
+			(xy 365.76 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4f834717-7f8a-4832-a20c-b0007db1d096")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 365.76 99.06 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b0ea1b97-be66-4a55-a1ea-f0a4fe1356d4")
+		(property "Reference" "#PWR0080"
+			(at 372.11 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 369.57 99.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 365.76 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 365.76 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 365.76 99.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c50a7704-488e-4f0b-8521-eff98f2a8e5d")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0080")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 378.46 101.6 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a22f062d-f76a-41f2-ab32-1da22ce3eb2f")
+		(property "Reference" "C7"
+			(at 379.095 99.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 379.095 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 379.425 105.41 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 378.46 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 378.46 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e610e873-4409-4207-ba6c-98ef44ea2ced")
+		)
+		(pin "2"
+			(uuid "e41339bd-0b04-4cc4-9ef7-550838b3e315")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "C7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 378.46 97.79)
+			(xy 378.46 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "97fe6835-716b-4844-9cc0-5e0ecc34ea0f")
+	)
+	(label "BTN5_SW"
+		(at 378.46 95.25 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b8f505b0-48c0-4447-9e23-d471c972a4a3")
+	)
+	(wire
+		(pts
+			(xy 378.46 105.41)
+			(xy 378.46 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "55507466-db3e-4334-aea6-1b284a8a79d5")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 378.46 107.95 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c0c948f6-d34c-433a-89c3-b4f9ccc06807")
+		(property "Reference" "#PWR0081"
+			(at 378.46 114.3 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 378.46 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 378.46 107.95 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 378.46 107.95 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 378.46 107.95 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "d34fb73f-d250-40f0-be81-81a55b6b5f11")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0081")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 396.24 101.6 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "344e225e-22ba-4105-b8c2-9f0735b632c2")
+		(property "Reference" "R13"
+			(at 398.272 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 396.24 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 394.462 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 396.24 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 396.24 101.6 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "9cefe83c-e2b3-4b36-940c-7ccef26c1bef")
+		)
+		(pin "2"
+			(uuid "e13644c1-9bdd-4d1e-a654-c4503a0cfe29")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R13")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 396.24 97.79)
+			(xy 396.24 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3aee0660-3532-4048-a1e6-65c7b83635d3")
+	)
+	(label "BTN5_SW"
+		(at 396.24 95.25 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "266a5d90-cbfe-4991-b921-d4d813ddf9e2")
+	)
+	(wire
+		(pts
+			(xy 396.24 105.41)
+			(xy 396.24 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "43274173-f3ad-413a-b940-e9208fb889e2")
+	)
+	(label "BTN5"
+		(at 396.24 107.95 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "8108aebc-db16-4edb-8de5-2d901025fa4f")
+	)
+	(text "User button 5 -> UART1_RTS (pin 11), active low, RC debounced."
+		(exclude_from_sim no)
+		(at 330.2 73.66 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0cdae530-5f20-4501-b30b-50e1699873f4")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 261.62 121.92 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e3808ffa-a55b-481d-af8c-962b64d593a0")
+		(property "Reference" "R9"
+			(at 263.652 121.92 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 261.62 121.92 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 259.842 121.92 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 121.92 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 261.62 121.92 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "0287e285-cbac-4246-aedb-3d6f94c961ee")
+		)
+		(pin "2"
+			(uuid "e4b9d733-3e7f-47a2-bee3-5176db187a32")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 261.62 118.11)
+			(xy 261.62 115.57)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "10427d46-20a2-42b1-bdfd-f2cf1b110a6b")
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 261.62 115.57 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "30efae2b-24fb-4a6c-84af-47e21741afdd")
+		(property "Reference" "#PWR0082"
+			(at 261.62 119.38 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 261.62 112.014 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 261.62 115.57 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 115.57 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 261.62 115.57 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "de47c3b3-d547-4d95-946c-cddc6187795c")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0082")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 261.62 125.73)
+			(xy 261.62 128.27)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c3084d56-7f1f-4e95-8d37-bf6e32f14bcd")
+	)
+	(label "BTN6_SW"
+		(at 261.62 128.27 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e85f17cf-6202-47fa-8777-3045f2df4d2e")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 281.94 137.16 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "0381b301-d1d7-41be-b5a6-dd64886c13b1")
+		(property "Reference" "SW6"
+			(at 283.21 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "USER_BTN"
+			(at 281.94 138.684 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
+			(at 281.94 132.08 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 281.94 132.08 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 281.94 137.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "64279ab3-0770-4570-a9bf-938390cedc8d")
+		)
+		(pin "2"
+			(uuid "15648c7a-2951-41c6-bbab-a4cc604233d2")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "SW6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 276.86 137.16)
+			(xy 274.32 137.16)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a7a27f0b-a68c-4b07-812c-c49b764c3b73")
+	)
+	(label "BTN6_SW"
+		(at 274.32 137.16 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "bbe106c7-09c5-4c05-a88f-5e4fd4ee8fd9")
+	)
+	(wire
+		(pts
+			(xy 287.02 137.16)
+			(xy 289.56 137.16)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "675a95aa-0c75-4597-a169-3109d18dd30c")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 289.56 137.16 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "109b907d-9a06-44a2-ba01-3f0e9f079143")
+		(property "Reference" "#PWR0083"
+			(at 295.91 137.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 293.37 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 289.56 137.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 289.56 137.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 289.56 137.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "b2b1fc67-b351-4677-9d3a-f82680de82c4")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0083")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 302.26 139.7 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5c14ba5f-ca3d-41d2-8fa3-e6f8f94dec2c")
+		(property "Reference" "C8"
+			(at 302.895 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 302.895 142.24 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 303.225 143.51 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 302.26 139.7 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 302.26 139.7 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "cfc82b97-634c-48eb-8ae6-ab5efa4a5ffa")
+		)
+		(pin "2"
+			(uuid "7b6c5646-5af0-4fa5-9bc2-3becb2e22d0c")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "C8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 302.26 135.89)
+			(xy 302.26 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d869cdbb-5d73-4db6-ae06-ca4b194a8c12")
+	)
+	(label "BTN6_SW"
+		(at 302.26 133.35 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "45324014-c81c-4463-bd0d-bb6936dda424")
+	)
+	(wire
+		(pts
+			(xy 302.26 143.51)
+			(xy 302.26 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "605ea2ea-7b77-482e-af9d-76c2453e6557")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 302.26 146.05 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c50b2b43-835e-4a12-a983-09e90684d29b")
+		(property "Reference" "#PWR0084"
+			(at 302.26 152.4 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 302.26 149.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 302.26 146.05 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 302.26 146.05 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 302.26 146.05 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "2f1aafe2-4304-49ad-918a-23ce6c9d9780")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0084")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 320.04 139.7 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c206704b-5a4a-4b7d-a8a7-1b2d920dad86")
+		(property "Reference" "R14"
+			(at 322.072 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 320.04 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 318.262 139.7 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 320.04 139.7 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 320.04 139.7 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "db964631-f22d-4aec-9dc4-6fae5b643826")
+		)
+		(pin "2"
+			(uuid "decdc20a-9049-41b4-8e55-fed1c68d885a")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "R14")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 320.04 135.89)
+			(xy 320.04 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "76b75a4f-2352-4118-b2f5-fd8584b9cc93")
+	)
+	(label "BTN6_SW"
+		(at 320.04 133.35 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e8ccc43b-93bf-4dbb-859a-99c56da0a98a")
+	)
+	(wire
+		(pts
+			(xy 320.04 143.51)
+			(xy 320.04 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "145e49ac-110d-4c35-8e98-697931ce12ef")
+	)
+	(label "BTN6"
+		(at 320.04 146.05 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "3a843731-ba85-46e2-aceb-bebdd8ca3be5")
+	)
+	(text "User button 6 -> GPIO09 (pin 7), active low, RC debounced."
+		(exclude_from_sim no)
+		(at 254 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "6b6d2ada-6534-42ec-9828-6f0ad7c13300")
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x04")
+		(at 101.6 45.72 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "69cc18ff-064b-4e0f-9130-0b1272604ccf")
+		(property "Reference" "J2"
+			(at 101.6 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "OLED_0.91in_I2C"
+			(at 101.6 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+			(at 101.6 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 101.6 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x04, script generated"
+			(at 101.6 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "8f948eaf-c526-412c-8faa-700366f3bc8f")
+		)
+		(pin "2"
+			(uuid "e748c82f-1d35-4224-ac40-b76d74423a27")
+		)
+		(pin "3"
+			(uuid "4161cc5b-b088-4a4c-9bb7-bd6bd557f10e")
+		)
+		(pin "4"
+			(uuid "e45527af-1ea0-4554-a406-d3e3d3eaa2ad")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "J2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 96.52 43.18)
+			(xy 88.9 43.18)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a3d9b8c6-a605-40e4-833b-809d6a3d8569")
+	)
+	(wire
+		(pts
+			(xy 96.52 45.72)
+			(xy 88.9 45.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aeb08fec-948f-4d55-92bc-bba5759c4c58")
+	)
+	(wire
+		(pts
+			(xy 96.52 48.26)
+			(xy 88.9 48.26)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c3db7a23-d8a6-45fe-a4bc-43f3831fbf84")
+	)
+	(wire
+		(pts
+			(xy 96.52 50.8)
+			(xy 88.9 50.8)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9e28230e-c29c-4926-9d2f-81813fd18ec3")
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 88.9 43.18 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "3747bcfb-5378-4f13-8424-aa8edaa4db97")
+		(property "Reference" "#PWR0085"
+			(at 95.25 43.18 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 92.71 43.18 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 88.9 43.18 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 88.9 43.18 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 88.9 43.18 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "2a02bf5f-3849-4ab1-a4b5-3aa8aa896702")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0085")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 88.9 45.72 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "038dbe4d-7275-4216-ac66-5c4eeef42a59")
+		(property "Reference" "#PWR0086"
+			(at 88.9 49.53 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 88.9 42.164 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 88.9 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 88.9 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 88.9 45.72 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5ec79a76-f3b3-4fec-a2b3-126c42737cdd")
+		)
+		(instances
+			(project "orin_hat_diag"
+				(path "/94e01ff5-6ff3-464e-b853-c53a9500ed11"
+					(reference "#PWR0086")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "I2C7_SCL"
+		(at 88.9 48.26 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "b4d4759a-1979-4e6a-b7a4-3f18c143f449")
+	)
+	(label "I2C7_SDA"
+		(at 88.9 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "dd6daf02-f735-4450-8ca8-37101739f115")
+	)
+	(text "J2: 0.91in 128x32 SSD1306 OLED module, I2C address 0x3C, on I2C7 (pins 3/5).\nHeader order must be GND VCC SCL SDA (some modules swap GND/VCC)."
+		(exclude_from_sim no)
+		(at 50.8 31.75 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f0169cd6-bbb3-4e29-8fc4-6ff9f1a80722")
 	)
 	(sheet_instances
 		(path "/"
