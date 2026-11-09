@@ -42,7 +42,8 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `js/drive.js` | The driving logic: arming, the dead-man, limits, who's driving. Its own cards sit hidden under the driving view |
 | `js/cockpit.js` | The driving view on the Drive tab and in full screen: panes, floating controls, Settings, the side rail, thumb sticks, speedometer |
 | `js/radar.js` | The Detailed LiDAR view: the radar drawing, obstacle detection and its panel on the Overview card |
-| `js/main.js` | Render loop, tabs, theme switch, buttons, the connection form and robot picker, and startup. Must load last |
+| `js/main.js` | Render loop, tabs, theme switch, buttons, the connection form and robot picker, and startup. Must load last, apart from `deck.js` |
+| `js/deck.js` | Steam Deck only (`?deck=1`): swipe, D-pad and stick scrolling, and L1/R1 to switch tabs |
 
 ## Looking at it
 
