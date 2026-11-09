@@ -1809,6 +1809,14 @@
               <input type="checkbox" id="autoR1" role="switch">
             </label>
 
+            <label class="cockpit-switch auto-switch">
+              <span class="cockpit-switch-text">
+                <strong>Steer away from obstacles</strong>
+                <span>Uses the LiDAR: if something is ahead, the run turns toward the roomier side.</span>
+              </span>
+              <input type="checkbox" id="autoAvoid" role="switch" checked>
+            </label>
+
             <div class="auto-guard" id="autoGuard">
               <label class="cockpit-switch auto-switch">
                 <span class="cockpit-switch-text">
@@ -2022,6 +2030,7 @@
 <script src="js/lidar-select.js"></script>
 <script src="js/estop.js"></script>
 <script src="js/controller.js"></script>
+<script src="js/avoid.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/cockpit.js"></script>
 <script src="js/radar.js"></script>

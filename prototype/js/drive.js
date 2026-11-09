@@ -423,6 +423,18 @@ function driveTick() {
     targetSpeed = autoSpeed();
     targetSteer = Math.max(-limitSteer(), Math.min(limitSteer(), parseFloat($("autoSteer").value) || 0));
     autoActive = true;
+
+    /* something ahead on the LiDAR: turn away from it instead */
+    avoidNow = null;
+    if ($("autoAvoid").checked && scanStats && now - scanStats.at < AVOID_SCAN_MAX_AGE_MS) {
+      const turn = lidarAvoid(lastScan, targetSpeed, limitSteer(), avoidState);
+      if (turn.active) {
+        targetSteer = turn.steer;
+        avoidNow = turn;
+      }
+    } else {
+      avoidState.dir = 0;
+    }
   }
 
   /* mirror the sticks on the on-screen knob, unless a finger has it */
@@ -920,6 +932,12 @@ function autonomousState() {
 
 let autoRunNote = "";
 
+/* LiDAR steer-away for the run (js/avoid.js). A scan older than this is
+   not trusted, so a dead LiDAR means no steering from it. */
+const AVOID_SCAN_MAX_AGE_MS = 500;
+const avoidState = { dir: 0 };
+let avoidNow = null;          // the last tick's lidarAvoid() result while turning, else null
+
 /* byR1: started by holding R1, which then runs it with no time limit -
    the hold is the limit */
 function startAutoRun(byR1 = false) {
@@ -1086,7 +1104,10 @@ function renderAutoPanel() {
   go.classList.toggle("running", running);
 
   let status = autoRunNote;
-  if (running) {
+  if (running && avoidNow) {
+    status = `Avoiding: obstacle ${avoidNow.front.toFixed(2)} m ahead, steering ` +
+      (avoidNow.dir > 0 ? "left" : "right");
+  } else if (running) {
     const left = autoRun.until ? Math.max(0, Math.ceil((autoRun.until - performance.now()) / 1000)) : null;
     status = `Driving at ${cmdSpeed.toFixed(2)} m/s` +
       (autoRun.byR1 ? " · let go of R1 to stop"
