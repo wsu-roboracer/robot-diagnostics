@@ -38,10 +38,21 @@ const NAV_AXIS_STICK_Y = 1;
 /* A finger that moves less than this is still a tap */
 const SWIPE_START_PX = 10;
 
-/* Things that use touch themselves: a drag on them is not a scroll */
+/* Things that use touch themselves: a drag on them is not a scroll.
+   Buttons and toggles are not on the list: a swipe that starts on one
+   still scrolls, and the click at its end is swallowed. */
 const SWIPE_SKIP =
-  "input, select, textarea, button, a, canvas, summary, label, " +
-  "#drivePad, #cockpitPad, #stickSteer, #stickThrottle, .cockpit, [data-no-swipe]";
+  "input:not([type=checkbox]):not([type=radio]), select, textarea, canvas, " +
+  "#drivePad, #cockpitPad, #stickSteer, #stickThrottle, [data-movable], [data-no-swipe]";
+
+/* In the full-screen driving view the page itself does not scroll and
+   a drag moves panes and dividers, but these two panels scroll on
+   their own, so a swipe on them is a scroll */
+const COCKPIT_SCROLLERS = ["cockpitSettings", "cockpitPanel"];
+
+/* a text box you type in is the only thing that may be selected */
+const EDITABLE =
+  "input:not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable]";
 
 /* ---------- swipe to scroll ---------- */
 
@@ -105,6 +116,25 @@ function navCockpitFull() {
   return Boolean(document.querySelector(".cockpit.full:not([hidden])"));
 }
 
+/* What the D-pad and stick scroll: the page, or in the full-screen
+   driving view the open panel that has more below it (null if none) */
+function navScroller() {
+
+  if (!navCockpitFull()) return document.scrollingElement;
+
+  for (const id of COCKPIT_SCROLLERS) {
+
+    const panel = document.getElementById(id);
+
+    if (panel && !panel.hidden && panel.getClientRects().length &&
+        panel.scrollHeight > panel.clientHeight + 1) {
+      return panel;
+    }
+  }
+
+  return null;
+}
+
 function navStepTab(direction) {
 
   const selected = document.querySelector('[role="tab"][aria-selected="true"]');
@@ -150,7 +180,12 @@ function navTick(now) {
       NAV_STICK_SPEED * dt;
   }
 
-  if (delta) window.scrollBy(0, delta);
+  if (delta) {
+
+    const scroller = navScroller();
+
+    if (scroller) scroller.scrollBy(0, delta);
+  }
 
   /* a press, not a hold; tracked while armed too, so a bumper already
      down when the car disarms does not count as a press */
@@ -168,22 +203,83 @@ function navTick(now) {
 
 /* ---------- start ---------- */
 
+function elementOf(node) {
+  return node instanceof Element ? node : node && node.parentElement;
+}
+
+function editable(node) {
+
+  const el = elementOf(node);
+
+  return Boolean(el && el.closest(EDITABLE));
+}
+
+/* No text selection on the Deck: a drag scrolls, a press-and-hold is
+   not a copy, and a selected, dragged bit of text broke the page. The
+   rule is added here, not in a stylesheet, because Firefox keeps an
+   old cached stylesheet until a hard reload but always loads a new
+   script. */
+function noSelection() {
+
+  const style = document.createElement("style");
+
+  style.textContent =
+    "html.deck, html.deck * {" +
+    "  user-select: none; -moz-user-select: none;" +
+    "  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }" +
+    "html.deck input:not([type=checkbox]):not([type=radio]), html.deck textarea {" +
+    "  user-select: text; -moz-user-select: text; }";
+
+  document.head.appendChild(style);
+
+  document.addEventListener("selectstart", event => {
+    if (!editable(event.target)) event.preventDefault();
+  }, true);
+
+  /* anything that still got selected is un-selected at once */
+  document.addEventListener("selectionchange", () => {
+
+    const selection = getSelection();
+
+    if (selection && !selection.isCollapsed && !editable(document.activeElement)) {
+      selection.removeAllRanges();
+    }
+  });
+
+  /* nothing here is meant to be dragged out, and a long press on a
+     touch screen is a right click, which opens a menu over the page */
+  document.addEventListener("dragstart", event => event.preventDefault(), true);
+  document.addEventListener("contextmenu", event => event.preventDefault(), true);
+}
+
 function startDeckNavigation() {
 
-  /* a drag scrolls, so it must not also select text */
   document.documentElement.classList.add("deck");
+
+  noSelection();
 
   window.addEventListener("pointerdown", event => {
 
-    if (event.button > 0 || !(event.target instanceof Element) ||
-        event.target.closest(SWIPE_SKIP)) {
+    const target = event.target;
+
+    if (event.button > 0 || !(target instanceof Element) ||
+        target.closest(SWIPE_SKIP)) {
+      return;
+    }
+
+    const scroller = scrollParent(target);
+
+    /* in the full-screen driving view only its own panels scroll */
+    if (target.closest(".cockpit.full") &&
+        (!target.closest(COCKPIT_SCROLLERS.map(id => "#" + id).join(", ")) ||
+         scroller === document.scrollingElement)) {
       return;
     }
 
     swipe = {
       id: event.pointerId,
       y: event.clientY,
-      scroller: scrollParent(event.target),
+      scroller,
       scrolling: false
     };
   }, true);

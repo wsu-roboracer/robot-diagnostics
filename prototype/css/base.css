@@ -161,20 +161,6 @@ input {
 html {
   -webkit-text-size-adjust: 100%;
 }
-
-/* Steam Deck (?deck=1, js/deck.js): a drag scrolls the page, so it must
-   not also select text. Boxes you type in still can. */
-html.deck {
-  user-select: none;
-  -moz-user-select: none;
-}
-
-html.deck input,
-html.deck textarea {
-  user-select: text;
-  -moz-user-select: text;
-}
-
 @media (max-height: 500px) {
 
   .page {
