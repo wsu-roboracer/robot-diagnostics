@@ -269,14 +269,22 @@ command. Only something on the robot can notice the silence, so
 mid-drive. It waits 0.3 s, longer than the mux's own 0.2 s cut-off for a quiet
 input (`mux.yaml`), so it can never interrupt a publisher that is still working.
 
-### The emergency stop freezes one node
+### The emergency stop locks the mux
 
-Picked over: publishing stop commands.
+Picked over: publishing stop commands, and freezing a node.
 
 The physical controller has the highest priority in the mux, so a stop sent from
-the page would lose to someone holding the controller. Every input reaches the
-motor through `ackermann_to_vesc_node`, so freezing that one process stops all of
-them, and the node then holds the motor at speed 0 itself.
+the page would lose to someone holding the controller. The mux has its own
+answer: a lock (`locks:` in `mux.yaml`), a `std_msgs/Bool` topic that, while
+true, blocks every input below its priority. The e-stop's lock,
+`/emergency_stop`, has priority 255, above everything, so the mux forwards
+nothing and the node holds the motor at speed 0 itself.
+
+The first version froze `ackermann_to_vesc_node` (`SIGSTOP`), the one node every
+input passes through. Measured on F1-WSU-2 on 2026-11-04: after a long freeze
+that node sometimes came back deaf, publishing nothing, so the car could not
+drive at all until bringup restarted. A car whose `mux.yaml` has no lock still
+gets the freeze, as a fallback.
 
 ### It starts with bringup, inside f1tenth_system
 
@@ -379,18 +387,22 @@ already running.
 
 **Restarting from the page.** When the page lags or stops updating, the
 Advanced tab's **Restart the dashboard on the car** (also on the red "NO DATA
-FROM THE ROBOT" bar) does what `./start_diagnostics.sh --stop &&
-./start_diagnostics.sh` does, with the same options the run was started with.
+FROM THE ROBOT" bar) stops and starts again every node on the car (bringup,
+rosbridge, the camera, the page's server), with the same options the run was
+started with. By hand on the car, when debugging, the same is
+`./start_diagnostics.sh --stop && ./start_diagnostics.sh`.
 `restart_stack.py` does the work, reached two ways, because what has hung is
 usually rosbridge: `system_diagnostics`' `~/restart_stack` service, which
 refuses while the emergency stop is on, a deadman is held or a dashboard is
 driving; and, when rosbridge does not answer, `camera_http.py`'s `POST /restart`
 on port 8082 (the body must be `restart`). The restart runs in its own session
 so it survives the `--stop` it starts, and logs to
-`/tmp/f1tenth-diag/restart.log`; a second request within 90 s is the same
-restart. The page waits for rosbridge and the page itself to come back, then
-reloads. A car started by `bringup` (the f1tenth_stack version) has no
-`start_diagnostics.sh`, and the restart says so.
+`/tmp/f1tenth-diag/restart.log`; a second request within 90 s starts nothing new and
+answers "a restart is already under way" (`RESTART_GAP_S`), so the page waits
+for that one. The page waits for rosbridge and the page itself to come back, then
+reloads. On a car started by `bringup` instead (no `start_diagnostics.sh` run), the
+same file stops the bringup launch and starts it again with the same
+arguments.
 
 To work on the page without copying it to the robot each time, serve
 `prototype/` from your laptop and point it at a running robot:
@@ -1065,9 +1077,9 @@ seconds.
 
 **What is sent.** `/odom`, field `twist.twist.linear.x`.
 
-**On the page.** The Speed tile (MPH and m/s), the Odometry row, and the driving
-view's speed readout and speedometer, in the unit chosen in its Settings (m/s,
-km/h or mph; `SPEED_UNITS` in `js/cockpit.js`).
+**On the page.** The Speed tile, the Odometry row, and the driving view's speed
+readout and speedometer. Every speed on the page uses the unit chosen in the
+driving view's Settings (m/s, km/h or mph; `SPEED_UNITS` in `js/helpers.js`).
 
 **To change.** The Speed tile is `getSpeedMetric()` in `js/metrics.js`; the row is
 the odometry part of `subsystemData()` in `js/health.js`; the "waits for a steer"
@@ -1307,6 +1319,16 @@ always overrides the page.
   or `/joy` quiet for 250 ms (`R1_FRESH_MS`), stops it. R1 is read with the
   Controller tab's mapping, an R1 that changed 6 times in 2 s cannot start it
   (`jpUnsettled`), and `/joy` is at full rate while the mode is on.
+- **Steer away from obstacles.** In the autonomous branch of the same loop,
+  `lidarAvoid()` (`js/avoid.js`, a pure function of the latest `LaserScan`, the
+  speed and the steering limit) replaces the run's steering when something is
+  within ±20° ahead and closer than `0.8 m + 0.8 m per m/s`. It turns toward the
+  side with more room (nearest point in 8°–75° left against right), holds that
+  side until clear by 25% extra, and steers half of full lock at the trigger
+  distance up to full lock at 0.4 m. It leaves the speed alone, does nothing in
+  reverse, and ignores a scan older than 500 ms (`AVOID_SCAN_MAX_AGE_MS`). It runs
+  in the page, so it only affects this page's run; the obstacle stop on the car
+  is separate and still applies. Checked by `tests/verify_avoid.mjs`.
 - **Obstacle stop.** `system_diagnostics.py` subscribes to `/scan` and, from
   every scan, every `/drive` message and the 20 Hz watchdog, asks
   `obstacle_verdict()`: is a fresh forward `/drive` command (not the page's
@@ -1334,6 +1356,8 @@ always overrides the page.
 | Ramping | `js/drive.js` | `KEY_ACCEL = 8.0`, `KEY_STEER_RATE = 8.0` (keys); `PAD_ACCEL = 20.0`, `PAD_STEER_RATE = 20.0` (pad and sticks) |
 | Command rate, stop burst | `js/drive.js` | `DRIVE_HZ = 50`, `DRIVE_NOW_MIN_MS = 10`, `STOP_BURST = 5` |
 | Keys | `js/drive.js` | `KEY_FWD`, `KEY_BACK`, `KEY_LEFT`, `KEY_RIGHT` |
+| Steer-away distances and strength | `js/avoid.js` | `AVOID`: `frontHalfAngle` 20°, `sideNear` 8°, `sideFar` 75°, `lookaheadBase` 0.8 m, `lookaheadPerMs` 0.8, `hardStop` 0.4 m, `releaseFactor` 1.25, `minTurn` 0.5 |
+| Steer-away scan age limit | `js/drive.js` | `AVOID_SCAN_MAX_AGE_MS = 500` |
 | When closing the controls disarms | `js/cockpit.js` | the start of `applyPanes()` |
 
 ### Drive watchdog
@@ -1369,15 +1393,29 @@ Stops the car for everyone (the controller, any page, autonomous code) until
 someone releases it.
 
 **How it works.** The button calls the service `/system_diagnostics/emergency_stop`.
-On the robot, the node finds `ackermann_to_vesc_node` with `pgrep` and freezes it
-(`SIGSTOP`). Every input reaches the motor through that one node. The node then
-publishes speed 0 on `/commands/motor/speed` 50 times a second. Release calls
-`/system_diagnostics/emergency_release`, which unfreezes the node (`SIGCONT`); it
-is refused, on the page and on the robot, while anyone holds L1 or R1, so the car
-never resumes into a live command.
+On the robot, the node publishes `true` on `/emergency_stop`, the mux lock in
+`mux.yaml` (priority 255), so the mux forwards no input at all, and publishes
+speed 0 on `/commands/motor/speed` 50 times a second (the lock again with each,
+so a mux that restarts mid-stop is locked again). Release calls
+`/system_diagnostics/emergency_release`, which publishes `false`; it is refused,
+on the page and on the robot, while anyone holds L1 or R1, so the car never
+resumes into a live command. A car whose `mux.yaml` has no such lock (nothing
+subscribes to `/emergency_stop`) gets the old way: `ackermann_to_vesc_node`
+frozen with `SIGSTOP` and unfrozen with `SIGCONT`.
+
+The lock, in `f1tenth_stack/config/mux.yaml` under `ackermann_mux.ros__parameters`:
+
+```yaml
+locks:
+  emergency_stop:
+    topic   : emergency_stop
+    timeout : 0.0       # never expires: only true locks it
+    priority: 255
+```
 
 **What is sent.** Report `system: E-stop`: level 2 while on, with keys `since` and
-`action` (what the robot did, such as "froze ackermann_to_vesc_node (pid 1234)").
+`action` (what the robot did, such as "locked the mux (/emergency_stop)") and
+`method` (`mux lock` or `SIGSTOP`).
 
 **On the page.** The red Emergency stop banner, on every open page, from that
 report.
@@ -1671,8 +1709,9 @@ Outside any repo, the login user on each car has to be in the `input` group (see
 
 Almost everything added only reads. The exceptions:
 
-- **Emergency stop** freezes `ackermann_to_vesc_node` and holds the motor at
-  speed 0 until Release.
+- **Emergency stop** locks the mux (`/emergency_stop`) and holds the motor at
+  speed 0 until Release; on a car without the lock it freezes
+  `ackermann_to_vesc_node` instead.
 - **The drive watchdog** sends zero-speed commands on `/drive` when the page's
   commands stop mid-drive.
 - **Driving from the page** publishes on `/drive`, the input an autonomous stack

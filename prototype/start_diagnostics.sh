@@ -136,6 +136,10 @@ stop_all(){
     kill -INT -- "-$pid" 2>/dev/null || kill -INT "$pid" 2>/dev/null
     info "sent INT to $name (pid $pid)"
   done < <(cat "$PIDFILE" 2>/dev/null)
+  # rosbridge 2.0.4 does not exit on INT: its ROS side shuts down but the
+  # websocket server keeps port 9090 open, accepting pages and dropping what
+  # they send (F1-WSU-2, 2026-11-04). Nothing to wait for, so TERM it now.
+  pkill -TERM -f "lib/rosbridge_server/rosbridge_websocket" 2>/dev/null || true
   # 2. --stop from another session: ask each other run to stop. It cleans up
   #    after itself, the same as Ctrl+C in its own terminal.
   if [ "$DO_STOP" = 1 ]; then
@@ -144,10 +148,14 @@ stop_all(){
       kill -TERM "$p" 2>/dev/null && info "asked run $p to stop"
     done
   fi
-  # give launches (and other runs) up to 15 s to stop their children before
-  # forcing anything
+  # give launches (and, for --stop, the other runs) up to 15 s to stop their
+  # children before forcing anything. A run cleaning up waits only for its own
+  # processes: waiting for other runs too made it and the --stop that asked it
+  # wait on each other, the --stop gave up first, and the page's Restart then
+  # started a new run whose bringup the old run's sweep below killed
+  # (F1-WSU-2, 2026-11-09).
   for _ in $(seq 1 15); do
-    [ -z "$(matching)" ] && [ -z "$(other_runs)" ] && break
+    [ -z "$(matching)" ] && { [ "$DO_STOP" = 0 ] || [ -z "$(other_runs)" ]; } && break
     sleep 1
   done
   # 3. anything that survived, or was left by a run we have no record of.
@@ -159,6 +167,17 @@ stop_all(){
     done
   }
   sweep TERM; sleep 2; sweep KILL; sleep 1
+  # --stop: the sweep just removed what kept the other runs waiting (rosbridge
+  # ignores INT and TERM), so they finish their own cleanup in a few seconds.
+  # One still cleaning up after this --stop returns could sweep whatever starts
+  # next, so wait, then kill it and what it started (its log tail).
+  if [ "$DO_STOP" = 1 ]; then
+    for _ in $(seq 1 10); do [ -z "$(other_runs)" ] && break; sleep 1; done
+    for p in $(other_runs | awk '{print $1}'); do
+      pkill -KILL -P "$p" 2>/dev/null
+      kill -KILL "$p" 2>/dev/null && info "run $p did not stop: killed it"
+    done
+  fi
   rm -f "$PIDFILE"
   # Only what a run starts. Copies of this script are never killed here, and
   # checking for them listed this script's own process as "still running" on a
@@ -199,7 +218,14 @@ PIDS=() NAMES=()
 # then fought over the joystick, and the symptom was "the controller will not
 # connect". Use the one thorough path for both. Costs Ctrl+C a few extra seconds.
 cleanup(){
-  trap - INT TERM HUP EXIT
+  # A second Ctrl+C while stopping used to kill this script before the final
+  # sweep, leaving whatever had not exited yet - a broken rosbridge, twice on
+  # F1-WSU-2. Ignore them until the stop is done.
+  trap '' INT TERM HUP
+  trap - EXIT
+  # the log tail is not in PIDFILE, and only a Ctrl+C reaches it (it shares
+  # the terminal's job); a --stop from elsewhere left one behind each time
+  [ -n "${TAIL_PID:-}" ] && kill "$TAIL_PID" 2>/dev/null
   stop_all
   info "logs kept in $LOGDIR"
   exit 0
@@ -218,6 +244,22 @@ start(){  # start <name> <logfile> <cmd...>
 }
 
 port_open(){ (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# A rosbridge that answers a real ROS call, not just one holding the port.
+rosbridge_answers(){
+  python3 - "$SERVE_DIR/tools" <<'PY' 2>/dev/null
+import json, socket, sys, time
+sys.path.insert(0, sys.argv[1]); import rosbridge_check as rc
+s = socket.create_connection(("127.0.0.1", 9090), timeout=3)
+f = rc.Frames(s, rc.handshake(s, "127.0.0.1", 9090))
+rc.send(s, json.dumps({"op": "call_service", "service": "/rosapi/get_time", "id": "alive"}))
+end = time.time() + 3
+while time.time() < end:
+    for m in map(json.loads, f.poll(0.3)):
+        if m.get("id") == "alive":
+            sys.exit(0 if m.get("result") else 1)
+sys.exit(1)
+PY
+}
 wait_for(){  # wait_for <seconds> <test-cmd...>
   local n="$1"; shift
   for _ in $(seq 1 "$n"); do "$@" && return 0; sleep 1; done
@@ -276,8 +318,16 @@ fi
 
 # --- 2. rosbridge ----------------------------------------------------------
 if [ "$WANT_BRIDGE" = 1 ]; then
+  if port_open 9090 && ! rosbridge_answers; then
+    bad "something holds 9090 but does not answer ROS calls (a rosbridge left broken by an earlier stop) - replacing it"
+    pkill -TERM -f "lib/rosbridge_server/rosbridge_websocket|ros2 launch rosbridge_server" 2>/dev/null || true
+    sleep 2
+    pkill -KILL -f "lib/rosbridge_server/rosbridge_websocket|ros2 launch rosbridge_server" 2>/dev/null || true
+    wait_for 5 bash -c '! (exec 3<>/dev/tcp/127.0.0.1/9090) 2>/dev/null' || true
+  fi
   if port_open 9090; then
-    ok "rosbridge already listening on 9090"
+    if rosbridge_answers; then ok "rosbridge already listening on 9090, and answering"
+    else bad "9090 is held by something that is not a working rosbridge - the dashboard will not work until it is freed"; fi
   else
     start rosbridge "$LOGDIR/rosbridge.log" \
       ros2 launch rosbridge_server rosbridge_websocket_launch.xml
@@ -354,7 +404,8 @@ echo
 # --- hold, showing bringup output ------------------------------------------
 if [ "$WANT_BRINGUP" = 1 ] && [ -f "$LOGDIR/bringup.log" ]; then
   tail -n 0 -f "$LOGDIR/bringup.log" &
-  PIDS+=($!); NAMES+=(tail)
+  TAIL_PID=$!
+  PIDS+=("$TAIL_PID"); NAMES+=(tail)
 fi
 while true; do
   for i in "${!PIDS[@]}"; do

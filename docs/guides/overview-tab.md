@@ -104,7 +104,7 @@ Each tile's **coloured left edge** is its grade: green fine, amber watch it, red
 
 | Tile | What it shows | Amber | Red |
 |---|---|---|---|
-| **Speed** | The car's speed from its wheel odometry, in MPH and m/s, and FORWARD, REVERSE or STOPPED. The bar is full at 3 m/s | | No odometry for 2 s (STALE) |
+| **Speed** | The car's speed from its wheel odometry, in the unit chosen in the Drive tab's Settings, and FORWARD, REVERSE or STOPPED. The bar is full at 3 m/s | | No odometry for 2 s (STALE) |
 | **CPU** | How busy the robot's processor is, and its 1-minute load average | Load above 1 per core | Load above 2 per core |
 | **RAM** | Memory in use, and how much is free | Less than 20 % free | Less than 10 % free |
 | **GPU** | How busy the graphics processor is | 95 % or more for 5 s | Never: a busy GPU is a heavy job, not a fault |
@@ -169,6 +169,7 @@ The live picture from the car's camera. **It connects on its own** whenever the 
 - **LIVE** in the corner means pictures are arriving. *no stream* means none are.
 - **Take Picture** freezes the current frame below the stream. **Save PNG** downloads it.
 - **Record** records the camera to a video file; press it again (**Stop**) to save it. See [Recording the camera](drive-tab.md#recording-the-camera).
+- **The stream pauses when no tab or pane shows the picture** (another tab, the Camera pane closed, or the browser tab in the background), so it does not use the car's Wi-Fi for nothing, and opens again when the picture is back on screen. A recording keeps it going. **Take Picture** and **Record** open it again by themselves ("Opening the camera…").
 
 ![A picture taken](images/overview-tab/11-snapshot.jpg)
 
