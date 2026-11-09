@@ -1077,9 +1077,9 @@ seconds.
 
 **What is sent.** `/odom`, field `twist.twist.linear.x`.
 
-**On the page.** The Speed tile (MPH and m/s), the Odometry row, and the driving
-view's speed readout and speedometer, in the unit chosen in its Settings (m/s,
-km/h or mph; `SPEED_UNITS` in `js/cockpit.js`).
+**On the page.** The Speed tile, the Odometry row, and the driving view's speed
+readout and speedometer. Every speed on the page uses the unit chosen in the
+driving view's Settings (m/s, km/h or mph; `SPEED_UNITS` in `js/helpers.js`).
 
 **To change.** The Speed tile is `getSpeedMetric()` in `js/metrics.js`; the row is
 the odometry part of `subsystemData()` in `js/health.js`; the "waits for a steer"

@@ -217,6 +217,8 @@ function armDrive() {
 function disarmDrive(reason) {
 
   /* any disarm ends an autonomous run */
+  const endedRun = autoRun.on;
+
   if (autoRun.on) {
     autoRun.on = false;
     autoRun.byR1 = false;
@@ -253,6 +255,7 @@ function disarmDrive(reason) {
   }
 
   renderDriveControls();
+  if (endedRun) renderAutoPanel();
 }
 
 function setDriveNote(text) {
@@ -381,12 +384,17 @@ function driveTick() {
   if (!r1 || !r1.down) {
     r1Since = 0;
     r1Tried = false;
+    $("autoStart").classList.remove("r1-hold");
     if (autoRun.on && autoRun.byR1) endR1Run(r1 ? "R1 let go" : "Hold R1 to run switched off");
   } else {
-    if (!r1Since) r1Since = now;
+    if (!r1Since) {
+      r1Since = now;
+      $("autoStart").classList.toggle("r1-hold", !autoRun.on && !r1Tried);
+    }
     if (!autoRun.on && !r1Tried && now - r1Since >= R1_HOLD_MS &&
         driveTabVisible() && !document.hidden) {
       r1Tried = true;
+      $("autoStart").classList.remove("r1-hold");
       startAutoRun(true);
     }
   }
@@ -532,7 +540,7 @@ function renderDriveReadout(active) {
 
   $("drivePad").classList.toggle("held", padHeld && driveArmed);
 
-  $("cmdSpeed").textContent = cmdSpeed.toFixed(2) + " m/s";
+  $("cmdSpeed").textContent = speedText(cmdSpeed);
   $("cmdSteer").textContent =
     Math.round(cmdSteer * 180 / Math.PI) + "°" +
     (cmdSteer > 0.01 ? " left" : cmdSteer < -0.01 ? " right" : "");
@@ -661,7 +669,7 @@ function renderDrive() {
     performance.now() - robotSpeedAt < 2000;
 
   $("measSpeed").textContent =
-    fresh ? robotSpeedMps.toFixed(2) + " m/s" : "—";
+    fresh ? speedText(robotSpeedMps) : "—";
 
   $("hudBattery").innerHTML =
     icon("battery") + " " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
@@ -969,6 +977,7 @@ function startAutoRun(byR1 = false) {
     ? "Autonomous run: R1 held. Let go of R1 to stop."
     : "Autonomous run started. STOP, Space or Stop on the indicator ends it.");
   if (!byR1) driveNow();               // R1 starts it from inside the tick
+  renderAutoPanel();                   // the button answers now, not at the next redraw
 }
 
 /* R1 let go: stop, but stay armed so holding R1 again runs again. The
@@ -978,6 +987,7 @@ function endR1Run(why) {
   autoRun.byR1 = false;
   autoRunNote = "Stopped: " + why + ".";
   setDriveNote("Stopped - " + why + ". Still armed: hold R1 to run again.");
+  renderAutoPanel();
 }
 
 /* the run's speed: Full speed is the Max speed limit, forward; otherwise
@@ -1094,13 +1104,21 @@ function renderAutoPanel() {
   const a = Math.max(-maxS, Math.min(maxS, parseFloat(steer.value) || 0));
   const deg = Math.round(a * 180 / Math.PI);
 
-  $("autoSpeedValue").textContent = v.toFixed(2) + " m/s" + (full ? " full" : v < 0 ? " rev" : "");
+  $("autoSpeedValue").textContent = speedText(v) + (full ? " full" : v < 0 ? " rev" : "");
   $("autoSteerValue").textContent = deg ? Math.abs(deg) + "° " + (deg > 0 ? "left" : "right") : "0°";
 
   const go = $("autoStart");
   const running = autoRun.on && driveArmed;
 
-  go.textContent = running ? "Stop autonomous run" : "Start autonomous run";
+  /* with a controller on the car a run needs R1 held, so the button cannot
+     start one: say what will, instead of starting and ending at once */
+  const needsR1 = !running && padOnCar();
+
+  const label = running ? "Stop autonomous run"
+    : needsR1 ? "Hold R1 on the controller to start"
+    : "Start autonomous run";
+  if (go.textContent !== label) go.textContent = label;
+  go.disabled = needsR1;               // never while running: this is a stop
   go.classList.toggle("running", running);
 
   let status = autoRunNote;
@@ -1109,7 +1127,7 @@ function renderAutoPanel() {
       (avoidNow.dir > 0 ? "left" : "right");
   } else if (running) {
     const left = autoRun.until ? Math.max(0, Math.ceil((autoRun.until - performance.now()) / 1000)) : null;
-    status = `Driving at ${cmdSpeed.toFixed(2)} m/s` +
+    status = `Driving at ${speedText(cmdSpeed)}` +
       (autoRun.byR1 ? " · let go of R1 to stop"
         : left !== null ? ` · ${left} s left` : " · until you stop it");
   } else if (r1Enabled()) {
@@ -1220,7 +1238,7 @@ function renderObstacleGuard() {
     const need = guardStopDistance({ ...g, margin }, guardSpeed());
     text = !on
       ? "Off: nothing stops the car before an obstacle."
-      : `Stops if anything is within ${need.toFixed(1)} m ahead at ${guardSpeed().toFixed(1)} m/s` +
+      : `Stops if anything is within ${need.toFixed(1)} m ahead at ${speedText(guardSpeed(), 1)}` +
         (g.ahead !== null ? ` · nearest ${g.ahead.toFixed(1)} m` : " · clear ahead");
   }
 
@@ -1277,6 +1295,7 @@ function setDriveMode(mode) {
   $("cockpitPanel").dataset.mode = driveMode;
   document.querySelectorAll("[data-drive-mode]").forEach(b =>
     b.setAttribute("aria-pressed", String(b.dataset.driveMode === driveMode)));
+  if (typeof jpSubscribe === "function") jpSubscribe();
 }
 
 /* Is a controller attached? true / false, or null with no
@@ -1482,7 +1501,7 @@ function renderPadDisconnect(padLinked) {
   button.hidden = !padLinked;
   button.disabled = padDisconnectBusy || held;
   button.innerHTML =
-    padDisconnectBusy ? "Disconnecting…" : icon("gamepad") + " Disconnect controller";
+    padDisconnectBusy ? "Disconnecting…" : icon("gamepad") +  ' Disconnect<span class="fold-word"> controller</span>';
   button.title =
     held
       ? "Someone is holding L1/R1 — they must let go first, or press E-STOP"
@@ -1542,6 +1561,12 @@ $("padDisconnectBtn").onclick = disconnectPad;
 
 /* ---------- limits and high speed ---------- */
 
+function renderSpeedUnlock() {
+  $("speedUnlockBtn").innerHTML = highSpeed
+    ? `Lock back to ${speedLimitText(NORMAL_MAX_SPEED)}`
+    : icon("alert") + ` Unlock high speed (up to ${speedLimitText(HIGH_MAX_SPEED)})`;
+}
+
 function setHighSpeed(on) {
 
   highSpeed = on;
@@ -1554,8 +1579,7 @@ function setHighSpeed(on) {
     slider.value = NORMAL_MAX_SPEED;
   }
 
-  $("speedUnlockBtn").innerHTML =
-    on ? "Lock back to 3 m/s" : icon("alert") + " Unlock high speed (up to 5 m/s)";
+  renderSpeedUnlock();
 
   $("speedUnlockBtn").classList.toggle("unlocked", on);
   $("speedMode").hidden = !on;
@@ -1623,7 +1647,7 @@ function wireUnlock(prefix, isOn, setOn) {
 function renderLimits() {
 
   $("maxSpeedValue").textContent =
-    limitSpeed().toFixed(1) + " m/s";
+    speedText(limitSpeed(), 1);
 
   $("maxSteerValue").textContent =
     Math.round(limitSteer() * 180 / Math.PI) + "°";
