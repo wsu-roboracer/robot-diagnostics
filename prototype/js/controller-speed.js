@@ -2,12 +2,20 @@
    How fast full stick drives. The robot keeps joy_teleop's speed scale on a
    saved value (system_diagnostics' controller_max_speed, saved on the car so
    it survives restarts) and reports it as "system: Controller speed"; this
-   sets it. The same control shows twice: in a popup, opened from a chip in
-   the footer (or full screen's bottom-right corner), and on the Controller
-   tab. A change takes effect on the controller at once. */
+   sets it. On the Drive tab it is always in view: - and + in the top bar (or
+   a button in the side rail) with the slider in a popup. The footer's chip
+   opens the same popup from the other tabs, and the full control is on the
+   Controller tab and in the phone Limits drawer. A change takes effect on
+   the controller at once. */
+
+const CSPEED_FAST = 3;          // m/s: the on-screen controls' limit before unlocking
+const CSPEED_STEP = 0.1;        // m/s, the slider's step and the - and + buttons'
+const CSPEED_SETTLE_MS = 300;   // arrow keys and +/- taps send one change, not many
 
 let cspeedPending = null;       // { value, until } while a change is on its way
 let cspeedOpener = null;        // the chip the popup was opened from
+let cspeedDraft = null;         // value being stepped with - and +, not sent yet
+let cspeedDraftTimer = null;
 
 function cspeedDiag() {
   const item = diag[SYS_PREFIX + "Controller speed"];
@@ -36,12 +44,51 @@ async function setControllerSpeed(value) {
       cspeedPending = null;
       toast("The car refused: " + (bad.reason || "no reason given") + ".", "warn");
     } else {
-      toast(`Controller top speed: ${value.toFixed(1)} m/s.`, "ok");
+      toast(`PS4 controller top speed: ${cspeedText(value)}.`, "ok");
     }
   } catch (error) {
     cspeedPending = null;
     toast("Could not set the controller speed (" + error.message + ").", "bad");
   }
+  renderControllerSpeed();
+}
+
+function cspeedText(value) {
+  return speedText(value, 1);
+}
+
+function cspeedSetText(element, text) {
+  if (element.textContent !== text) element.textContent = text;
+}
+
+/* what the note under the slider says, and how it is coloured */
+function cspeedNote(s, shown) {
+  if (!socketOpen()) return ["Not connected to the car.", "warn"];
+  if (!s) return ["Needs the new system_diagnostics.py on the car.", "warn"];
+  if (!s.live) return ["This car's joy_teleop needs the teleop_tools update before this can change.", "warn"];
+  if (s.max === null) return ["joy_teleop is not answering. Is bringup running?", "warn"];
+  if (cspeedPending || cspeedDraft !== null) return ["Saving to the car\u2026", ""];
+  if (shown > CSPEED_FAST) return ["High speed at full stick. Keep the area clear.", "warn"];
+  return ["The speed at full stick. Applies right away and stays saved on the car.", ""];
+}
+
+function cspeedShownValue(s) {
+  return cspeedPending ? cspeedPending.value : s ? s.max : null;
+}
+
+/* - and +, wherever they are: several quick taps send one change */
+function cspeedNudge(direction) {
+  const s = cspeedDiag();
+  const base = cspeedDraft !== null ? cspeedDraft : cspeedShownValue(s);
+  if (!s || base === null) return;
+  const next = Math.round((base + direction * CSPEED_STEP) * 10) / 10;
+  cspeedDraft = Math.min(s.hi, Math.max(s.lo, next));
+  clearTimeout(cspeedDraftTimer);
+  cspeedDraftTimer = setTimeout(() => {
+    const value = cspeedDraft;
+    cspeedDraft = null;
+    setControllerSpeed(value);
+  }, CSPEED_SETTLE_MS);
   renderControllerSpeed();
 }
 
@@ -54,44 +101,92 @@ function renderControllerSpeed() {
     cspeedPending = null;
   }
 
-  const shown = cspeedPending ? cspeedPending.value : s ? s.max : null;
-  const text = shown === null ? "--" : shown.toFixed(1) + " m/s";
+  const shown = cspeedDraft !== null ? cspeedDraft : cspeedShownValue(s);
+  const text = shown === null ? "--" : cspeedText(shown);
+  const [note, tone] = cspeedNote(s, shown);
+  const usable = Boolean(s && s.live && s.max !== null && socketOpen());
+  const lo = s ? s.lo : 0.2;
+  const hi = s ? s.hi : 5.0;
 
-  document.querySelectorAll("[data-cspeed-chip]").forEach(chip => {
-    chip.hidden = !s;
-    chip.querySelector("[data-cspeed-value]").textContent = text;
-  });
-  if (!s || (cspeedOpener && !cspeedOpener.offsetParent)) closeControllerSpeed();
+  /* the Drive tab has its own, so the footer's chip is for the other tabs */
+  $("cspeedChip").hidden = !s || cockpitOpen;
+  document.querySelectorAll("[data-cspeed-chip]").forEach(chip =>
+    cspeedSetText(chip.querySelector("[data-cspeed-value]"), text));
+  if (cspeedOpener && !cspeedOpener.offsetParent) closeControllerSpeed();
 
-  const note =
-    !s ? "Needs the new system_diagnostics.py on the car."
-    : !s.live ? "This car's joy_teleop reads its speed once, at start. It needs the teleop_tools update before it can be changed here."
-    : s.max === null ? "joy_teleop is not answering. Is bringup running?"
-    : "Full stick drives at this speed. Saved on the car, so it stays after a restart.";
+  document.querySelectorAll("[data-cspeed-step]").forEach(b => b.disabled = !usable);
+  document.querySelectorAll("[data-cspeed-bar]").forEach(bar =>
+    bar.dataset.fast = String(shown !== null && shown > CSPEED_FAST));
 
   document.querySelectorAll("[data-cspeed]").forEach(box => {
     const range = box.querySelector("input");
-    range.min = s ? s.lo : 0.2;
-    range.max = s ? s.hi : 5.0;
-    range.disabled = !s || !s.live || s.max === null || !socketOpen();
+    range.min = lo;
+    range.max = hi;
+    range.disabled = !usable;
+    cspeedSetText(box.querySelector("[data-cspeed-lo]"), speedNumber(lo, 1));
+    cspeedSetText(box.querySelector("[data-cspeed-hi]"), cspeedText(hi));
     if (!box.dataset.dragging) {
       if (shown !== null) range.value = shown;
-      box.querySelector("output").textContent = text;
+      cspeedSetText(box.querySelector("[data-cspeed-shown]"), text);
+      range.setAttribute("aria-valuetext", shown === null ? "unknown" : speedSpoken(shown));
     }
-    box.querySelector(".cspeed-note").textContent = note;
+    cspeedSetText(box.querySelector(".cspeed-note"), note);
+    box.querySelector(".cspeed-note").dataset.tone = tone;
+    box.dataset.fast = String(shown !== null && shown > CSPEED_FAST);
   });
 }
 
+/* one control, built the same wherever it shows */
 document.querySelectorAll("[data-cspeed]").forEach(box => {
+
+  box.innerHTML = `
+    <div class="cspeed-head">
+      <span class="cspeed-title">PS4 controller top speed</span>
+      <strong class="cspeed-value" data-cspeed-shown>--</strong>
+    </div>
+    <div class="cspeed-row">
+      <button class="cspeed-step" type="button" data-cspeed-step="-1"
+              aria-label="Lower the PS4 controller's top speed">&minus;</button>
+      <input type="range" step="${CSPEED_STEP}" min="0.2" max="5" aria-label="PS4 controller top speed">
+      <button class="cspeed-step" type="button" data-cspeed-step="1"
+              aria-label="Raise the PS4 controller's top speed">+</button>
+    </div>
+    <div class="cspeed-scale" aria-hidden="true">
+      <span data-cspeed-lo>0.2</span><span data-cspeed-hi>5.0 m/s</span>
+    </div>
+    <p class="cspeed-note" role="status"></p>`;
+
   const range = box.querySelector("input");
-  range.addEventListener("input", () => {
+  let settle = null;
+
+  const show = () => {
+    const value = parseFloat(range.value);
+    box.querySelector("[data-cspeed-shown]").textContent = cspeedText(value);
+    range.setAttribute("aria-valuetext", speedSpoken(value));
+  };
+
+  const commitSoon = () => {
     box.dataset.dragging = "1";
-    box.querySelector("output").textContent = parseFloat(range.value).toFixed(1) + " m/s";
+    clearTimeout(settle);
+    settle = setTimeout(() => {
+      delete box.dataset.dragging;
+      setControllerSpeed(parseFloat(range.value));
+    }, CSPEED_SETTLE_MS);
+  };
+
+  range.addEventListener("input", () => {
+    clearTimeout(settle);       // not while the thumb is still moving
+    box.dataset.dragging = "1";
+    show();
   });
-  range.addEventListener("change", () => {
-    delete box.dataset.dragging;
-    setControllerSpeed(parseFloat(range.value));
-  });
+  range.addEventListener("change", commitSoon);
+
+  /* let go of the slider and WASD drives again (keyboard users keep focus) */
+  range.addEventListener("pointerup", () => range.blur());
+});
+
+document.querySelectorAll("[data-cspeed-step]").forEach(button => {
+  button.addEventListener("click", () => cspeedNudge(Number(button.dataset.cspeedStep)));
 });
 
 function closeControllerSpeed() {
@@ -112,6 +207,13 @@ function openControllerSpeed(chip) {
   chip.setAttribute("aria-expanded", "true");
   const r = chip.getBoundingClientRect();
   const w = pop.offsetWidth;
+  if (chip.closest(".cockpit-rail")) {     // beside the rail, not over it
+    const rail = chip.closest(".cockpit-rail").getBoundingClientRect();
+    pop.style.left = (rail.left < innerWidth / 2 ? rail.right + 8 : rail.left - w - 8) + "px";
+    pop.style.bottom = "";
+    pop.style.top = Math.min(r.top, innerHeight - pop.offsetHeight - 8) + "px";
+    return;
+  }
   pop.style.left = Math.max(16, Math.min(r.right - w, innerWidth - w - 16)) + "px";
   if (r.bottom + 8 + pop.offsetHeight <= innerHeight - 8) {
     pop.style.bottom = "";
@@ -131,7 +233,7 @@ document.querySelectorAll("[data-cspeed-chip]").forEach(chip => {
 });
 
 document.addEventListener("click", e => {
-  if (!e.target.closest("#cspeedPop, [data-cspeed-chip]")) closeControllerSpeed();
+  if (!e.target.closest("#cspeedPop, [data-cspeed-chip], [data-cspeed-step]")) closeControllerSpeed();
 });
 
 document.addEventListener("keydown", e => {

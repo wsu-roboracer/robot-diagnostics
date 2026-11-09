@@ -50,9 +50,8 @@ Status on the left, actions on the right, Emergency stop last and set apart so i
 | **DISARMED / ARMED / DRIVING** | The state of the controls on this page. DRIVING means a command is going out right now |
 | **Health pill** | The overall verdict from the Overview tab (HEALTHY, DEGRADED, FAILED, UNKNOWN) |
 | **Battery** | The battery voltage from the motor controller (VESC) |
-| **Latency** | The round trip from this page to the car and back, every 2 s. Green under 50 ms, amber from 50 ms, red from 120 ms. Each command takes about half of it to arrive (see [Why the controller feels quicker](#why-the-controller-feels-quicker)) |
 | **Disconnect controller** | Shown while a physical controller is connected. Drops its Bluetooth link; press the PS button on the controller to reconnect. Refused while someone holds L1 or R1 |
-| **Who is driving** | One answer: *Nobody is driving*, *You're armed*, *You are driving*, *The controller is driving*, *Someone else is driving*, *Autonomous code is driving*, or *Emergency stop is on* |
+| **PS4 top speed** | How fast the physical controller drives at full stick (0.2 to 5 m/s). **−** and **+** change it by 0.1; click the speed for a slider. It applies right away, even mid-drive, and stays saved on the car. With the bar hidden the same control is in the side rail; on phones it is in the Limits drawer |
 | **AUTONOMOUS DRIVING** / **Autonomous standby** | Shown only while autonomous code is up: red and pulsing while it is driving the car, amber while it is running but not sending commands. Holding L1 on the controller overrides it; Emergency stop stops it. It is in the side rail too |
 | **Camera · LiDAR · Controls** | Which panes show. Orange means on |
 | **Record** | Records the camera to a video file; press again to stop and save it (see [Recording the camera](#recording-the-camera)) |
@@ -73,11 +72,16 @@ The robot's computer on the left (CPU, GPU, RAM and temperatures, coloured by ho
 
 ![The speedometer and steering readout while driving](images/drive-tab/05-speed-readout.jpg)
 
-- **The speedometer arc** is the car's measured speed (from `/odom`), or your command until the car reports one. The **orange tick** is what you are commanding. The scale ends at your max-speed limit, so a full arc means "at the limit". The arc turns orange near the limit and blue in reverse.
+- **The speedometer** is an arc of LED segments showing the car's measured speed (from `/odom`), or your command until the car reports one, with a bright tip at its end. The **white marker** is what you are commanding, and it hides when the command is zero. The scale ends at your max-speed limit, so a full arc means "at the limit". The segments run from green to red along the arc, the red ticks mark the top of the range, and the glow and the number turn hot near the limit. In reverse the arc is blue.
 - **Command**: the speed being sent. **Measured**: what the car reports.
 - **Steering**: the angle being sent, with a marker that slides left and right.
 
-Speed can be shown in m/s, km/h or mph (Settings → Readouts).
+At its right end:
+
+- **Who is driving**: One answer: *Nobody is driving*, *You're armed*, *You are driving*, *The controller is driving*, *Someone else is driving*, *Autonomous code is driving*, or *Emergency stop is on*
+- **Latency**: The round trip from this page to the car and back, every 2 s. Green under 50 ms, amber from 50 ms, red from 120 ms. Each command takes about half of it to arrive (see [Why the controller feels quicker](#why-the-controller-feels-quicker))
+
+Every speed on the page can be shown in m/s, km/h or mph (Settings → Readouts): the readouts, the limits, the PS4 top speed, autonomous runs and the Overview tab.
 
 ## Driving, step by step
 
@@ -193,7 +197,7 @@ In the Detailed view, **Sweep** in the LiDAR's toolbar turns the radar's turning
 | **Arrangement** | LiDAR over camera · Dock the controls · Hide the top bar · Side rail on the left or right · *Controls only* (phones) |
 | **On the picture** | Edge warning lights · Close-object warning |
 | **LiDAR** | Lines or Detailed · range · Sweep line (the turning line on the Detailed view) |
-| **Readouts** | Speed in m/s, km/h or mph |
+| **Readouts** | Every speed on the page in m/s, km/h or mph |
 | **Screen** | Keep the screen awake · Buzz when very close (phones) |
 | **Keyboard** | The keys, as a reminder (desktop) |
 | **Thumb sticks** | Move sticks & STOP (phones) |
@@ -251,7 +255,7 @@ does on the car, but from the page.
 1. In the Controls card, switch **Hold to drive** to **Autonomous run**.
 2. **Full speed** (on by default) drives forward at your **Max speed**, the same top speed as full stick with L1 held. Turn it off to set **Speed** with the slider (forward or, below zero, reverse). Set **Steering** too. Both are limited by Max speed and Max steering, and both can be changed **while it runs**. Full speed is remembered in this browser.
 3. Pick **Run for**: 5 s, 10 s, 30 s, 1 min, or until stopped.
-4. Tick the safety box and press **Start autonomous run**. It arms by itself if the box is ticked.
+4. Tick the safety box and press **Start autonomous run**, at the top of the panel. It arms by itself if the box is ticked. With a controller connected to the car, the button reads **Hold R1 on the controller to start** instead, and fills up over the half second of the hold.
 
 It starts gently, like the keys. The pad, the keys or a controller held still take over while they are held.
 
@@ -310,7 +314,7 @@ When something else drives the car through `/drive` (a `ros2 topic pub` in a ter
 
 The Limits section of the Controls card is always in view.
 
-- **Max speed** and **Max steering** sliders cap what the pad, keys and sticks can ask for. The normal limits are **3 m/s and 19°**, the same as the stock controller.
+- **Max speed** and **Max steering** sliders cap what the pad, keys and sticks on this page can ask for. They do not limit the physical controller: that is **PS4 top speed**, in the top bar. The normal limits are **3 m/s and 19°**, the same as the stock controller.
 - **Unlock high speed (up to 5 m/s)** and **Unlock full steering (up to 23°)** raise the caps. Each opens a warning that spells out the risk and needs two boxes ticked:
 
 ![The high-speed unlock warning](images/drive-tab/13-unlock-dialog.jpg)
