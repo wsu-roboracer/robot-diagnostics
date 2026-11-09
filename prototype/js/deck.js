@@ -215,6 +215,20 @@ function startDeckNavigation() {
     }
   }, true);
 
+  /* press and hold on a touch screen opens the browser's menu, and a
+     drag picks up the camera picture: neither belongs in a controller
+     screen. Text boxes keep their menu (paste an address). */
+  const keepNative = target =>
+    target instanceof Element && target.closest("input, textarea, select");
+
+  window.addEventListener("contextmenu", event => {
+    if (!keepNative(event.target)) event.preventDefault();
+  }, true);
+
+  window.addEventListener("dragstart", event => {
+    if (!keepNative(event.target)) event.preventDefault();
+  }, true);
+
   requestAnimationFrame(navTick);
 }
 
