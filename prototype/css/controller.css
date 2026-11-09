@@ -802,3 +802,128 @@
   }
 }
 
+
+/* ------------------------------------------------------------------
+   Controller top speed (controller-speed.js): a chip in the footer, and in
+   full screen's bottom-right corner, opens a popup above it (placed by the
+   script); the same control sits on the Controller tab. The popup is above
+   the full-screen view and under the toast.
+   ------------------------------------------------------------------ */
+
+.cspeed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cspeed-chip svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cspeed-chip strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cspeed-chip:hover,
+.cspeed-chip[aria-expanded="true"] {
+  border-color: var(--border-strong);
+}
+
+.cspeed-chip[hidden] {
+  display: none;
+}
+
+/* full screen: the same chip in the bottom-right corner, dark like the
+   driving view's other chips. Not on the Drive tab, where the footer shows,
+   and not on phones, whose thumb sticks own the bottom corners (there the
+   speed is on the Controller tab and in the footer). */
+.cockpit .cspeed-full {
+  display: none;
+}
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+
+  .cockpit.full .cspeed-full:not([hidden]) {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 6;
+    display: inline-flex;
+    padding: 5px 12px;
+    border-color: rgba(255, 255, 255, .18);
+    background: rgba(0, 0, 0, .55);
+    color: rgba(255, 255, 255, .8);
+    font-size: 12.5px;
+  }
+
+  .cockpit.full .cspeed-full strong {
+    color: #fff;
+  }
+
+  .cockpit.full .cspeed-full:hover,
+  .cockpit.full .cspeed-full[aria-expanded="true"] {
+    border-color: rgba(255, 255, 255, .4);
+  }
+}
+
+.cspeed-pop {
+  position: fixed;
+  z-index: 1100;
+  width: min(300px, calc(100vw - 32px));
+  padding: 14px 14px 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+
+.cspeed-pop[hidden] {
+  display: none;
+}
+
+.cspeed-title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cspeed-inline {
+  padding: 0 13px;
+}
+
+.cspeed-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cspeed-row input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--orange);
+}
+
+.cspeed-row output {
+  min-width: 64px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.cspeed-note {
+  margin: 8px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
