@@ -148,10 +148,14 @@ stop_all(){
       kill -TERM "$p" 2>/dev/null && info "asked run $p to stop"
     done
   fi
-  # give launches (and other runs) up to 15 s to stop their children before
-  # forcing anything
+  # give launches (and, for --stop, the other runs) up to 15 s to stop their
+  # children before forcing anything. A run cleaning up waits only for its own
+  # processes: waiting for other runs too made it and the --stop that asked it
+  # wait on each other, the --stop gave up first, and the page's Restart then
+  # started a new run whose bringup the old run's sweep below killed
+  # (F1-WSU-2, 2026-11-09).
   for _ in $(seq 1 15); do
-    [ -z "$(matching)" ] && [ -z "$(other_runs)" ] && break
+    [ -z "$(matching)" ] && { [ "$DO_STOP" = 0 ] || [ -z "$(other_runs)" ]; } && break
     sleep 1
   done
   # 3. anything that survived, or was left by a run we have no record of.
@@ -163,6 +167,17 @@ stop_all(){
     done
   }
   sweep TERM; sleep 2; sweep KILL; sleep 1
+  # --stop: the sweep just removed what kept the other runs waiting (rosbridge
+  # ignores INT and TERM), so they finish their own cleanup in a few seconds.
+  # One still cleaning up after this --stop returns could sweep whatever starts
+  # next, so wait, then kill it and what it started (its log tail).
+  if [ "$DO_STOP" = 1 ]; then
+    for _ in $(seq 1 10); do [ -z "$(other_runs)" ] && break; sleep 1; done
+    for p in $(other_runs | awk '{print $1}'); do
+      pkill -KILL -P "$p" 2>/dev/null
+      kill -KILL "$p" 2>/dev/null && info "run $p did not stop: killed it"
+    done
+  fi
   rm -f "$PIDFILE"
   # Only what a run starts. Copies of this script are never killed here, and
   # checking for them listed this script's own process as "still running" on a
@@ -208,6 +223,9 @@ cleanup(){
   # F1-WSU-2. Ignore them until the stop is done.
   trap '' INT TERM HUP
   trap - EXIT
+  # the log tail is not in PIDFILE, and only a Ctrl+C reaches it (it shares
+  # the terminal's job); a --stop from elsewhere left one behind each time
+  [ -n "${TAIL_PID:-}" ] && kill "$TAIL_PID" 2>/dev/null
   stop_all
   info "logs kept in $LOGDIR"
   exit 0
@@ -386,7 +404,8 @@ echo
 # --- hold, showing bringup output ------------------------------------------
 if [ "$WANT_BRINGUP" = 1 ] && [ -f "$LOGDIR/bringup.log" ]; then
   tail -n 0 -f "$LOGDIR/bringup.log" &
-  PIDS+=($!); NAMES+=(tail)
+  TAIL_PID=$!
+  PIDS+=("$TAIL_PID"); NAMES+=(tail)
 fi
 while true; do
   for i in "${!PIDS[@]}"; do

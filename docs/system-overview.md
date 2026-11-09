@@ -397,10 +397,12 @@ refuses while the emergency stop is on, a deadman is held or a dashboard is
 driving; and, when rosbridge does not answer, `camera_http.py`'s `POST /restart`
 on port 8082 (the body must be `restart`). The restart runs in its own session
 so it survives the `--stop` it starts, and logs to
-`/tmp/f1tenth-diag/restart.log`; a second request within 90 s is the same
-restart. The page waits for rosbridge and the page itself to come back, then
-reloads. A car started by `bringup` (the f1tenth_stack version) has no
-`start_diagnostics.sh`, and the restart says so.
+`/tmp/f1tenth-diag/restart.log`; a second request within 90 s starts nothing new and
+answers "a restart is already under way" (`RESTART_GAP_S`), so the page waits
+for that one. The page waits for rosbridge and the page itself to come back, then
+reloads. On a car started by `bringup` instead (no `start_diagnostics.sh` run), the
+same file stops the bringup launch and starts it again with the same
+arguments.
 
 To work on the page without copying it to the robot each time, serve
 `prototype/` from your laptop and point it at a running robot:
