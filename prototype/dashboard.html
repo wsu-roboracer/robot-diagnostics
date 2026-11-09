@@ -77,6 +77,11 @@
       <button type="button" data-theme-choice="dark" title="Dark mode"><i data-icon="moon"></i> Dark</button>
     </div>
 
+    <!-- Steam Deck only (?deck=1, from open_dashboard.sh): kiosk mode
+         has no window controls, so the page closes itself (main.js) -->
+    <button class="top-btn" type="button" data-quit hidden
+            title="Close the dashboard"><i data-icon="power"></i> Close</button>
+
     <!-- stops the car for EVERYONE — controller, this page, autonomous.
          Last in the bar and set apart, so it is always in the same
          corner and never hit on the way to Refresh. -->
@@ -1464,6 +1469,9 @@
       <button class="top-btn cockpit-full-btn" id="cockpitGoFull" type="button"
               title="Full screen (Esc to leave)"><i data-icon="maximize"></i><span class="btn-lbl"> Full screen</span></button>
       <button class="top-btn cockpit-exit-btn" id="cockpitClose" type="button" title="Leave full screen (Esc) - disarms"><i data-icon="x"></i> Exit</button>
+      <!-- Steam Deck only: closes the dashboard itself (main.js) -->
+      <button class="top-btn" type="button" data-quit hidden
+              title="Close the dashboard"><i data-icon="power"></i><span class="btn-lbl"> Close</span></button>
 
       <!-- one tap: tuck the bar away (the corner keeps E-stop and Show) -->
       <button class="top-btn cockpit-icon-btn" id="cockpitBarHideBtn" type="button"

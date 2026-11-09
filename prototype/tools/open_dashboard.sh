@@ -48,7 +48,9 @@ if [[ $(echo "$found" | wc -l) -gt 1 ]] && command -v zenity >/dev/null; then
   n=$(zenity --list --title="Which robot?" --column="Robot" $found 2>/dev/null) || exit 0
 fi
 
-url="http://$SUBNET.$((200 + n)):$PORT/dashboard.html"
+# ?deck=1 used for closing dashboard window on deck.
+# here: kiosk mode has no window controls.
+url="http://$SUBNET.$((200 + n)):$PORT/dashboard.html?deck=1"
 echo "Opening robot $n: $url"
 
 # --kiosk: fullscreen from the start, no tabs or address bar. Needed in
