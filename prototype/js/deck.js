@@ -40,8 +40,17 @@ const SWIPE_START_PX = 10;
 
 /* Things that use touch themselves: a drag on them is not a scroll */
 const SWIPE_SKIP =
-  "input, select, textarea, button, a, canvas, summary, label, " +
-  "#drivePad, #cockpitPad, #stickSteer, #stickThrottle, .cockpit, [data-no-swipe]";
+  "input, select, textarea, button, a, canvas, summary, " +
+  "#drivePad, #cockpitPad, #stickSteer, #stickThrottle, [data-no-swipe]";
+
+/* in the driving view only these scroll by dragging: the panes, sticks
+   and pad have drags of their own */
+const COCKPIT_SWIPE = ".cockpit-panel, .cockpit-settings";
+
+function swipeSkips(target) {
+  return target.closest(SWIPE_SKIP) ||
+    (target.closest(".cockpit") && !target.closest(COCKPIT_SWIPE));
+}
 
 /* ---------- swipe to scroll ---------- */
 
@@ -176,7 +185,7 @@ function startDeckNavigation() {
   window.addEventListener("pointerdown", event => {
 
     if (event.button > 0 || !(event.target instanceof Element) ||
-        event.target.closest(SWIPE_SKIP)) {
+        swipeSkips(event.target)) {
       return;
     }
 
@@ -226,6 +235,12 @@ function startDeckNavigation() {
   }, true);
 
   window.addEventListener("dragstart", event => {
+    if (!keepNative(event.target)) event.preventDefault();
+  }, true);
+
+  /* the Deck's trackpad is a mouse, and a mouse drag selects text even
+     with user-select: none in Firefox; stop it at the source */
+  document.addEventListener("selectstart", event => {
     if (!keepNative(event.target)) event.preventDefault();
   }, true);
 
