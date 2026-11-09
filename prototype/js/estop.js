@@ -49,6 +49,11 @@ function onJoy(message) {
   joyAt = Date.now();
 }
 
+/* a controller is connected to the car: /joy is coming in */
+function padOnCar() {
+  return Date.now() - joyAt <= JOY_FRESH_MS;
+}
+
 function deadmanHeld() {
 
   if (Date.now() - joyAt > JOY_FRESH_MS) return false;
@@ -178,7 +183,7 @@ function renderEstop() {
         "The car will not move for anyone — controller, this page or autonomous code."
       : escapeHtml(estopError);
 
-  /* what the robot actually did, e.g. "froze ackermann_to_vesc_node (pid 1234)" */
+  /* what the robot actually did, e.g. "locked the mux (/emergency_stop)" */
   const action =
     active && item && item.values ? item.values["action"] || "" : "";
 

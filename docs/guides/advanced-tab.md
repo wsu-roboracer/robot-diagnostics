@@ -146,15 +146,18 @@ It takes a few seconds. If it says the service does not exist, `system_diagnosti
 
 ### Restart the dashboard on the car
 
-When the page lags, stops updating, or shows **NO DATA FROM THE ROBOT**, **Restart the dashboard on the car** does what you would type on the car:
+When the page lags, stops updating, or shows **NO DATA FROM THE ROBOT**, **Restart the dashboard on the car** stops and starts again every node on the car: bringup (the drive stack), rosbridge, the camera, and the server this page comes from. Nobody needs to be at the car.
+
+When you are debugging on the car itself (over SSH or NoMachine), the same by hand is:
 
 ```bash
 ./start_diagnostics.sh --stop && ./start_diagnostics.sh
 ```
 
-It stops and starts again everything that script runs: bringup (the drive stack), rosbridge, the camera, and the server this page comes from. It asks first, disarms driving from this page, then shows a panel while the car restarts (usually 30 to 60 seconds) and **reloads the page by itself** when the car is back. Every dashboard on that car loses its connection meanwhile. The same button is on the red **NO DATA FROM THE ROBOT** bar.
+It asks first, disarms driving from this page, then shows a panel while the car restarts (usually 30 to 60 seconds) and **reloads the page by itself** when the car is back. Every dashboard on that car loses its connection meanwhile. The same button is on the red **NO DATA FROM THE ROBOT** bar.
 
 - **It refuses** while the emergency stop is on (a restart would bring the drive chain back up running), while someone holds L1 or R1 on the controller, or while a dashboard is driving. It says which.
+- **Pressing it again within 90 seconds** of a restart starts no second one: the page waits for the restart already under way.
 - **It still works when rosbridge is stuck**, which is usually why the page stopped: it then asks the car's camera server instead. That route cannot see whether the car is moving, so make sure it is stopped.
 - **If nothing answers**, the car is off the network or the dashboard is not running at all; it says so, with the command to run on the car.
 - **If the car has not come back after three minutes**, it says so: `./start_diagnostics.sh --status` on the car shows what is running, and `/tmp/f1tenth-diag/restart.log` what the restart printed.

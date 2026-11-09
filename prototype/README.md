@@ -38,6 +38,7 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `js/lidar-select.js` | Select beams: picking a range of LiDAR beam indices |
 | `js/estop.js` | The Emergency stop button and banner |
 | `js/controller.js` | The Controller tab: the PS4 controller drawn live from `/joy`, or a Steam Deck (any controller on this device) through the browser's Gamepad API, which can also drive (`deckDriveInput`, read by `drive.js`); the deadman check, the battery, and Map buttons |
+| `js/avoid.js` | LiDAR steer-away for the autonomous run: `lidarAvoid()` turns the run away from something ahead. Pure function, checked by `tests/verify_avoid.mjs` |
 | `js/drive.js` | The driving logic: arming, the dead-man, limits, who's driving. Its own cards sit hidden under the driving view |
 | `js/cockpit.js` | The driving view on the Drive tab and in full screen: panes, floating controls, Settings, the side rail, thumb sticks, speedometer |
 | `js/radar.js` | The Detailed LiDAR view: the radar drawing, obstacle detection and its panel on the Overview card |
@@ -214,6 +215,8 @@ The count is advisory - it is there so people can watch the room fill up before 
 **The page connects but every topic reads SILENT.** You are probably past rosbridge's 10-client limit. The page now says so itself with an orange bar - *"rosbridge is answering but sending no topic data"* - and the header shows `clients N / 10`. Closing another tab is the fix, not restarting anything.
 
 **rosbridge stops responding** (connections are accepted but the page never connects). It has no rate limiting, and a client subscribing to everything *unthrottled* can wedge it, which needs a restart. Merely having too many throttled clients does not - that degrades and recovers on its own. The page throttles all of its own subscriptions.
+
+**A controller only blinks on PS and won't connect.** Pair it again on the car with Share + PS. If the car says "Pairing successful" and the controller hangs up about 5 s later, it is probably an off-brand pad stuck calling another computer: see [tools/ds4-pair](tools/ds4-pair/README.md).
 
 ## Things to know
 

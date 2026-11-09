@@ -39,10 +39,11 @@ try:
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
     from ackermann_msgs.msg import AckermannDriveStamped
-    from rcl_interfaces.msg import SetParametersResult
+    from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue, SetParametersResult
+    from rcl_interfaces.srv import GetParameters, SetParameters
     from rclpy.qos import qos_profile_sensor_data
     from sensor_msgs.msg import Joy, LaserScan
-    from std_msgs.msg import Float64
+    from std_msgs.msg import Bool, Float64
     from std_srvs.srv import Trigger
 except ImportError:
     # --self-test exercises the pure decision logic, which is the part worth
@@ -163,12 +164,19 @@ def cpu_busy_pct(prev, cur):
 # ---------- emergency stop ----------
 #
 # The command mux gives the physical controller priority, so nothing a web
-# page publishes can stop a car someone is driving with the pad. Every input
-# - pad, web, autonomous - reaches the motor through ONE node, which turns
-# the mux output into /commands/motor/* for the VESC. Freezing that node
-# (SIGSTOP) cuts all of them at once; this node then holds the motor at 0
-# ERPM itself, at 50 Hz, so the VESC actively brakes to a stop and keeps
-# getting a command (no firmware timeout). SIGCONT releases it.
+# page publishes can stop a car someone is driving with the pad. The stop is
+# the mux's own lock instead: mux.yaml lists ESTOP_LOCK_TOPIC under `locks:`
+# at priority 255, and while it carries true the mux forwards no input at
+# all - pad, web or autonomous. This node then holds the motor at 0 ERPM
+# itself, at 50 Hz, so the VESC actively brakes to a stop and keeps getting a
+# command (no firmware timeout). Publishing false releases it.
+#
+# A car whose mux.yaml has no such lock (nothing subscribes to the topic)
+# gets the old way: freeze ackermann_to_vesc_node, the one node every input
+# passes through, with SIGSTOP, and SIGCONT to release. Measured on F1-WSU-2
+# (2026-11-04): after a long freeze that node sometimes comes back deaf -
+# listed as _NODE_NAME_UNKNOWN_, publishing nothing - and the car cannot
+# drive until bringup restarts. Hence the lock.
 #
 # Speed 0, not a brake current: the joystick's own release path already
 # sends speed 0, and a brake value has units (A vs mA) that differ between
@@ -176,6 +184,7 @@ def cpu_busy_pct(prev, cur):
 
 DRIVE_CHAIN_NODE = "ackermann_to_vesc_node"
 ESTOP_HZ = 50.0
+ESTOP_LOCK_TOPIC = "/emergency_stop"   # std_msgs/Bool, a `locks:` entry in mux.yaml
 
 
 def parse_pgrep(out, own_pid):
@@ -363,6 +372,65 @@ def other_drive_nodes(publisher_nodes):
                    and not re.search(r"rosbridge|system_diagnostics", n)})
 
 
+
+# ---------- controller top speed (Controller tab, bottom-right popup) ----------
+#
+# The PS4's top speed is joy_teleop's speed scale: full stick times
+# human_control's drive-speed scale in config/joy_teleop.yaml = m/s. A
+# joy_teleop with live axis mappings (teleop_tools) applies a new scale at
+# once. The page sets controller_max_speed here; this node saves it to a file
+# and keeps joy_teleop on it, also after joy_teleop restarts (bringup, the
+# page's Restart, a reboot). An older joy_teleop reads the scale once at start
+# and would accept a new value without using it, so it is only set when the
+# installed joy_teleop is the live one.
+CONTROLLER_SPEED_PARAM = "human_control.axis_mappings.drive-speed.scale"
+CONTROLLER_SPEEDS = (0.2, 5.0)          # m/s the page may set
+CONTROLLER_SPEED_FILE = os.path.expanduser("~/.ros/controller_max_speed")
+CONTROLLER_SYNC_S = 2.0                 # how often joy_teleop is checked
+
+
+def controller_scale_for(want, current):
+    """The scale that makes full stick `want` m/s, or None if it already does
+    (or nothing is wanted, or joy_teleop's scale is unknown). Keeps the sign of
+    the current scale, so an inverted stick stays inverted."""
+    if want is None or current is None or abs(abs(current) - want) < 1e-6:
+        return None
+    return math.copysign(want, current) if current else want
+
+
+def load_controller_speed(path=CONTROLLER_SPEED_FILE):
+    """The saved top speed in m/s, or None if none is saved (or it is bad)."""
+    try:
+        with open(path) as f:
+            value = float(f.read().strip())
+    except (OSError, ValueError):
+        return None
+    lo, hi = CONTROLLER_SPEEDS
+    return value if lo <= value <= hi else None
+
+
+def save_controller_speed(value, path=CONTROLLER_SPEED_FILE):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        f.write(f"{value:.2f}\n")
+    os.replace(path + ".tmp", path)
+
+
+def joy_teleop_live():
+    """True if the installed joy_teleop applies axis-mapping changes at once."""
+    # ponytail: looks for the callback's name in the installed source; a
+    # joy_teleop parameter that says so would need another teleop_tools change.
+    for prefix in os.environ.get("AMENT_PREFIX_PATH", "").split(":"):
+        for path in glob.glob(os.path.join(prefix, "lib", "python3*", "site-packages",
+                                           "joy_teleop", "joy_teleop.py")):
+            try:
+                with open(path) as f:
+                    return "set_axis_mapping_parameters" in f.read()
+            except OSError:
+                pass
+    return False
+
+
 # ---------- obstacle stop ----------
 #
 # While something drives the car FORWARD through /drive - the page's
@@ -389,6 +457,7 @@ OBSTACLE_HALF_WIDTH_M = 0.2         # the corridor ahead: the car is about 0.3 m
 OBSTACLE_MIN_POINTS = 3             # one or two stray returns are not an obstacle
 OBSTACLE_SCAN_FRESH_S = 0.5         # no newer scan than this: it cannot see, so stop
 OBSTACLE_MIN_SPEED = 0.05           # m/s; slower is standing still
+OBSTACLE_AT_LIDAR_M = 0.05          # closer than this is beside the LiDAR, not ahead
 OBSTACLE_REPORT_M = 10.0            # how far ahead "nearest ahead" looks for the page
 DASHBOARD_MANUAL_FRAME = "dashboard_manual"   # the page's hold-to-drive (drive.js)
 
@@ -433,7 +502,12 @@ def obstacle_verdict(enabled, speed, cmd_age, frame, l1_held, estop_on, scan_age
                 f"while driving forward at {speed:.2f} m/s, so it cannot see ahead")
     need = stop_distance(speed, margin)
     if ahead is not None and ahead <= need:
-        return (f"obstacle stop: something {ahead:.2f} m ahead at {speed:.2f} m/s "
+        # "ahead" is measured forward from the LiDAR, so a hand right beside
+        # it reads 0.00 m: say where it is rather than a distance that looks
+        # like a fault
+        where = (f"{ahead:.2f} m ahead" if ahead >= OBSTACLE_AT_LIDAR_M
+                 else "right at the LiDAR")
+        return (f"obstacle stop: something {where} at {speed:.2f} m/s "
                 f"(needs {need:.2f} m to stop)")
     return ""
 
@@ -531,9 +605,11 @@ class SystemDiagnostics(Node):
         self.estop_active = False
         self.estop_since = None
         self.estop_pids = []
+        self.estop_locked = False
         self.estop_note = ""
         estop_group = MutuallyExclusiveCallbackGroup()
         self.motor_pub = self.create_publisher(Float64, "/commands/motor/speed", 10)
+        self.lock_pub = self.create_publisher(Bool, ESTOP_LOCK_TOPIC, 10)
         self.create_service(Trigger, "~/emergency_stop", self.emergency_stop,
                             callback_group=estop_group)
         self.create_service(Trigger, "~/emergency_release", self.emergency_release,
@@ -568,7 +644,22 @@ class SystemDiagnostics(Node):
         # e-stop's group, so a trip and the hold never interleave.
         self.declare_parameter("obstacle_stop", True)
         self.declare_parameter("obstacle_margin", OBSTACLE_MARGIN_M)
+        # before the callback, which refuses 0.0 ("none saved") from the page
+        self.controller_want = load_controller_speed()
+        self.declare_parameter("controller_max_speed", self.controller_want or 0.0)
         self.add_on_set_parameters_callback(self.on_set_parameters)
+
+        # Controller top speed: saved here, kept on joy_teleop. Its own group,
+        # so a slow joy_teleop never holds up anything else.
+        self.teleop_live = joy_teleop_live()
+        self.teleop_scale = None        # joy_teleop's scale as last read
+        teleop_group = MutuallyExclusiveCallbackGroup()
+        self.teleop_get = self.create_client(GetParameters, "/joy_teleop/get_parameters",
+                                             callback_group=teleop_group)
+        self.teleop_set = self.create_client(SetParameters, "/joy_teleop/set_parameters",
+                                             callback_group=teleop_group)
+        self.create_timer(CONTROLLER_SYNC_S, self.controller_speed_sync,
+                          callback_group=teleop_group)
         self.drive_frame = ""
         self.scan_at = None             # monotonic time of the newest scan
         self.ahead = None               # nearest_ahead() of it
@@ -692,7 +783,7 @@ class SystemDiagnostics(Node):
     # ---------- restarting the stack ----------
 
     def restart_stack(self, _request, response):
-        """start_diagnostics.sh --stop, then start it again (restart_stack.py).
+        """Restart everything: start_diagnostics.sh, or bringup (restart_stack.py).
         Refused while the car could be moving, or while the emergency stop is
         on: the restart brings the drive chain it froze back up running."""
         why = restart_refusal(self.estop_active,
@@ -702,11 +793,14 @@ class SystemDiagnostics(Node):
             response.success, response.message = False, why
             return response
         try:
-            import restart_stack
+            import restart_stack                            # next to this file (~/diag)
         except ImportError:
-            response.success = False
-            response.message = "restart_stack.py is missing next to system_diagnostics.py"
-            return response
+            try:
+                from f1tenth_stack import restart_stack     # installed with bringup
+            except ImportError:
+                response.success = False
+                response.message = "restart_stack.py is missing next to system_diagnostics.py"
+                return response
         response.success, response.message = restart_stack.restart(
             os.path.dirname(os.path.abspath(__file__)))
         self.get_logger().warn(f"restart_stack: {response.message}")
@@ -721,8 +815,20 @@ class SystemDiagnostics(Node):
         return response
 
     def engage_estop(self, why=""):
-        """Freeze the drive chain and hold the motor at 0. why: what tripped
-        it, when it was not someone pressing the button. True if frozen."""
+        """Lock the mux (or, without the lock, freeze the drive chain) and
+        hold the motor at 0. why: what tripped it, when it was not someone
+        pressing the button. True if every input is cut off."""
+        if self.lock_pub.get_subscription_count() > 0:
+            self.estop_locked = True
+            self.estop_active = True
+            self.estop_since = self.estop_since or time.time()
+            self.estop_note = f"locked the mux ({ESTOP_LOCK_TOPIC})"
+            if why:
+                self.estop_note = f"{why} - {self.estop_note}"
+            self.estop_hold()
+            self.get_logger().warn(f"EMERGENCY STOP: {self.estop_note}")
+            return True
+
         rc, out = probe(["pgrep", "-f", DRIVE_CHAIN_NODE], timeout=3)
         pids = parse_pgrep(out if rc == 0 else "", os.getpid())
         frozen, failed = [], []
@@ -760,7 +866,10 @@ class SystemDiagnostics(Node):
         if deadman_held(self.joy_buttons, time.time() - self.joy_at):
             response.success = False
             response.message = "someone is holding L1/R1 - let go first"
+            self.get_logger().warn(f"emergency stop release refused: {response.message}")
             return response
+        if self.estop_locked:
+            self.lock_pub.publish(Bool(data=False))
         resumed, gone = [], []
         for pid in self.estop_pids:
             try:
@@ -772,7 +881,13 @@ class SystemDiagnostics(Node):
         self.estop_since = None
         self.estop_pids = []
         self.estop_note = ""
-        msg = f"released; resumed pid {', '.join(map(str, resumed)) or 'none'}"
+        if self.estop_locked:
+            msg = "released; mux unlocked"
+            if resumed:
+                msg += f", resumed pid {', '.join(map(str, resumed))}"
+        else:
+            msg = f"released; resumed pid {', '.join(map(str, resumed)) or 'none'}"
+        self.estop_locked = False
         if gone:
             msg += f" (gone: {', '.join(map(str, gone))} - restart bringup)"
         self.get_logger().warn(f"emergency stop {msg}")
@@ -784,6 +899,9 @@ class SystemDiagnostics(Node):
             m = Float64()
             m.data = 0.0
             self.motor_pub.publish(m)
+            if self.estop_locked:
+                # every tick, so a mux that restarts mid-stop is locked again
+                self.lock_pub.publish(Bool(data=True))
 
     # ---------- drive watchdog ----------
 
@@ -820,10 +938,87 @@ class SystemDiagnostics(Node):
                         successful=False, reason=f"obstacle_margin must be {lo} to {hi} m")
             if p.name == "obstacle_stop" and not isinstance(p.value, bool):
                 return SetParametersResult(successful=False, reason="obstacle_stop is true or false")
+            if p.name == "controller_max_speed":
+                lo, hi = CONTROLLER_SPEEDS
+                if isinstance(p.value, bool) or not isinstance(p.value, (int, float)) \
+                        or not lo <= p.value <= hi:
+                    return SetParametersResult(
+                        successful=False, reason=f"controller_max_speed must be {lo} to {hi} m/s")
+                if not self.teleop_live:
+                    return SetParametersResult(
+                        successful=False, reason="this car's joy_teleop cannot change speed "
+                        "while running: it needs the teleop_tools update")
         for p in params:
             if p.name in ("obstacle_stop", "obstacle_margin"):
                 self.get_logger().warn(f"obstacle stop: {p.name} set to {p.value}")
+            if p.name == "controller_max_speed":
+                self.controller_want = float(p.value)
+                try:
+                    save_controller_speed(self.controller_want)
+                except OSError as e:
+                    self.get_logger().warn(f"controller speed: could not save it ({e})")
+                self.get_logger().warn(f"controller speed: top speed set to {p.value:.2f} m/s")
+                self.controller_speed_sync()
         return SetParametersResult(successful=True)
+
+    # ---------- controller top speed ----------
+
+    def controller_speed_sync(self):
+        """Read joy_teleop's scale; set it to the saved speed if they differ."""
+        if not self.teleop_get.service_is_ready():
+            self.teleop_scale = None
+            return
+        request = GetParameters.Request(names=[CONTROLLER_SPEED_PARAM])
+        self.teleop_get.call_async(request).add_done_callback(self.on_teleop_scale)
+
+    def on_teleop_scale(self, future):
+        try:
+            value = future.result().values[0]
+        except Exception:  # noqa: BLE001 - no answer, or no such parameter
+            self.teleop_scale = None
+            return
+        if value.type == ParameterType.PARAMETER_DOUBLE:
+            self.teleop_scale = value.double_value
+        elif value.type == ParameterType.PARAMETER_INTEGER:
+            self.teleop_scale = float(value.integer_value)
+        else:
+            self.teleop_scale = None
+        target = controller_scale_for(self.controller_want, self.teleop_scale)
+        if target is None or not self.teleop_live:
+            return
+        request = SetParameters.Request(parameters=[Parameter(
+            name=CONTROLLER_SPEED_PARAM,
+            value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=target))])
+        self.teleop_set.call_async(request).add_done_callback(
+            lambda f: self.on_teleop_set(f, target))
+
+    def on_teleop_set(self, future, target):
+        try:
+            result = future.result().results[0]
+        except Exception as e:  # noqa: BLE001
+            self.get_logger().warn(f"controller speed: joy_teleop did not answer ({e})")
+            return
+        if result.successful:
+            self.teleop_scale = target
+            self.get_logger().info(f"controller speed: joy_teleop now {abs(target):.2f} m/s")
+        else:
+            self.get_logger().warn(f"controller speed: joy_teleop refused ({result.reason})")
+
+    def controller_speed_status(self):
+        lo, hi = CONTROLLER_SPEEDS
+        now = None if self.teleop_scale is None else abs(self.teleop_scale)
+        want = self.controller_want
+        vals = [("max m/s", "unknown" if now is None else f"{now:.2f}"),
+                ("saved m/s", "none" if want is None else f"{want:.2f}"),
+                ("live", "yes" if self.teleop_live else "no"),
+                ("range m/s", f"{lo:g} to {hi:g}")]
+        if now is None:
+            text = "joy_teleop is not answering"
+        elif not self.teleop_live:
+            text = f"full stick {now:.1f} m/s; this car's joy_teleop cannot change it while running"
+        else:
+            text = f"full stick {now:.1f} m/s"
+        return status("system: Controller speed", OK, text, vals)
 
     def on_scan(self, msg):
         self.scan_at = time.monotonic()
@@ -919,6 +1114,7 @@ class SystemDiagnostics(Node):
         since = time.strftime("%H:%M:%S", time.localtime(self.estop_since))
         return status("system: E-stop", ERROR, f"EMERGENCY STOP ACTIVE since {since}",
                       [("active", "yes"), ("since", since), ("action", self.estop_note),
+                       ("method", "mux lock" if self.estop_locked else "SIGSTOP"),
                        ("frozen pids", ", ".join(map(str, self.estop_pids)) or "none")])
 
     # ---------- fast probes: pure sysfs reads, safe at 1 Hz ----------
@@ -1305,7 +1501,8 @@ class SystemDiagnostics(Node):
     def tick(self):
         msg = DiagnosticArray()
         msg.header.stamp = self.get_clock().now().to_msg()
-        for build in (self.estop_status, self.drive_status, self.obstacle_status, self.thermal, self.cpu, self.gpu,
+        for build in (self.estop_status, self.drive_status, self.obstacle_status,
+                      self.controller_speed_status, self.thermal, self.cpu, self.gpu,
                       self.memory, self.storage, self.power, self.vesc_device,
                       self.network, self.gamepad, self.camera, self.clock):
             try:
@@ -1463,7 +1660,26 @@ def self_test():
     assert obstacle_verdict(**{**go, "estop_on": True}, ahead=0.4) == "", "already stopped"
     assert "no LiDAR" in obstacle_verdict(**{**go, "scan_age": 0.8}, ahead=None)
     assert "no LiDAR" in obstacle_verdict(**{**go, "scan_age": None}, ahead=None)
+    assert "right at the LiDAR" in obstacle_verdict(**go, ahead=0.0), "a hand beside it"
+    assert "0.30 m ahead" in obstacle_verdict(**go, ahead=0.3)
     print("obstacle stop self-test passed")
+
+    assert controller_scale_for(2.0, 5.0) == 2.0
+    assert controller_scale_for(2.0, -5.0) == -2.0, "an inverted stick stays inverted"
+    assert controller_scale_for(2.0, 2.0) is None, "already there"
+    assert controller_scale_for(None, 5.0) is None, "nothing saved: leave the yaml's value"
+    assert controller_scale_for(2.0, None) is None, "joy_teleop unknown"
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "sub", "speed")
+        assert load_controller_speed(path) is None
+        save_controller_speed(1.5, path)
+        assert load_controller_speed(path) == 1.5
+        for bad in ("fast\n", "9.0\n", ""):
+            with open(path, "w") as f:
+                f.write(bad)
+            assert load_controller_speed(path) is None, bad
+    print("controller speed self-test passed")
 
 
 def main():
