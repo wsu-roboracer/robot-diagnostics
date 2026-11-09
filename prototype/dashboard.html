@@ -99,6 +99,20 @@
 <!-- a short message about what just happened (stopping autonomous code) -->
 <div class="toast" id="toast" role="status" hidden></div>
 
+<!-- the car's PS4 top speed (controller-speed.js): the chip in the footer,
+     or in full screen's bottom-right corner, opens this popup above it; the
+     same control is on the Controller tab -->
+<div class="cspeed-pop" id="cspeedPop" role="dialog" aria-label="Controller top speed" hidden>
+  <div class="cspeed-title">Controller top speed</div>
+  <div class="cspeed" data-cspeed>
+    <div class="cspeed-row">
+      <input type="range" step="0.1" min="0.2" max="5" aria-label="Controller top speed in m/s">
+      <output>--</output>
+    </div>
+    <p class="cspeed-note"></p>
+  </div>
+</div>
+
 <!-- restarting the dashboard on the car (checks.js): waits for the car to
      come back, then reloads this page -->
 <div class="restart-overlay" id="restartOverlay" hidden role="alertdialog"
@@ -1347,6 +1361,15 @@
         <div class="jp-sub">Sticks and triggers</div>
         <div class="jp-axes" id="jpAxes"></div>
 
+        <div class="jp-sub">Top speed (PS4 on the car)</div>
+        <div class="cspeed cspeed-inline" data-cspeed>
+          <div class="cspeed-row">
+            <input type="range" step="0.1" min="0.2" max="5" aria-label="Controller top speed in m/s">
+            <output>--</output>
+          </div>
+          <p class="cspeed-note"></p>
+        </div>
+
         <div class="jp-sub" id="jpRawTitle">Raw /joy</div>
         <div class="jp-raw">
           <div><span class="jp-raw-k">buttons[ ]</span><span class="jp-raw-v" id="jpRawButtons"></span></div>
@@ -1407,6 +1430,13 @@
       IP:
       <strong id="robotIp">unknown</strong>
     </span>
+
+    <button class="cspeed-chip" id="cspeedChip" type="button" data-cspeed-chip
+            aria-expanded="false" aria-controls="cspeedPop" title="Controller top speed" hidden>
+      <i data-icon="gamepad"></i>
+      <span>Controller</span>
+      <strong data-cspeed-value>--</strong>
+    </button>
 
   </div>
 
@@ -1953,6 +1983,15 @@
 
 
   <!-- the computer's numbers, and the command / steering readout -->
+  <!-- full screen only: the car's PS4 top speed in the bottom-right corner,
+       like the footer's chip on the page (the footer is hidden here) -->
+  <button class="cspeed-chip cspeed-full" id="cockpitSpeedChip" type="button" data-cspeed-chip
+          aria-expanded="false" aria-controls="cspeedPop" title="Controller top speed" hidden>
+    <i data-icon="gamepad"></i>
+    <span>Controller</span>
+    <strong data-cspeed-value>--</strong>
+  </button>
+
   <div class="cockpit-bottom">
     <div class="cockpit-sys" id="cockpitSys"></div>
   <div class="cockpit-hud">
@@ -2040,6 +2079,7 @@
 <script src="js/controller.js"></script>
 <script src="js/avoid.js"></script>
 <script src="js/drive.js"></script>
+<script src="js/controller-speed.js"></script>
 <script src="js/cockpit.js"></script>
 <script src="js/radar.js"></script>
 <script src="js/main.js"></script>

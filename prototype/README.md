@@ -215,6 +215,8 @@ The count is advisory - it is there so people can watch the room fill up before 
 
 **rosbridge stops responding** (connections are accepted but the page never connects). It has no rate limiting, and a client subscribing to everything *unthrottled* can wedge it, which needs a restart. Merely having too many throttled clients does not - that degrades and recovers on its own. The page throttles all of its own subscriptions.
 
+**A controller only blinks on PS and won't connect.** Pair it again on the car with Share + PS. If the car says "Pairing successful" and the controller hangs up about 5 s later, it is probably an off-brand pad stuck calling another computer: see [tools/ds4-pair](tools/ds4-pair/README.md).
+
 ## Things to know
 
 - **rosbridge serves exactly 10 clients at once** (measured 2026-09-16: 5/5, 10/10, 10 of 15, 10 of 25). Client 11 connects, is counted by `/client_count`, and then receives nothing - which on this page looks identical to a dead robot. Your own open tab is one of the ten, and a tab is a heavier client than most. There is no `max_clients` setting to raise it. It recovers on its own within 30 seconds once clients disconnect.
