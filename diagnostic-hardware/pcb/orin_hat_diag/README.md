@@ -114,7 +114,7 @@ Full white on all 74 LEDs draws roughly 3 A, which is more than the header's 5 V
 
 **Strip** (beside the fan), from the top:
 1. The OLED header J2 at the right edge; the module covers the strip from the header down to the buttons.
-2. User buttons SW2–SW6 in one row at 7.6 mm pitch (six don't fit across the 40 mm strip), labelled SW2–SW6 above. Under each: its series resistor, debounce cap and pull-up (R10–R14, C4–C8, R5–R9), and the header pin it reads on.
+2. User buttons SW2–SW6 in one row at 7.6 mm pitch (six don't fit across the 40 mm strip), labelled SW2–SW6 above. All six buttons are 5.1 × 5.1 mm SMD tactile switches (XKB TS-1187A, LCSC C318884), so JLCPCB places them. SW2–SW6 are turned 90° so their pads run up and down, leaving about 2 mm between neighbours. Under each: its series resistor, debounce cap and pull-up (R10–R14, C4–C8, R5–R9), and the header pin it reads on.
 3. Status LEDs in two rows of five: LiDAR, Camera, Network, VESC, Gamepad on top, then 5–9.
 4. The 8×8 matrix at 4.5 mm pitch, with **FRONT** marked above row 0.
 5. The 5 V bulk capacitor C2, below the matrix.
@@ -140,7 +140,7 @@ The `User.Comments` layer in the PCB draws the carrier underneath: its outline, 
 - **Top (F.Cu): a +5V copper fill** over the whole board. The header's +5V pins and every +5V pad join it directly. Each LED's VDD pad also has a short track to its decoupling cap.
 - **Bottom (B.Cu): a GND copper fill.** Every top-side GND pad has a short track to a via into it. J1 pins 20 and 30 have short bottom tracks, because there's no room for thermal spokes between neighbouring header pins.
 - **LED data chain:** each LED connects to the next with a short top-layer track. The long jumps run on the bottom layer so they don't split the +5V fill: each matrix row's end back to the next row's start, D5→D6, and D10→D101. The chain starts at U1 in the arm and runs down the strip's left edge to D1.
-- **User buttons SW2–SW6:** each header pin leaves the header on the bottom layer through the gaps in the inner row of pins, runs along the arm at y 9.5–15.5, then drops down the middle of its button to a via at the series resistor. Their +3V3 comes from pin 1 along the top edge and down the strip's right edge on top, then along a bottom-layer bus under the pull-ups. J1 pins 6 and 14 get short bottom GND tracks, like pins 20 and 30.
+- **User buttons SW2–SW6:** each header pin leaves the header on the bottom layer through the gaps in the inner row of pins, runs along the arm at y 9.5–15.5, then drops down the middle of its button to a via at the series resistor. On top, each switch's two pin-1 pads are joined and jog to the pull-up track. Its two GND pads are joined and drop through one via to the bottom fill. Their +3V3 comes from pin 1 along the top edge and down the strip's right edge on top, then along a bottom-layer bus under the pull-ups. J1 pins 6 and 14 get short bottom GND tracks, like pins 20 and 30.
 - **I2C7 to the OLED:** pins 3 and 5 drop through the gaps beside pins 2 and 4 on the bottom layer, run right above the button tracks, and hop to the top layer just before J2. The hop keeps the bottom ground fill open down the strip's right edge, which is the only link between the fill over the arm and the rest of it. J2's VCC has a short top track to the +3V3 rail.
 - **Arm signals** run on top, between the header pins:
   - SPI0_MOSI from pin 19 to U1 and R4;
@@ -162,5 +162,5 @@ The `User.Comments` layer in the PCB draws the carrier underneath: its outline, 
 - [x] Route the board (see [Routing](#routing)). The board check finds 0 violations and 0 unconnected items, and the board matches the schematic.
 - [ ] Review the routing in KiCad before ordering, especially the +5V fill's narrow paths through the matrix (see [Routing](#routing)).
 - [ ] Buy a 0.91" OLED module and check its size and pin order against J2 (outline on the `F.Fab` layer).
-- [ ] Check the button row's height against whatever sits above the HAT (6 mm tactile switches, about 5 mm tall).
+- [ ] Check the button row's height against whatever sits above the HAT (TS-1187A switches, 1.5 mm tall). The OLED module sits above the button row, not over it, but check that a finger can still reach the low buttons past it.
 - [ ] Hardware bring-up: scope pin 19 and check the line idles low between frames. The driver sends a low byte first in case it doesn't.
