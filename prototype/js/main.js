@@ -41,6 +41,7 @@ function render() {
   renderLidar();
   renderRadar();
   renderSelectionReadout();
+  renderLidarTab();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
@@ -117,7 +118,7 @@ $("refreshBtn").onclick = async () => {
    straight onto it, and a reload keeps you where you were.
 ========================================================== */
 
-const TABS = ["overview", "drive", "advanced", "controller"];
+const TABS = ["overview", "drive", "advanced", "controller", "lidar"];
 
 function showTab(name) {
 
@@ -142,6 +143,11 @@ function showTab(name) {
      view, everywhere else it lives on the Overview card */
   $(name === "drive" ? "driveCamSlot" : "cameraHome")
     .appendChild($("cameraBox"));
+
+  /* the one LiDAR card lives on the Overview, and moves to the
+     LiDAR tab while that shows */
+  $(name === "lidar" ? "lidarSlot" : "lidarHome")
+    .appendChild($("lidarCard"));
 
   TABS.forEach(tab => {
 

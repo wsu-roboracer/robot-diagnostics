@@ -77,6 +77,7 @@ const RADAR = {
 const radarState = {
   masks: [],                  // [from, to] degrees to ignore (own robot)
   sweep: true,
+  warnings: true,             // warning circles, highlights and object tags
   scanAt: 0,                  // which scan was last analysed
   arrivals: [],               // scan times, for scans/s
   result: null,               // the last analysis
@@ -383,7 +384,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
   }
 
   /* the warn and danger distances, as dashed circles */
-  [[RADAR.warn, c.warn], [RADAR.danger, c.danger]].forEach(([r, color]) => {
+  (radarState.warnings ? [[RADAR.warn, c.warn], [RADAR.danger, c.danger]] : []).forEach(([r, color]) => {
     ctx.setLineDash([4 * px, 4 * px]);
     ctx.strokeStyle = color;
     ctx.globalAlpha = (live ? 1 : 0.4) * 0.55;
@@ -424,7 +425,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
     /* obstacles (closer than the warning distance): a thick outline in
        their status colour, bigger dots */
     result.objects.forEach(o => {
-      if (o.distance >= RADAR.warn) return;
+      if (!radarState.warnings || o.distance >= RADAR.warn) return;
       const color = o.distance < RADAR.danger ? c.danger : c.warn;
       ctx.strokeStyle = color;
       ctx.lineWidth = 4 * px;
@@ -496,7 +497,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
   ctx.fill();
 
   /* proximity ring: each direction's status as an arc around the car */
-  if (result && live) {
+  if (result && live && radarState.warnings) {
     const ring = s * 2.1;
     const tone = { danger: c.danger, warn: c.warn, clear: "rgba(34, 197, 94, 0.55)" };
     result.sectors.forEach(sec => {
@@ -514,7 +515,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
 
   /* object tags: number and distance, approaching ones with an arrow;
      drawn last so nothing covers them */
-  if (result) {
+  if (result && radarState.warnings) {
     const placed = [];                      // tags already drawn, to step around
     const hits = (x, y, bw, bh) => placed.some(r =>
       x < r.x + r.w + 3 * px && x + bw + 3 * px > r.x && y < r.y + r.h + 2 * px && y + bh + 2 * px > r.y);
@@ -837,6 +838,21 @@ document.querySelectorAll("[data-sweep-toggle]").forEach(button => {
   button.onclick = () => setRadarSweep(!radarState.sweep);
 });
 
+/* Warnings: the warn/danger circles, the red and amber highlights on
+   close objects, the proximity arcs round the car and the object tags.
+   Off leaves just the map. Kept per browser, like Sweep. */
+function setRadarWarnings(on) {
+
+  radarState.warnings = on;
+  document.querySelectorAll("[data-warnings-toggle]").forEach(button =>
+    button.setAttribute("aria-pressed", String(on)));
+
+  try { localStorage.setItem("radarWarnings", on ? "on" : "off"); } catch (error) {}
+
+  renderRadar();
+  if (typeof cockpitPaneShown === "function" && cockpitPaneShown("lidar")) redrawPaneRadar();
+}
+
 $("radarMask").addEventListener("change", () => {
   radarState.masks = parseMasks($("radarMask").value);
   $("radarMask").value = radarState.masks.map(([a, b]) => `${a}:${b}`).join(", ");
@@ -847,6 +863,7 @@ $("radarMask").addEventListener("change", () => {
 
 try {
   radarState.sweep = localStorage.getItem("radarSweep") !== "off";
+  radarState.warnings = localStorage.getItem("radarWarnings") !== "off";
   $("radarMask").value = localStorage.getItem("radarMask") || "";
   radarState.masks = parseMasks($("radarMask").value);
 } catch (error) {}
