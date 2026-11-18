@@ -2091,7 +2091,7 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
 
   /* DANGER CIRCLES — red under 0.5 m, amber under 1 m */
 
-  drawDangerZones(ctx, originX, originY, pxPerMeter);
+  if (radarState.warnings) drawDangerZones(ctx, originX, originY, pxPerMeter);
 
   /* the robot's obstacle stop zone (radar.js) */
   if (typeof drawObstacleZone === "function") drawObstacleZone(ctx, P, k, Math.round(11 * k));
@@ -2164,7 +2164,7 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
 
   const labelFont = Math.round(Math.max(12, Math.min(15, w / RU / 32)) * RU);
 
-  drawZoneLabels(ctx, P, labelFont);
+  if (radarState.warnings) drawZoneLabels(ctx, P, labelFont);
 
   /* the outline is drawn to its full length, so every point on it can
      be pointed at */
