@@ -1003,7 +1003,7 @@ function autoSpeed() {
    joy_teleop's default command sends zero speed on /teleop with every /joy
    message, and the mux gives /teleop priority over /drive, so the car takes
    /drive only while R1 (the autonomous deadman) is held. */
-let autoR1Choice = false;
+let autoR1Choice = true;       // on by default, and again after every reload
 
 function syncAutoR1() {
   const forced = padOnCar();
@@ -1267,8 +1267,8 @@ try {
   if (localStorage.getItem(DRIVE_MODE_KEY) === "auto") driveMode = "auto";
 } catch (error) {}
 
-/* Full speed is kept per browser; Hold R1 to run is not - it starts off
-   after a reload, like the speed unlocks */
+/* Full speed is kept per browser; Hold R1 to run is not - it starts on
+   after a reload */
 const AUTO_FULL_KEY = "autoFullSpeed";
 
 try {

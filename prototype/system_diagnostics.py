@@ -642,7 +642,7 @@ class SystemDiagnostics(Node):
 
         # Obstacle stop: the LiDAR ahead while /drive drives forward. In the
         # e-stop's group, so a trip and the hold never interleave.
-        self.declare_parameter("obstacle_stop", True)
+        self.declare_parameter("obstacle_stop", False)
         self.declare_parameter("obstacle_margin", OBSTACLE_MARGIN_M)
         # before the callback, which refuses 0.0 ("none saved") from the page
         self.controller_want = load_controller_speed()
