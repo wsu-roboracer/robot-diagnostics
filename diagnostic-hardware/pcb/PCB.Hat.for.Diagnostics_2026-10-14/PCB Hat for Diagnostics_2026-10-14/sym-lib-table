@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "PCB Hat fo-easyedapro") (type "KiCad") (uri "${KIPRJMOD}/PCB Hat fo-easyedapro.kicad_sym") (options "") (descr ""))
+)

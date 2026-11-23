@@ -17,6 +17,8 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics`, and runs the emergency stop, the drive watchdog and the **obstacle stop** (LiDAR ahead while `/drive` drives forward) |
 | `tests/` | Checks that need no robot. Run them all with `node tests/run.mjs`: LiDAR plot geometry, beam selection maths, the system list, joystick check and connection banners (all against the page's real `js/`), and the self-tests in `camera_http.py` and `system_diagnostics.py` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
+| `hat_leds.py` | Drives the diagnostics HAT's 74 WS2812B LEDs over SPI (header pin 19) and reads its six user buttons. Pinout and LED index map: [diagnostic-hardware/pcb/orin_hat_diag](../diagnostic-hardware/pcb/orin_hat_diag/README.md). `python3 hat_leds.py --self-test` needs no hardware |
+| `hat_display.py` | Shows the Orin's hostname and IP addresses on the HAT's 0.91" OLED (I2C7, header pins 3/5) when SW2 is pressed. `python3 hat_display.py --self-test` needs no hardware |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
 
 ### The scripts, in load order
