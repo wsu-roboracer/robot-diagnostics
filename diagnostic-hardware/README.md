@@ -4,6 +4,7 @@ The physical side of the diagnostics system: a small PCB "hat" with LEDs and a d
 
 | File | What it is |
 |---|---|
+| [pcb/](pcb/) | The KiCad 10 design (`orin_hat_diag/`) and the student's original EasyEDA Pro project, kept for reference |
 | [PCB-Hat_Diagnostics.zip](PCB-Hat_Diagnostics.zip) | Gerber files: what you send to a board manufacturer |
 | [pcb/orin_hat_diag/](pcb/orin_hat_diag/) | The KiCad 10 project for the hat (schematic, routed PCB), with pin map and board status in its README. Its `jlcpcb/` folder has the gerbers, BOM and CPL for ordering |
 | [PCB Hat for Diagnostics_2026-10-14.epro](PCB%20Hat%20for%20Diagnostics_2026-10-14.epro) | The EasyEDA project the Gerbers were made from. Open this to change the board |
