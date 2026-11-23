@@ -17,7 +17,7 @@ The board is **L-shaped** so that it plugs straight onto the Orin's 40-pin heade
 | `led_matrix.kicad_sch` | The 8×8 obstacle matrix |
 | `orin_hat_diag.kicad_pcb` | L-shaped board, 86 × 116 mm overall, 2 layers, fully routed |
 
-Driver code: [`prototype/hat_leds.py`](../../../prototype/hat_leds.py) (LEDs, buttons) and [`prototype/hat_display.py`](../../../prototype/hat_display.py) (OLED). Skeletons: [`hat_status_leds.py`](../../../prototype/hat_status_leds.py) (`/diagnostics` onto the named status LEDs), [`hat_obstacle_matrix.py`](../../../prototype/hat_obstacle_matrix.py) (`/scan` onto the 8x8 matrix), [`hat_battery.py`](../../../prototype/hat_battery.py) (battery voltmeter, no hardware chosen yet).
+Driver code: [`prototype/hat_leds.py`](../../../prototype/hat_leds.py) (LEDs, buttons) and [`prototype/hat_display.py`](../../../prototype/hat_display.py) (OLED). Skeletons: [`hat_status_leds.py`](../../../prototype/hat_status_leds.py) (`/diagnostics` onto the named status LEDs), [`hat_obstacle_matrix.py`](../../../prototype/hat_obstacle_matrix.py) (`/scan` onto the 8x8 matrix).
 
 ## Header pin assignments
 
