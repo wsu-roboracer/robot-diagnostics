@@ -126,6 +126,7 @@ VERSIONS = {
     r"js/metrics\.js": "20261118c",
     r"js/main\.js": "20261118a",
     r"js/drive\.js": "20261118d",
+    r"js/deck\.js": "20261118x",
 }
 for name, version in VERSIONS.items():
     s = re.sub(name + r"\?v=\w+", name.replace("\\", "") + "?v=" + version, s)
