@@ -1,0 +1,64 @@
+## Sprint 3 Report - 0003
+
+**Team:** Alex, Luke, Saman, Darrin
+**Sprint:** 3 (Sep 28 - October 19th)
+
+### Completed
+
+Items that meet every line of the Definition of Done.
+
+| Issue | What it is | PR |
+|---|---|---|
+
+### Not completed
+
+| Issue | Why not | What we're doing with it |
+|---|---|---|
+| #5 | Only a brief summary went in - README and repo setup weren't revisited beyond that | Carrying to Sprint 3, to finish once the dashboard's features and design are finalized |
+
+### Demo on Monday October 19th
+**LiDAR features (inside the canvas):**
+Drag and drop, zoom in and out.
+Select and highlight certain sections.
+Select specific points of LiDAR data.
+
+**Camera:**
+Using LiDAR, showing red, yellow haze around the remote camera lens to signify how close you are to an object. Red means you're much closer to the object.
+Printing on the camera screen how close you are to an object directly infront of you in meters.
+
+**Remote Controls:**
+Arm and Disarm features for remote control from the web dashboard.
+Speed is throttled to 3 mps, can enable 5 mps speed through proper cautious steps.
+
+
+### What we learned
+
+
+### Blockers and asks
+
+- What we need from Scott: PCB Hat (est 2 weeks)
+- What we need from another track: Nothing yet
+- What we need to figure out ourselves:
+
+### Hours
+
+| Person | Hours this sprint |
+|---|---|
+| Alex | 32 |
+| Saman | 15 |
+| Luke | 25 |
+| Darrin | 23 | 
+
+Honest numbers. A low number with a reason is fine; a made-up number is not.
+
+### Proposed for Sprint 3
+
+1. Dropdown on the dashboard to select which robot to connect to. It can be the "Connect" button in the navbar.
+2. Begin pseudo code for the physical-implementation, and update doc for how its going to fit on the Orin.
+3. Add instructions/guides on how to use the dashboard
+
+### Retro notes
+
+- **Start:** Make sure when you plug in a battery it's actually charging
+- **Stop: pushing straight to `main`** - a couple of docs landed this sprint with no PR, same thing we said we'd stop doing last sprint
+- **Keep: getting the professor to sign off on thresholds in person** - the battery/thermal ranges and the green/yellow/red definitions are real numbers now instead of guesses

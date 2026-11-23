@@ -5,9 +5,9 @@
 
    Sprint 3: test-specific presets and a way to pick exactly
    which /scan indices a student's own test code should read.
-   "Select beams" (in the LiDAR toolbar and the full screen viewer)
-   opens one panel, which moves into the viewer while that shows
-   the LiDAR. Dragging the map always pans; clicking picks: one
+   "Select beams" (in the LiDAR toolbar and the full screen LiDAR
+   pane) opens one panel, which moves into the full screen while
+   that shows the LiDAR. Dragging the map always pans; clicking picks: one
    click for the start beam, a second for the end, with the
    selection following the mouse in between. Esc cancels.
 ========================================================== */
@@ -17,10 +17,10 @@ let pickStart = null;     // first click of a pick, until the second
 
 function renderBeamSelect() {
 
-  const inViewer =
-    typeof viewerMode !== "undefined" && viewerMode && viewerMode !== "camera";
+  const inPane =
+    typeof cockpitPaneShown === "function" && cockpitPaneShown("lidar");
 
-  $(inViewer ? "viewerSelectSlot" : "beamSelectHome")
+  $(inPane ? "paneSelectSlot" : "beamSelectHome")
     .appendChild($("beamSelect"));
 
   $("beamSelect").hidden = !beamSelecting;
@@ -38,7 +38,7 @@ function toggleBeamSelect() {
 }
 
 /* ---- selection geometry ----
-   Pure, so verify_testing.mjs checks it with no DOM/websocket —
+   Pure, so tests/verify_testing.mjs checks it with no DOM/websocket —
    same reasoning as the radar geometry in connection.js. */
 
 // Inverse of polarToCanvas's angle term: a cursor offset from the

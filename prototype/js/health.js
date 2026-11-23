@@ -126,7 +126,9 @@ function subsystemData() {
       else {
 
         vescDetail =
-          "VESC responding normally";
+          vesc.fetMissing
+            ? "VESC responding normally (no FET temperature: this car's vesc_driver needs the temperature patch)"
+            : "VESC responding normally";
       }
     }
   }
@@ -183,37 +185,70 @@ function subsystemData() {
       "/urg_node is not running";
   }
 
+  /* The lidar takes one network connection at a time. A urg_node left
+     over from an earlier run keeps it, so the new driver gets nothing
+     while the lidar still answers ping (spike notes, 2026-09-21). */
+  else if (scanTopic && scanTopic.pubs > 1) {
+
+    lidarHealth = "failed";
+    lidarDetail =
+      `${scanTopic.pubs} lidar drivers are publishing /scan - one is left over ` +
+      "from an earlier run. Stop bringup, run pkill -f urg_node_driver, then " +
+      "start bringup again";
+  }
+
   else if (scanTopic) {
 
     const state =
       classifyTopic(scanTopic);
 
-    if (state === "OK") {
+    /* urg_node grades its own rate against sensors.yaml (40 Hz within
+       5%) and reports it on /diagnostics */
+    const rate = diag["urg_node: Laser Scan topic status"];
+    const rateFresh = rate && Date.now() - rate.receivedAt < 5000;
+    const hz = rateFresh ? numberOr(rate.values["Actual frequency (Hz)"]) : NaN;
+    const lo = rateFresh ? numberOr(rate.values["Minimum acceptable frequency (Hz)"]) : NaN;
+    const hi = rateFresh ? numberOr(rate.values["Maximum acceptable frequency (Hz)"]) : NaN;
 
-      lidarHealth = "healthy";
-      lidarDetail =
-        "Laser scan data publishing";
-    }
+    const network = diag["system: Network"];
+    const pingKey = network &&
+      Object.keys(network.values).find(key => key.indexOf("lidar ") === 0);
+    const answersPing = pingKey && !/NO REPLY/.test(network.values[pingKey]);
 
-    else if (
-      state === "STALE" ||
-      state === "SILENT"
-    ) {
+    if (state === "OK" && Number.isFinite(hz) && (hz < lo || hz > hi)) {
 
       lidarHealth = "degraded";
       lidarDetail =
-        "LiDAR data is stale";
+        `Scanning at ${hz.toFixed(1)} Hz, expected ${lo.toFixed(0)} to ${hi.toFixed(0)} Hz`;
     }
 
-    else if (
-      state === "MISSING" ||
-      state === "NODE_DOWN" ||
-      state === "NOT_ADVERTISED"
-    ) {
+    else if (state === "OK") {
+
+      lidarHealth = "healthy";
+      lidarDetail =
+        Number.isFinite(hz)
+          ? `Laser scan publishing at ${hz.toFixed(1)} Hz`
+          : "Laser scan data publishing";
+    }
+
+    /* #6: a sensor whose data stopped is red, not yellow - the car
+       is driving blind */
+    else {
 
       lidarHealth = "failed";
       lidarDetail =
-        "LiDAR topic unavailable";
+        state === "SILENT"
+          ? "LiDAR is running but has sent no scans"
+          : state === "STALE"
+          ? "LiDAR stopped sending scans"
+          : "LiDAR topic unavailable";
+
+      if (answersPing) {
+        lidarDetail +=
+          ". The lidar answers ping, so the driver cannot connect to it - an " +
+          "old urg_node may hold its only connection. Stop bringup, run " +
+          "pkill -f urg_node_driver, then start bringup again";
+      }
     }
   }
 
@@ -237,9 +272,10 @@ function subsystemData() {
 
   else if (odomWaitingForSteer()) {
 
-    odomHealth = "unknown";
+    /* normal at rest, like no controller connected */
+    odomHealth = "healthy";
     odomDetail =
-      "Waiting for the first steering command - odometry starts once the car is steered";
+      "Idle - odometry starts after the first steering command";
   }
 
   else if (odomTopic) {
@@ -259,9 +295,11 @@ function subsystemData() {
       state === "SILENT"
     ) {
 
-      odomHealth = "degraded";
+      odomHealth = "failed";
       odomDetail =
-        "Odometry data is stale";
+        state === "SILENT"
+          ? "Odometry is running but has sent nothing"
+          : "Odometry stopped sending";
     }
 
     else if (
@@ -293,6 +331,23 @@ function subsystemData() {
       "Camera diagnostic received";
   }
 
+  /* frame rate from camera_http, while the stream is showing (#6) */
+  if (cameraStats && Date.now() - cameraStats.at < 5000) {
+
+    const { fps, last_frame_s: age } = cameraStats;
+
+    if (age !== null && age > CAMERA_NO_FRAME_S) {
+      cameraHealth = "failed";
+      cameraDetail = `No frames for ${Math.round(age)} s`;
+    } else if (fps !== null && fps < CAMERA_MIN_FPS &&
+               healthRank("degraded") > healthRank(cameraHealth)) {
+      cameraHealth = "degraded";
+      cameraDetail = `Streaming at ${fps.toFixed(0)} fps, expected about 30`;
+    } else if (fps !== null && cameraHealth === "healthy") {
+      cameraDetail += ` · ${fps.toFixed(0)} fps`;
+    }
+  }
+
   /* BATTERY */
 
   let batteryHealth = "unknown";
@@ -306,7 +361,7 @@ function subsystemData() {
       batteryHealth = "failed";
 
       batteryDetail =
-        `${vesc.voltage.toFixed(1)} V — stop driving`;
+        `${vesc.voltage.toFixed(1)} V - replace the pack soon`;
     }
 
     else if (
@@ -316,7 +371,7 @@ function subsystemData() {
       batteryHealth = "degraded";
 
       batteryDetail =
-        `${vesc.voltage.toFixed(1)} V — battery low`;
+        `${vesc.voltage.toFixed(1)} V - low, get a spare pack ready`;
     }
 
     else {
@@ -342,7 +397,7 @@ function subsystemData() {
   return [
     {
       id: "controller",
-      icon: "🎮",
+      icon: "gamepad",
       name: "Controller",
       subtitle: "Input",
       source: "/joy",
@@ -352,7 +407,7 @@ function subsystemData() {
 
     {
       id: "vesc",
-      icon: "◉",
+      icon: "zap",
       name: "VESC",
       subtitle: "Motor Controller",
       source: "/vesc_driver_node",
@@ -362,7 +417,7 @@ function subsystemData() {
 
     {
       id: "lidar",
-      icon: "◌",
+      icon: "radar",
       name: "LiDAR",
       subtitle: "Hokuyo URG",
       source: "/urg_node + /scan",
@@ -372,7 +427,7 @@ function subsystemData() {
 
     {
       id: "odometry",
-      icon: "◍",
+      icon: "gauge",
       name: "Odometry",
       subtitle: "Wheel Encoder",
       source: "/vesc_to_odom_node",
@@ -382,7 +437,7 @@ function subsystemData() {
 
     {
       id: "camera",
-      icon: "▣",
+      icon: "camera",
       name: "Camera",
       subtitle: "Intel RealSense",
       source: "system: Camera",
@@ -392,7 +447,7 @@ function subsystemData() {
 
     {
       id: "battery",
-      icon: "ϟ",
+      icon: "battery",
       name: "Battery",
       subtitle: "Vehicle Power",
       source: "/sensors/core",
@@ -402,7 +457,7 @@ function subsystemData() {
 
     {
       id: "control",
-      icon: "⇄",
+      icon: "swap",
       name: "Control Mode",
       subtitle: mux ? mux : "Command Mux",
       source: "/ackermann_mux",
@@ -421,8 +476,15 @@ function renderSubsystems(all) {
   /* Battery has its own card right above; it still feeds the
      overall verdict (renderOverall gets the full list), but a
      table row would only repeat it. */
+  /* problems first: failed, then degraded, then unconfirmed; the
+     order among equals stays the usual one */
   const data =
-    all.filter(item => item.id !== "battery");
+    all
+      .filter(item => item.id !== "battery")
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) =>
+        healthRank(b.item.health) - healthRank(a.item.health) || a.index - b.index)
+      .map(entry => entry.item);
 
   $("subsystemRows").innerHTML =
     data.map(item => {
@@ -434,7 +496,7 @@ function renderSubsystems(all) {
             <div class="subsystem-name">
 
               <div class="subsystem-icon">
-                ${item.icon}
+                ${icon(item.icon)}
               </div>
 
               <div>
@@ -468,6 +530,43 @@ function renderSubsystems(all) {
         </tr>
       `;
     }).join("");
+
+  /* phones: one card per subsystem, in the metric tiles' style. The
+     node is usually named in the details already ("/urg_node is not
+     running"), so it only gets its own line when it is not. */
+  $("subsystemCards").innerHTML =
+    data.map(item => {
+
+      const sourceSaid =
+        item.source.split(/\s*\+\s*/).every(part => item.details.includes(part));
+
+      return `
+        <article class="sub-card ${item.health}">
+          <div class="sub-head">
+            <div class="subsystem-icon">${icon(item.icon)}</div>
+            <div class="sub-name">
+              <div class="subsystem-title">${escapeHtml(item.name)}</div>
+              <span class="subsystem-subtitle">${escapeHtml(item.subtitle)}</span>
+            </div>
+            <span class="health ${item.health}">
+              <span class="health-dot"></span>
+              ${healthLabel(item.health)}
+            </span>
+          </div>
+          <p class="sub-detail">${escapeHtml(item.details)}</p>
+          ${sourceSaid ? "" : `<p class="sub-source">${escapeHtml(item.source)}</p>`}
+        </article>
+      `;
+    }).join("");
+
+  const count = health => data.filter(item => item.health === health).length;
+
+  $("subsystemSummary").textContent =
+    [[count("failed"), "failed"], [count("degraded"), "degraded"],
+     [count("unknown"), "unconfirmed"], [count("healthy"), "healthy"]]
+      .filter(([n]) => n)
+      .map(([n, word]) => `${n} ${word}`)
+      .join(" · ");
 }
 
 /* ==========================================================
@@ -475,6 +574,26 @@ function renderSubsystems(all) {
 ========================================================== */
 
 function renderOverall(data) {
+
+  /* No rosbridge: nothing below is a verdict on the robot, so do
+     not call it FAILED. Say what is actually wrong, and the fix
+     (the hint that used to sit in a separate red strip). */
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+
+    const connecting = ws && ws.readyState === WebSocket.CONNECTING;
+
+    $("statusBanner").dataset.health = "offline";
+    $("overallStatus").textContent = connecting ? "CONNECTING…" : "NOT CONNECTED";
+    $("overallStatus").style.color = "var(--text)";
+    $("overallIcon").style.background = "var(--unknown)";
+    $("overallIcon").innerHTML = connecting ? "…" : window.icon("power");
+    $("overallNote").textContent =
+      $("connHint").textContent ||
+      (connecting
+        ? "Reaching the robot at " + $("wsUrl").value.trim()
+        : "Not talking to the robot — check the address in the top bar and press Connect.");
+    return;
+  }
 
   let worst = "healthy";
 
@@ -521,9 +640,9 @@ function renderOverall(data) {
       ? "var(--failed)"
       : "var(--unknown)";
 
-  icon.textContent =
+  icon.innerHTML =
     worst === "healthy"
-      ? "✓"
+      ? window.icon("check")
       : worst === "failed"
       ? "!"
       : worst === "degraded"
@@ -576,7 +695,7 @@ function renderOverall(data) {
     note.textContent =
       `${unknown} subsystem` +
       (unknown === 1 ? "" : "s") +
-      " not yet confirmed";
+      " not yet confirmed - " + names("unknown");
   }
 
   else {
@@ -595,8 +714,11 @@ function renderStatusFacts(data) {
   const healthy =
     data.filter(item => item.health === "healthy").length;
 
+  /* no robot, no count: "0 / 7 healthy" read like seven failures */
   $("factSubsystems").textContent =
-    `${healthy} / ${data.length} healthy`;
+    ws && ws.readyState === WebSocket.OPEN
+      ? `${healthy} / ${data.length} healthy`
+      : "—";
 
   $("factControl").textContent =
     mux === "teleop"
@@ -606,6 +728,15 @@ function renderStatusFacts(data) {
       : mux === "idle"
       ? "Idle"
       : "—";
+
+  /* autonomous driving: off, standby, or driving (drive.js) */
+  if (typeof autonomousState === "function") {
+    const auto = autonomousState();
+    $("factAuto").textContent = auto.text;
+    $("factAutoBox").dataset.state = auto.state;
+    $("factAutoBox").title = auto.detail || "";
+    $("factAutoStop").hidden = !["on", "standby"].includes(auto.state);
+  }
 
   const up =
     EXPECTED_NODES.filter(name => runningNodes.has(name)).length;

@@ -41,6 +41,7 @@ function render() {
   renderLidar();
   renderRadar();
   renderSelectionReadout();
+  renderLidarTab();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
@@ -68,7 +69,7 @@ function render() {
   /* drive */
 
   renderDrive();
-  renderViewer();
+  renderCockpit();
 }
 
 /* ==========================================================
@@ -117,7 +118,7 @@ $("refreshBtn").onclick = async () => {
    straight onto it, and a reload keeps you where you were.
 ========================================================== */
 
-const TABS = ["overview", "drive", "advanced"];
+const TABS = ["overview", "drive", "advanced", "controller", "lidar"];
 
 function showTab(name) {
 
@@ -143,6 +144,11 @@ function showTab(name) {
   $(name === "drive" ? "driveCamSlot" : "cameraHome")
     .appendChild($("cameraBox"));
 
+  /* the one LiDAR card lives on the Overview, and moves to the
+     LiDAR tab while that shows */
+  $(name === "lidar" ? "lidarSlot" : "lidarHome")
+    .appendChild($("lidarCard"));
+
   TABS.forEach(tab => {
 
     const id = tab[0].toUpperCase() + tab.slice(1);
@@ -150,6 +156,15 @@ function showTab(name) {
     $("panel" + id).hidden = tab !== name;
     $("tab" + id).setAttribute("aria-selected", String(tab === name));
   });
+
+  /* the Controller tab takes /joy at full rate while it shows */
+  if (typeof jpSubscribe === "function") jpSubscribe();
+
+  /* the Drive tab is the driving view (cockpit.js), embedded */
+  if (typeof embedCockpit === "function") {
+    if (name === "drive") embedCockpit();
+    else unembedCockpit();
+  }
 
   history.replaceState(
     null,
@@ -255,7 +270,7 @@ document.querySelectorAll("[data-lidar-view]").forEach(button => {
 
     renderRadar();
     redrawDriveRadar();
-    redrawViewerRadar();
+    redrawPaneRadar();
   };
 });
 
@@ -266,7 +281,7 @@ setLidarView(lidarView);
    zooms around whatever is in the middle of the view. */
 const RANGE_PLOTS = {
   overview: [radarScaleState, renderRadar],
-  viewer: [viewerRadarScale, redrawViewerRadar]
+  pane: [paneRadarScale, redrawPaneRadar]
 };
 
 document.querySelectorAll("[data-range-for]").forEach(group => {
@@ -306,15 +321,21 @@ $("rangeApplyBtn").onclick = () => {
   }
 };
 
+/* typing an address takes the camera off automatic */
 $("cameraConnectBtn").onclick =
-  () => connectCamera($("cameraUrl").value.trim());
+  () => useManualCamera($("cameraUrl").value.trim());
 
 $("cameraUrl").addEventListener("keydown", event => {
 
   if (event.key === "Enter") {
-    connectCamera($("cameraUrl").value.trim());
+    useManualCamera($("cameraUrl").value.trim());
   }
 });
+
+$("cameraAutoBtn").onclick = () => {
+  useAutomaticCamera();
+  $("cameraEdit").open = false;
+};
 
 $("cameraSnapBtn").onclick = takePicture;
 
@@ -341,6 +362,38 @@ $("wsUrl").value =
 $("robotIp").textContent =
   location.hostname || "unknown";
 
+/* Robot dropdown: a car by name fills its address and connects. The
+   address box stays editable; an address that is not one of the
+   cars shows as "Custom address". */
+$("robotPick").innerHTML =
+  ROBOTS.map((robot, i) =>
+    `<option value="${i}">${escapeHtml(robot.name)}</option>`).join("") +
+  '<option value="custom">Other…</option>';
+
+function syncRobotPick() {
+  const url = $("wsUrl").value.trim().replace(/\/+$/, "");
+  const i = ROBOTS.findIndex(robot => robot.url === url);
+  $("robotPick").value = i >= 0 ? String(i) : "custom";
+  $("robotPick").parentElement.title =
+    i >= 0 ? `${ROBOTS[i].name} · ${ROBOTS[i].url}` : "Pick a robot to connect to";
+}
+
+$("robotPick").addEventListener("change", () => {
+
+  if ($("robotPick").value === "custom") {
+    $("wsUrl").focus();
+    $("wsUrl").select();
+    return;
+  }
+
+  $("wsUrl").value = ROBOTS[Number($("robotPick").value)].url;
+  $("connForm").requestSubmit();
+});
+
+$("wsUrl").addEventListener("input", syncRobotPick);
+
+syncRobotPick();
+
 /* Same reasoning as $("wsUrl") above, and the same bug fixed the
    same way: this used to be a hardcoded robot #2 IP
    (192.168.1.202) baked into the HTML, so the camera card was
@@ -348,20 +401,56 @@ $("robotIp").textContent =
    robot #6 (192.168.1.206), 2026-09-23. The browser already
    knows which robot it's talking to; it's whatever host served
    this page. ?video=<url> still overrides it, the same way
-   ?url= overrides rosbridge, for a different robot or port. */
-$("cameraUrl").value =
-  location.protocol.startsWith("http") && location.hostname
-    ? `http://${location.hostname}:8082/camera.mjpg`
-    : "http://localhost:8082/camera.mjpg";
+   ?url= overrides rosbridge, for a different robot or port.
 
+   Now the camera follows rosbridge instead (camera.js): it opens on
+   whichever robot the top bar connects to, so it is right even when
+   the page is served from somewhere else. Until then, one try on the
+   robot the address box points at. */
 const queryVideo =
   new URLSearchParams(location.search).get("video");
 
 if (queryVideo) {
+
   $("cameraUrl").value = queryVideo;
+  useManualCamera(queryVideo);
+
+} else {
+
+  $("cameraUrl").value = cameraUrlFor($("wsUrl").value.trim());
+  connectCamera($("cameraUrl").value, true);
 }
 
-connectCamera($("cameraUrl").value.trim());
+/* Steam Deck: open_dashboard.sh opens the page with ?deck=1. Kiosk mode
+   has no tabs, address bar or close button, so on the Deck the page
+   gets Close buttons ([data-quit], hidden everywhere else).
+
+   window.close() only works on a window Firefox is allowed to let a
+   page close; the Deck needs dom.allow_scripts_to_close_windows set to
+   true once (docs/guides/steam-deck-setup.md). Without it nothing
+   happens, so say how to leave instead of doing nothing. */
+const isDeck = new URLSearchParams(location.search).get("deck") === "1";
+
+function quitDashboard() {
+
+  if (!confirm("Close the dashboard?")) return;
+
+  /* the page-hide handlers would stop the car anyway; do it first */
+  if (typeof driveArmed !== "undefined" && driveArmed) {
+    disarmDrive("closing the dashboard");
+  }
+
+  window.close();
+
+  setTimeout(() => {
+    setDriveNote("Firefox would not close the page. Press the Steam button, then Exit Game.");
+  }, 500);
+}
+
+document.querySelectorAll("[data-quit]").forEach(button => {
+  button.hidden = !isDeck;
+  button.onclick = quitDashboard;
+});
 
 /* A form, so Enter in the address box and the button do the
    same thing. Lives in the top bar: switching robots is one

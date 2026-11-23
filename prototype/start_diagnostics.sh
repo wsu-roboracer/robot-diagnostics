@@ -71,7 +71,39 @@ PIDFILE="$LOGDIR/pids"
 
 
 # --- stop / status ---------------------------------------------------------
-PATTERNS='start_diagnostics.sh|rosbridge_websocket|rosapi_node|bringup_launch.py|http\.server|system_diagnostics\.py|gst-launch-1\.0|camera_http\.py'
+# What a run starts, matched by how each one is launched - never by a bare file
+# name, which `pgrep -f` also finds in `nvim bringup_launch.py`, a grep, or a
+# shell whose command mentions it (and --stop would kill those):
+#   - the launches: `ros2 launch f1tenth_stack bringup_launch.py` and rosbridge's
+#   - rosbridge and rosapi by their installed executables
+#   - the web server only with the flags this script (and bringup) use
+#   - system_diagnostics and camera_http only when python runs them, as .py here
+#     or as the f1tenth_stack console scripts
+#   - bringup's nodes by their ROS arguments: f1tenth_stack's config path, or the
+#     static transform's node name. A node can outlive its launch process, and an
+#     orphaned urg_node holds the lidar's one connection.
+BRINGUP_LAUNCH='ros2 launch f1tenth_stack bringup_launch\.py'
+BRINGUP_NODES='ros-args.*(f1tenth_stack/share/f1tenth_stack/config|__node:=static_baselink_to_laser)'
+PATTERNS="$BRINGUP_LAUNCH|$BRINGUP_NODES|ros2 launch rosbridge_server|lib/(rosbridge_server/rosbridge_websocket|rosapi/rosapi_node)|http\.server [0-9]+ --bind|python3 [^ ]*(system_diagnostics|camera_http)\.py|lib/f1tenth_stack/(system_diagnostics|camera_http)|gst-launch-1\.0 v4l2src"
+
+# Other copies of this script are kept apart from PATTERNS on purpose. They are
+# never swept: a run that is told to stop cleans up after itself, and its
+# cleanup sweeping other copies is what killed the `--stop` that asked it to.
+SCRIPT_PAT='bash [^ ]*start_diagnostics\.sh'
+
+# what a run starts, as "pid command"
+matching(){ pgrep -af "$PATTERNS" 2>/dev/null || true; }
+
+# other copies of this script, as "pid command": never this one, its parent, or
+# a subshell of this one (a subshell carries the script's command line). pgrep
+# runs on its own first, not in a pipeline: bash forks each side of a pipe as a
+# copy of itself before it becomes awk, and pgrep can catch that copy.
+other_runs(){
+  local list
+  list=$(pgrep -af "$SCRIPT_PAT" 2>/dev/null) || true
+  awk -v me="$$" -v pp="${PPID:-0}" -v subsh="$BASHPID" \
+      'NF && $1 != me && $1 != pp && $1 != subsh' <<<"$list"
+}
 
 # kill -0 succeeds on a zombie, so ask for the process state as well
 alive(){ local st; st=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' '); \
@@ -84,8 +116,10 @@ show_status(){
     if alive "$pid"; then ok "$name running (pid $pid)"; found=1
     else info "$name not running"; fi
   done < <(cat "$PIDFILE" 2>/dev/null)
-  local stray
-  stray=$(pgrep -af "$PATTERNS" 2>/dev/null | grep -v "\-\-status\|\-\-stop" || true)
+  local stray runs
+  stray=$(matching)
+  runs=$(other_runs)
+  [ -n "$runs" ] && { echo; info "start_diagnostics.sh runs:"; sed 's/^/      /' <<<"$runs"; found=1; }
   [ -n "$stray" ] && { echo; info "matching processes:"; sed 's/^/      /' <<<"$stray"; found=1; }
   [ "$found" = 0 ] && info "nothing running"
   return 0
@@ -93,37 +127,63 @@ show_status(){
 
 stop_all(){
   echo; echo "stopping…"
-  # 1. anything we recorded, killed by process group
+  # 1. anything we recorded, by process group. INT, as Ctrl+C would: ros2 launch
+  #    then shuts its own nodes down, which TERM to everything at once did not
+  #    leave time for.
   while read -r pid name; do
     [ -n "${pid:-}" ] || continue
     kill -0 "$pid" 2>/dev/null || continue
-    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
-    info "sent TERM to $name (pid $pid)"
+    kill -INT -- "-$pid" 2>/dev/null || kill -INT "$pid" 2>/dev/null
+    info "sent INT to $name (pid $pid)"
   done < <(cat "$PIDFILE" 2>/dev/null)
-  sleep 3
-  # 2. anything that survived, or was left by a run we have no record of.
-  #    NOTE: plain `pkill -f "$PATTERNS"` also matches THIS script's own command
-  #    line and kills it before the cleanup finishes. Exclude self and parent.
+  # rosbridge 2.0.4 does not exit on INT: its ROS side shuts down but the
+  # websocket server keeps port 9090 open, accepting pages and dropping what
+  # they send (F1-WSU-2, 2026-11-04). Nothing to wait for, so TERM it now.
+  pkill -TERM -f "lib/rosbridge_server/rosbridge_websocket" 2>/dev/null || true
+  # 2. --stop from another session: ask each other run to stop. It cleans up
+  #    after itself, the same as Ctrl+C in its own terminal.
+  if [ "$DO_STOP" = 1 ]; then
+    local p
+    for p in $(other_runs | awk '{print $1}'); do
+      kill -TERM "$p" 2>/dev/null && info "asked run $p to stop"
+    done
+  fi
+  # give launches (and, for --stop, the other runs) up to 15 s to stop their
+  # children before forcing anything. A run cleaning up waits only for its own
+  # processes: waiting for other runs too made it and the --stop that asked it
+  # wait on each other, the --stop gave up first, and the page's Restart then
+  # started a new run whose bringup the old run's sweep below killed
+  # (F1-WSU-2, 2026-11-09).
+  for _ in $(seq 1 15); do
+    [ -z "$(matching)" ] && { [ "$DO_STOP" = 0 ] || [ -z "$(other_runs)" ]; } && break
+    sleep 1
+  done
+  # 3. anything that survived, or was left by a run we have no record of.
+  #    PATTERNS never matches this script, so nothing here can kill it.
   sweep(){
     local sig="$1" p
     for p in $(pgrep -f "$PATTERNS" 2>/dev/null); do
-      [ "$p" = "$$" ] && continue
-      [ "$p" = "${PPID:-0}" ] && continue
       kill "-$sig" "$p" 2>/dev/null
     done
   }
   sweep TERM; sleep 2; sweep KILL; sleep 1
+  # --stop: the sweep just removed what kept the other runs waiting (rosbridge
+  # ignores INT and TERM), so they finish their own cleanup in a few seconds.
+  # One still cleaning up after this --stop returns could sweep whatever starts
+  # next, so wait, then kill it and what it started (its log tail).
+  if [ "$DO_STOP" = 1 ]; then
+    for _ in $(seq 1 10); do [ -z "$(other_runs)" ] && break; sleep 1; done
+    for p in $(other_runs | awk '{print $1}'); do
+      pkill -KILL -P "$p" 2>/dev/null
+      kill -KILL "$p" 2>/dev/null && info "run $p did not stop: killed it"
+    done
+  fi
   rm -f "$PIDFILE"
-  # Same self-match problem as sweep() above, but this one shipped with only
-  # half a fix: `grep -v -- --stop` hid the --stop invocation's own match
-  # (its command line contains "--stop"), but Ctrl+C runs this same function
-  # from a script instance with no "--stop" in its args, so THAT one always
-  # matched itself and printed "still running" on a completely clean stop.
-  # Reported on robot #6, 2026-09-23. Exclude by PID like sweep() does,
-  # which covers both callers instead of just one.
+  # Only what a run starts. Copies of this script are never killed here, and
+  # checking for them listed this script's own process as "still running" on a
+  # clean stop (first reported on robot #6, 2026-09-23); --status shows them.
   local left
-  left=$(pgrep -af "$PATTERNS" 2>/dev/null |
-    awk -v me="$$" -v pp="${PPID:-0}" '$1 != me && $1 != pp' || true)
+  left=$(matching)
   if [ -n "$left" ]; then bad "still running:"; sed 's/^/      /' <<<"$left"
   else ok "all stopped"; fi
 }
@@ -132,6 +192,22 @@ if [ "$DO_STATUS" = 1 ]; then echo; show_status; echo; trap - EXIT; exit 0; fi
 if [ "$DO_STOP"  = 1 ]; then stop_all;        echo; trap - EXIT; exit 0; fi
 
 command -v ros2 >/dev/null || { bad "ros2 not on PATH - is ROS installed?"; exit 1; }
+
+# Two bringups fight over /dev/input/event* and the VESC serial port. The visible
+# symptom is "the controller will not connect", which nobody traces back to here,
+# so refuse rather than warn. Checked BEFORE the cleanup trap is armed and the
+# pid file reset: refusing used to run the trap, which stopped the bringup that
+# was already running and orphaned its nodes. Bringup's nodes count too, since
+# they can outlive their launch process.
+if [ "$WANT_BRINGUP" = 1 ] && pgrep -f "$BRINGUP_LAUNCH|$BRINGUP_NODES" >/dev/null 2>&1; then
+  bad "a bringup (or nodes left over from one) is already running:"
+  pgrep -af "$BRINGUP_LAUNCH|$BRINGUP_NODES" | cut -c1-100 | sed 's/^/      /'
+  echo
+  bad "stop it first:  $0 --stop"
+  bad "or attach to it: $0 --no-bringup"
+  echo
+  exit 1
+fi
 
 # --- child management ------------------------------------------------------
 PIDS=() NAMES=()
@@ -142,7 +218,14 @@ PIDS=() NAMES=()
 # then fought over the joystick, and the symptom was "the controller will not
 # connect". Use the one thorough path for both. Costs Ctrl+C a few extra seconds.
 cleanup(){
-  trap - INT TERM HUP EXIT
+  # A second Ctrl+C while stopping used to kill this script before the final
+  # sweep, leaving whatever had not exited yet - a broken rosbridge, twice on
+  # F1-WSU-2. Ignore them until the stop is done.
+  trap '' INT TERM HUP
+  trap - EXIT
+  # the log tail is not in PIDFILE, and only a Ctrl+C reaches it (it shares
+  # the terminal's job); a --stop from elsewhere left one behind each time
+  [ -n "${TAIL_PID:-}" ] && kill "$TAIL_PID" 2>/dev/null
   stop_all
   info "logs kept in $LOGDIR"
   exit 0
@@ -161,6 +244,22 @@ start(){  # start <name> <logfile> <cmd...>
 }
 
 port_open(){ (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# A rosbridge that answers a real ROS call, not just one holding the port.
+rosbridge_answers(){
+  python3 - "$SERVE_DIR/tools" <<'PY' 2>/dev/null
+import json, socket, sys, time
+sys.path.insert(0, sys.argv[1]); import rosbridge_check as rc
+s = socket.create_connection(("127.0.0.1", 9090), timeout=3)
+f = rc.Frames(s, rc.handshake(s, "127.0.0.1", 9090))
+rc.send(s, json.dumps({"op": "call_service", "service": "/rosapi/get_time", "id": "alive"}))
+end = time.time() + 3
+while time.time() < end:
+    for m in map(json.loads, f.poll(0.3)):
+        if m.get("id") == "alive":
+            sys.exit(0 if m.get("result") else 1)
+sys.exit(1)
+PY
+}
 wait_for(){  # wait_for <seconds> <test-cmd...>
   local n="$1"; shift
   for _ in $(seq 1 "$n"); do "$@" && return 0; sleep 1; done
@@ -174,19 +273,6 @@ echo "F1TENTH diagnostics  (ROS_DOMAIN_ID=$ROS_DOMAIN_ID)"
 echo
 
 # --- 1. bringup ------------------------------------------------------------
-# Two bringups fight over /dev/input/event* and the VESC serial port. The visible
-# symptom is "the controller will not connect", which nobody traces back to here,
-# so refuse rather than warn.
-if [ "$WANT_BRINGUP" = 1 ] && pgrep -f bringup_launch.py >/dev/null 2>&1; then
-  bad "a bringup is already running:"
-  pgrep -af bringup_launch.py | cut -c1-100 | sed 's/^/      /'
-  echo
-  bad "stop it first:  $0 --stop"
-  bad "or attach to it: $0 --no-bringup"
-  echo
-  exit 1
-fi
-
 if [ "$WANT_BRINGUP" = 1 ]; then
   start bringup "$LOGDIR/bringup.log" ros2 launch f1tenth_stack bringup_launch.py
   if wait_for 30 bash -c 'ros2 node list 2>/dev/null | grep -q urg_node'; then
@@ -232,8 +318,16 @@ fi
 
 # --- 2. rosbridge ----------------------------------------------------------
 if [ "$WANT_BRIDGE" = 1 ]; then
+  if port_open 9090 && ! rosbridge_answers; then
+    bad "something holds 9090 but does not answer ROS calls (a rosbridge left broken by an earlier stop) - replacing it"
+    pkill -TERM -f "lib/rosbridge_server/rosbridge_websocket|ros2 launch rosbridge_server" 2>/dev/null || true
+    sleep 2
+    pkill -KILL -f "lib/rosbridge_server/rosbridge_websocket|ros2 launch rosbridge_server" 2>/dev/null || true
+    wait_for 5 bash -c '! (exec 3<>/dev/tcp/127.0.0.1/9090) 2>/dev/null' || true
+  fi
   if port_open 9090; then
-    ok "rosbridge already listening on 9090"
+    if rosbridge_answers; then ok "rosbridge already listening on 9090, and answering"
+    else bad "9090 is held by something that is not a working rosbridge - the dashboard will not work until it is freed"; fi
   else
     start rosbridge "$LOGDIR/rosbridge.log" \
       ros2 launch rosbridge_server rosbridge_websocket_launch.xml
@@ -310,7 +404,8 @@ echo
 # --- hold, showing bringup output ------------------------------------------
 if [ "$WANT_BRINGUP" = 1 ] && [ -f "$LOGDIR/bringup.log" ]; then
   tail -n 0 -f "$LOGDIR/bringup.log" &
-  PIDS+=($!); NAMES+=(tail)
+  TAIL_PID=$!
+  PIDS+=("$TAIL_PID"); NAMES+=(tail)
 fi
 while true; do
   for i in "${!PIDS[@]}"; do

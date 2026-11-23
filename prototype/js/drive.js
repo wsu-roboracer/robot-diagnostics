@@ -15,8 +15,8 @@
       stops the car: ackermann_mux forwards message by message and
       sends no zero of its own when an input goes quiet (see
       tools/estop_capture.py). If the link dies mid-drive, no zero
-      arrives and the motor holds the last command until the VESC's
-      own command timeout (~1 s, unconfirmed).
+      arrives from here; system_diagnostics.py's drive watchdog sends
+      the zeros instead, 0.3 s after /drive goes quiet.
    2. Priority. The physical joystick is the mux's higher-priority
       input, so holding its deadman always overrides this page.
    3. Disarm on anything unexpected: STOP / Space / Esc, leaving
@@ -31,26 +31,77 @@
 const DRIVE_TOPIC = "/drive";
 const DRIVE_TYPE = "ackermann_msgs/msg/AckermannDriveStamped";
 
-const DRIVE_HZ = 20;
+/* 50 commands a second while held, about the physical controller's
+   own rate (/joy measured at ~48 Hz). It was 20: up to 50 ms between
+   a thumb moving and the car hearing it, and visibly coarser steps. */
+const DRIVE_HZ = 50;
 
-/* Speed ramps rather than jumps, so a key press or a flick of
-   the pad does not ask the VESC for a step change. Releasing is
-   NOT ramped — stop is always immediate. */
-const DRIVE_ACCEL = 2.0;        // m/s per second
-const STEER_RATE = 2.5;         // rad per second
+/* An input change (a key, a press, a drag) sends at once instead of
+   waiting for the next tick - a release is a stop, and it should not
+   wait. Pointer moves come faster than any useful rate, so at most one
+   extra command per this many ms. */
+const DRIVE_NOW_MIN_MS = 10;
+
+/* Ramps. The keys are all or nothing, so their speed builds up rather
+   than asking the VESC for a jump from 0 to full in one message. The
+   pad and the thumb sticks are proportional, like the controller's
+   stick: your thumb is the ramp, and the page follows it almost at
+   once, only smoothing out jitter - the controller goes through no
+   ramp at all. Releasing is never ramped: stop is always immediate.
+
+   Was 5 m/s² and 2.5 rad/s for everything: 0.57 s to full speed and
+   0.13 s to full steering even on the pad, which read as lag next to
+   the controller. */
+const KEY_ACCEL = 8.0;          // m/s per second: 3 m/s in 0.38 s
+const KEY_STEER_RATE = 8.0;     // rad per second: full lock in about 40 ms
+const PAD_ACCEL = 20.0;         // m/s per second: 3 m/s in 0.15 s
+const PAD_STEER_RATE = 20.0;    // rad per second: full lock in about 17 ms
 
 /* zero-speed commands sent after release, so the last thing the
    mux saw is "stop" rather than whatever was held */
 const STOP_BURST = 5;
 
+/* Gamepad sticks (Steam Deck, or any pad the browser maps as
+   "standard"): left stick up/down is speed, right stick left/right is
+   steering. Only standard-mapped pads are read, so the axis numbers
+   below mean what they say; B stops. Like the on-screen pad, the stick
+   is proportional and deflecting it is the dead-man: centre it and the
+   car stops. */
+const STICK_DEADZONE = 0.15;
+const STICK_AXIS_SPEED = 1;     // left stick, vertical
+const STICK_AXIS_STEER = 2;     // right stick, horizontal
+const STICK_BTN_STOP = 1;       // B
+
 let driveArmed = false;
+
+/* An autonomous run from this page: drive at a set speed and steering with
+   nothing held, until stopped or the time is up - what
+   `ros2 topic pub /drive ... -r 10` does on the car, but from here, so it
+   ends with the page (the robot's drive watchdog stops the car 0.3 s after
+   /drive goes quiet). Every disarm ends it. */
+const autoRun = { on: false, until: 0, startedAt: 0, byR1: false };
+
+/* Hold R1 to run: R1 on the controller is the run's deadman. It has to
+   stay down half a second before the car moves, so a tap - or an R1 that
+   flickers by itself, as one of the pads does - cannot start it. Any
+   reading of R1 up stops the car at once, and so does /joy going quiet.
+   An R1 that has been flickering in the last 2 s cannot start it either. */
+const R1_HOLD_MS = 500;
+const R1_FRESH_MS = 250;        // /joy runs at ~48 Hz while this mode has it at full rate
+let r1Since = 0;                // when R1 went down and stayed down; 0 while up
+let r1Tried = false;            // this hold has already tried to start
+let r1Last = null;              // the tick's last r1Input(), for the panel
 let driveSocket = null;
 let padHeld = false;
+let stickHeld = false;
+let stickKnobShown = false;
+let stickStatus = "";
 let padVec = { x: 0, y: 0 };
 let cmdSpeed = 0;
 let cmdSteer = 0;
 let stopBurst = 0;
 let lastDriveTick = performance.now();
+let driveFrame = DASHBOARD_MANUAL_FRAME;   // what the next command is: by hand, or a run
 
 /* When this page last sent a /drive command, and when it last stopped
    advertising — so commands and publishers that are NOT ours can be
@@ -95,6 +146,12 @@ function limitSteer() {
 
 function publishDrive(speed, steer) {
 
+  /* never send the car a number that is not one: anything odd is a stop */
+  if (!Number.isFinite(speed) || !Number.isFinite(steer)) {
+    speed = 0;
+    steer = 0;
+  }
+
   const now = Date.now();
 
   lastOwnSend = performance.now();
@@ -108,7 +165,7 @@ function publishDrive(speed, steer) {
           sec: Math.floor(now / 1000),
           nanosec: (now % 1000) * 1e6
         },
-        frame_id: "base_link"
+        frame_id: driveFrame
       },
       drive: {
         steering_angle: steer,
@@ -153,11 +210,20 @@ function armDrive() {
   driveArmed = true;
   driveSocket = ws;
 
-  setDriveNote("Armed. Hold the pad or a drive key to move.");
+  setDriveNote("Armed. Hold the pad, a drive key or a stick to move.");
   renderDriveControls();
 }
 
 function disarmDrive(reason) {
+
+  /* any disarm ends an autonomous run */
+  const endedRun = autoRun.on;
+
+  if (autoRun.on) {
+    autoRun.on = false;
+    autoRun.byR1 = false;
+    autoRunNote = reason ? "Autonomous run ended - " + reason + "." : "Autonomous run ended.";
+  }
 
   const wasLive =
     driveArmed || cmdSpeed !== 0 || cmdSteer !== 0;
@@ -175,6 +241,7 @@ function disarmDrive(reason) {
   driveArmed = false;
   driveSocket = null;
   padHeld = false;
+  stickHeld = false;
   padVec = { x: 0, y: 0 };
   driveKeys.clear();
   cmdSpeed = 0;
@@ -188,13 +255,14 @@ function disarmDrive(reason) {
   }
 
   renderDriveControls();
+  if (endedRun) renderAutoPanel();
 }
 
 function setDriveNote(text) {
   $("driveNote").textContent = text;
 }
 
-/* ---------- the 20 Hz loop ---------- */
+/* ---------- the 50 Hz loop ---------- */
 
 function towards(current, target, maxStep) {
 
@@ -210,6 +278,45 @@ function keyAxis(positive, negative) {
   return (has(positive) ? 1 : 0) - (has(negative) ? 1 : 0);
 }
 
+/* Rescale so the stick starts from 0 at the edge of the dead zone
+   rather than jumping to 0.15. */
+function stickDeadzone(value) {
+
+  if (!Number.isFinite(value) || Math.abs(value) < STICK_DEADZONE) return 0;
+
+  return Math.sign(value) * (Math.abs(value) - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+}
+
+/* x and y follow the on-screen pad: y grows downward, so forward is
+   negative. A pad that unplugs reads as centred, which is a stop. */
+function readSticks() {
+
+  const pads = navigator.getGamepads
+    ? [...navigator.getGamepads()].filter(p => p && p.connected)
+    : [];
+
+  const pad = pads.find(p => p.mapping === "standard");
+
+  /* what the page can see, shown in the drive note while armed: a
+     pad Firefox cannot see or map is otherwise a silent failure */
+  const status = pad
+    ? "Gamepad ready: " + pad.id
+    : pads.length
+    ? "Gamepad found but not mapped as standard (" + pads[0].id + ") - sticks off"
+    : "No gamepad detected - press a button on it. Sticks off";
+
+  if (!pad) return { x: 0, y: 0, stop: false, status };
+
+  const stop = pad.buttons[STICK_BTN_STOP];
+
+  return {
+    x: stickDeadzone(pad.axes[STICK_AXIS_STEER]),
+    y: stickDeadzone(pad.axes[STICK_AXIS_SPEED]),
+    stop: Boolean(stop && stop.pressed),
+    status
+  };
+}
+
 function driveTick() {
 
   const now = performance.now();
@@ -222,11 +329,75 @@ function driveTick() {
   }
 
   if (driveArmed && estopActive()) {
-    disarmDrive("the emergency stop is on");
+    disarmDrive(estopObstacle() || "the emergency stop is on");
   }
+
+  /* gamepad sticks are only read while armed */
+  const stick = driveArmed
+    ? readSticks()
+    : { x: 0, y: 0, stop: false, status: "" };
+
+  if (stick.stop) disarmDrive("stop pressed on the controller");
+
+  if (driveArmed && stick.status !== stickStatus) {
+    setDriveNote("Armed. " + stick.status);
+  }
+
+  stickStatus = driveArmed ? stick.status : "";
+
+  stickHeld = driveArmed && (stick.x !== 0 || stick.y !== 0);
 
   let targetSpeed = 0;
   let targetSteer = 0;
+
+  /* a controller on this device (a Steam Deck), through the Controller
+     tab's mapping: the car's own layout - hold L1, left stick speed, right
+     stick steer, B stops and disarms (controller.js deckDriveInput). The
+     sticks above drive a standard-mapped pad without L1; this also covers a
+     pad that is not mapped as standard, and gives R1 to Hold R1 to run. */
+  const deck = typeof deckDriveInput === "function" ? deckDriveInput() : null;
+  let deckActive = false;
+  let autoActive = false;
+
+  /* the time is up */
+  if (autoRun.on && autoRun.until && now >= autoRun.until) {
+    autoRun.on = false;
+    autoRunNote = "Autonomous run finished: the time was up.";
+    disarmDrive("the autonomous run's time was up");
+  }
+
+  if (deck && deck.stop && driveArmed) {
+    disarmDrive("stop pressed on the controller");
+  }
+
+  /* a controller on the car holds the mux until R1 is held (joy_teleop's
+     default command sends zero speed with every /joy message), so a run
+     that needs nothing held cannot drive: end it and say why */
+  if (autoRun.on && !autoRun.byR1 && padOnCar()) {
+    endR1Run("a controller connected to the car, so the run needs R1 held");
+  }
+
+  /* hold R1 to run, let go to stop */
+  const r1 = r1Enabled() ? r1Input(deck) : null;
+  r1Last = r1;
+
+  if (!r1 || !r1.down) {
+    r1Since = 0;
+    r1Tried = false;
+    $("autoStart").classList.remove("r1-hold");
+    if (autoRun.on && autoRun.byR1) endR1Run(r1 ? "R1 let go" : "Hold R1 to run switched off");
+  } else {
+    if (!r1Since) {
+      r1Since = now;
+      $("autoStart").classList.toggle("r1-hold", !autoRun.on && !r1Tried);
+    }
+    if (!autoRun.on && !r1Tried && now - r1Since >= R1_HOLD_MS &&
+        driveTabVisible() && !document.hidden) {
+      r1Tried = true;
+      $("autoStart").classList.remove("r1-hold");
+      startAutoRun(true);
+    }
+  }
 
   if (padHeld) {
 
@@ -235,20 +406,75 @@ function driveTick() {
     targetSpeed = -padVec.y * limitSpeed();
     targetSteer = -padVec.x * limitSteer();
 
+  } else if (stickHeld) {
+
+    targetSpeed = -stick.y * limitSpeed();
+    targetSteer = -stick.x * limitSteer();
+
   } else if (driveKeys.size) {
 
     targetSpeed = keyAxis(KEY_FWD, KEY_BACK) * limitSpeed();
     targetSteer = keyAxis(KEY_LEFT, KEY_RIGHT) * limitSteer();
+
+  } else if (deck && deck.held && driveArmed) {
+
+    /* left and up read positive, as on the pad: up is forward, left is
+       a positive (left) steering angle */
+    targetSpeed = deckStick(deck.y) * limitSpeed();
+    targetSteer = deckStick(deck.x) * limitSteer();
+    deckActive = true;
+
+  } else if (autoRun.on && driveArmed) {
+
+    /* the set speed and steering, within the limits; the pad, the keys or
+       a controller held take over while they are held */
+    targetSpeed = autoSpeed();
+    targetSteer = Math.max(-limitSteer(), Math.min(limitSteer(), parseFloat($("autoSteer").value) || 0));
+    autoActive = true;
+
+    /* something ahead on the LiDAR: turn away from it instead */
+    avoidNow = null;
+    if ($("autoAvoid").checked && scanStats && now - scanStats.at < AVOID_SCAN_MAX_AGE_MS) {
+      const turn = lidarAvoid(lastScan, targetSpeed, limitSteer(), avoidState);
+      if (turn.active) {
+        targetSteer = turn.steer;
+        avoidNow = turn;
+      }
+    } else {
+      avoidState.dir = 0;
+    }
   }
 
+  /* mirror the sticks on the on-screen knob, unless a finger has it */
+  if (stickHeld && !padHeld) {
+
+    const length = Math.max(1, Math.hypot(stick.x, stick.y));
+
+    placeKnob(stick.x / length, stick.y / length);
+    stickKnobShown = true;
+
+  } else if (stickKnobShown) {
+
+    if (!padHeld) placeKnob(0, 0);
+    stickKnobShown = false;
+  }
+
+  /* the pad, the sticks and a controller here are all proportional; an
+     autonomous run starts gently, like the keys */
+  const proportional = padHeld || stickHeld || deckActive;
+
   const active =
-    driveArmed && (padHeld || driveKeys.size > 0);
+    driveArmed && (proportional || driveKeys.size > 0 || autoActive);
 
   if (active) {
 
-    cmdSpeed = towards(cmdSpeed, targetSpeed, DRIVE_ACCEL * dt);
-    cmdSteer = towards(cmdSteer, targetSteer, STEER_RATE * dt);
+    const accel = proportional ? PAD_ACCEL : KEY_ACCEL;
+    const steerRate = proportional ? PAD_STEER_RATE : KEY_STEER_RATE;
 
+    cmdSpeed = towards(cmdSpeed, targetSpeed, accel * dt);
+    cmdSteer = towards(cmdSteer, targetSteer, steerRate * dt);
+
+    driveFrame = autoActive ? DASHBOARD_AUTO_FRAME : DASHBOARD_MANUAL_FRAME;
     publishDrive(cmdSpeed, cmdSteer);
 
     stopBurst = STOP_BURST;
@@ -265,6 +491,20 @@ function driveTick() {
   }
 
   renderDriveReadout(active);
+}
+
+/* A controller stick: a dead zone, so a stick resting a little off
+   centre does not creep the car, then the full range after it. */
+const DECK_DEAD_ZONE = 0.1;
+
+function deckStick(v) {
+  const a = Math.abs(v);
+  return a < DECK_DEAD_ZONE ? 0 : Math.sign(v) * Math.min(1, (a - DECK_DEAD_ZONE) / (1 - DECK_DEAD_ZONE));
+}
+
+/* An input just changed: send now rather than at the next tick. */
+function driveNow() {
+  if (performance.now() - lastDriveTick >= DRIVE_NOW_MIN_MS) driveTick();
 }
 
 /* ---------- rendering ---------- */
@@ -300,7 +540,7 @@ function renderDriveReadout(active) {
 
   $("drivePad").classList.toggle("held", padHeld && driveArmed);
 
-  $("cmdSpeed").textContent = cmdSpeed.toFixed(2) + " m/s";
+  $("cmdSpeed").textContent = speedText(cmdSpeed);
   $("cmdSteer").textContent =
     Math.round(cmdSteer * 180 / Math.PI) + "°" +
     (cmdSteer > 0.01 ? " left" : cmdSteer < -0.01 ? " right" : "");
@@ -429,10 +669,10 @@ function renderDrive() {
     performance.now() - robotSpeedAt < 2000;
 
   $("measSpeed").textContent =
-    fresh ? robotSpeedMps.toFixed(2) + " m/s" : "—";
+    fresh ? speedText(robotSpeedMps) : "—";
 
-  $("hudBattery").textContent =
-    "🔋 " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
+  $("hudBattery").innerHTML =
+    icon("battery") + " " + (vesc ? vesc.voltage.toFixed(1) + " V" : "--.- V");
 
   const rows = driveVitals();
 
@@ -511,6 +751,7 @@ $("drivePad").addEventListener("pointerdown", event => {
   padVec = padVector(event);
 
   placeKnob(padVec.x, padVec.y);
+  driveNow();
 });
 
 $("drivePad").addEventListener("pointermove", event => {
@@ -520,15 +761,19 @@ $("drivePad").addEventListener("pointermove", event => {
   padVec = padVector(event);
 
   placeKnob(padVec.x, padVec.y);
+  driveNow();
 });
 
 ["pointerup", "pointercancel", "lostpointercapture"].forEach(type =>
   $("drivePad").addEventListener(type, () => {
 
+    const was = padHeld;
+
     padHeld = false;
     padVec = { x: 0, y: 0 };
 
     placeKnob(0, 0);
+    if (was) driveNow();
   })
 );
 
@@ -561,12 +806,17 @@ window.addEventListener("keydown", event => {
 
   if (driveArmed && DRIVE_KEYS.has(key)) {
     event.preventDefault();
-    driveKeys.add(key);
+
+    /* the browser repeats a held key; only the first press is news */
+    if (!driveKeys.has(key)) {
+      driveKeys.add(key);
+      driveNow();
+    }
   }
 });
 
 window.addEventListener("keyup", event => {
-  driveKeys.delete(event.key.toLowerCase());
+  if (driveKeys.delete(event.key.toLowerCase())) driveNow();
 });
 
 /* ---------- everything that must stop the car ---------- */
@@ -585,8 +835,7 @@ window.addEventListener("pagehide", () => {
 
 $("stopBtn").onclick = () => disarmDrive("stop pressed");
 
-$("driveCamConnect").onclick =
-  () => connectCamera($("cameraUrl").value.trim());
+$("driveCamConnect").onclick = reconnectCamera;
 
 $("armBtn").onclick = () => {
 
@@ -623,24 +872,432 @@ function foreignDriveActive() {
 
   const now = performance.now();
 
-  return now - topic.last < 1000 && topic.last - lastOwnSend > 400;
+  /* the robot's drive watchdog stopping the car is not someone driving */
+  return now - topic.last < 1000 && topic.last - lastOwnSend > 400 &&
+    topic.last - lastWatchdogStop > 50;
 }
 
 function drivePublishers() {
 
   const topic = topics.get(DRIVE_TOPIC);
-  const names = (topic && topic.publishers) || [];
+
+  /* rosapi's list, plus the car's own (system_diagnostics reads the ROS
+     graph directly, where a `ros2 topic pub` - a hidden node - counts) */
+  const watchdog = diag["system: Drive watchdog"];
+  const fromCar = String((watchdog && watchdog.values && watchdog.values.publishers) || "")
+    .split(",").map(n => n.trim()).filter(n => n && n !== "none");
+  const names = [...new Set([...((topic && topic.publishers) || []), ...fromCar])];
 
   return {
     /* every web dashboard publishes through the rosbridge node */
     web: names.some(name => /rosbridge/.test(name)),
-    autonomous: names.filter(name => !/rosbridge/.test(name))
+    /* system_diagnostics publishes /drive only for the watchdog's zeros */
+    autonomous: names.filter(name => !/rosbridge|system_diagnostics/.test(name))
   };
 }
 
-/* One answer to "who has the car right now?", most urgent first,
-   plus the extras that matter: whether there is a physical backup
-   stop, and warnings only when something is actually going on. */
+/* Is autonomous driving on? From who publishes /drive (rosapi, every
+   5 s) and whether commands are arriving (this page's own subscription):
+
+     on       a node that is neither a dashboard (they all publish through
+              rosbridge) nor the robot's watchdog is sending commands now
+     standby  such a node is up, ready to publish /drive, but quiet
+     off      nothing autonomous is running
+
+   The mux's own "navigation unmasked" is not enough on its own: every
+   dashboard drives through that same input. */
+function autonomousState() {
+
+  if (!socketOpen()) return { state: "unknown", nodes: [], text: "—" };
+
+  if (autoRun.on && driveArmed) {
+    return { state: "on", mine: true, nodes: [], text: "Driving",
+             detail: autoRun.byR1
+               ? "This page's autonomous run is driving the car while R1 is held. Letting go of R1, or Stop, ends it."
+               : "This page's autonomous run is driving the car. Stop ends it." };
+  }
+
+  const pubs = drivePublishers();
+  const nodes = pubs.autonomous;
+
+  if (!nodes.length) {
+    return { state: "off", nodes, text: "Off",
+             detail: "Nothing autonomous is publishing /drive." };
+  }
+
+  const list = nodes.join(", ");
+
+  if (foreignDriveActive() && !(pubs.web && !driveArmed && performance.now() - lastOwnUnadvertise > 15000)) {
+    return { state: "on", nodes, text: "Driving",
+             detail: `${list} is driving the car through /drive. Holding L1 on the controller overrides it; Emergency stop stops it.` };
+  }
+
+  return { state: "standby", nodes, text: "Standby",
+           detail: `${list} is running and can publish /drive, but is not sending commands now.` };
+}
+
+/* ---------- autonomous: run it from here, stop it from here ---------- */
+
+let autoRunNote = "";
+
+/* LiDAR steer-away for the run (js/avoid.js). A scan older than this is
+   not trusted, so a dead LiDAR means no steering from it. */
+const AVOID_SCAN_MAX_AGE_MS = 500;
+const avoidState = { dir: 0 };
+let avoidNow = null;          // the last tick's lidarAvoid() result while turning, else null
+
+/* byR1: started by holding R1, which then runs it with no time limit -
+   the hold is the limit */
+function startAutoRun(byR1 = false) {
+
+  if (!driveArmed) {
+    if (!$("driveConfirm").checked) {
+      const note = byR1 ? "Tick the safety box first, then hold R1 again."
+                        : "Tick the safety box first, then start.";
+      setDriveNote(note);
+      autoRunNote = note;
+      if (typeof setCockpitNote === "function") setCockpitNote(note);
+      return;
+    }
+    armDrive();
+    if (!driveArmed) {                 // armDrive said why
+      if (byR1) autoRunNote = $("driveNote").textContent;
+      return;
+    }
+  }
+
+  const secs = byR1 ? 0 : parseInt($("autoFor").value, 10) || 0;
+
+  autoRun.on = true;
+  autoRun.byR1 = byR1;
+  autoRun.startedAt = performance.now();
+  autoRun.until = secs ? autoRun.startedAt + secs * 1000 : 0;
+  autoRunNote = "";
+  setDriveNote(byR1
+    ? "Autonomous run: R1 held. Let go of R1 to stop."
+    : "Autonomous run started. STOP, Space or Stop on the indicator ends it.");
+  if (!byR1) driveNow();               // R1 starts it from inside the tick
+  renderAutoPanel();                   // the button answers now, not at the next redraw
+}
+
+/* R1 let go: stop, but stay armed so holding R1 again runs again. The
+   tick this is called from sends the zeros. */
+function endR1Run(why) {
+  autoRun.on = false;
+  autoRun.byR1 = false;
+  autoRunNote = "Stopped: " + why + ".";
+  setDriveNote("Stopped - " + why + ". Still armed: hold R1 to run again.");
+  renderAutoPanel();
+}
+
+/* the run's speed: Full speed is the Max speed limit, forward; otherwise
+   the slider, within the limit */
+function autoSpeed() {
+  const max = limitSpeed();
+  if ($("autoFull").checked) return max;
+  return Math.max(-max, Math.min(max, parseFloat($("autoSpeed").value) || 0));
+}
+
+/* Hold R1 to run: what you chose, unless a controller is connected to the
+   car - then it is on, whatever you chose. With a controller connected,
+   joy_teleop's default command sends zero speed on /teleop with every /joy
+   message, and the mux gives /teleop priority over /drive, so the car takes
+   /drive only while R1 (the autonomous deadman) is held. */
+let autoR1Choice = true;       // on by default, and again after every reload
+
+function syncAutoR1() {
+  const forced = padOnCar();
+  const box = $("autoR1");
+  const want = forced || autoR1Choice;
+  if (box.checked !== want) box.checked = want;
+  box.disabled = forced;
+  $("autoR1Sub").textContent = forced
+    ? "On while a controller is connected to the car: it holds the car still until R1 is held."
+    : "Hold R1 on the controller for half a second to start; let go to stop.";
+}
+
+/* Hold R1 to run: on in the Autonomous run mode only */
+function r1Enabled() {
+  return $("autoR1").checked && driveMode === "auto";
+}
+
+/* for controller.js: /joy at full rate while R1 can start or stop a run */
+function r1WantsJoy() {
+  return r1Enabled() && driveTabVisible();
+}
+
+/* R1 now: from a controller on this device (the Steam Deck), or the car's
+   pad through /joy, read with the Controller tab's mapping. A flickering
+   R1 counts as up: it may stop a run but never start one. */
+function r1Input(deck) {
+
+  if (deck && deck.r1 !== undefined) {
+    return { down: deck.r1 && !deck.r1Flicker, flicker: deck.r1Flicker, source: "deck" };
+  }
+
+  const fresh = typeof jpMsg !== "undefined" && jpMsg && performance.now() - jpAt <= R1_FRESH_MS;
+  const i = typeof jpMaps !== "undefined" ? jpMaps.ps4.buttons.r1 : JOY_R1;
+
+  if (!fresh || i === null || i === undefined) return { down: false, flicker: false, source: fresh ? "ps4" : null };
+
+  const flicker = jpUnsettled("ps4", i);
+
+  return { down: (jpMsg.buttons || [])[i] === 1 && !flicker, flicker, source: "ps4" };
+}
+
+function stopAutoRun(reason = "stopped") {
+  if (!autoRun.on) return;
+  disarmDrive(reason);
+}
+
+/* the Stop next to the Autonomous indicator: this page's run, or whatever
+   is driving through /drive on the car (system_diagnostics stops a
+   `ros2 topic pub` and sends zero speed) */
+async function stopAutonomous() {
+
+  if (autoRun.on) {
+    stopAutoRun("Stop pressed");
+    toast("Autonomous run stopped.");
+    return;
+  }
+
+  try {
+    const result = await call(STOP_AUTO_SERVICE);
+    toast(result.message || "Stopped.", result.success ? "ok" : "warn");
+  } catch (error) {
+    toast("The car could not be asked to stop it (" + error.message + "). " +
+          "Use Emergency stop.", "bad");
+  }
+}
+
+let toastTimer = null;
+
+function toast(text, tone = "ok") {
+  const box = $("toast");
+  box.textContent = text;
+  box.dataset.tone = tone;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 7000);
+}
+
+/* the panel: limits follow Max speed / Max steering; the button and the
+   status follow the run */
+function renderAutoPanel() {
+
+  const speed = $("autoSpeed");
+  const steer = $("autoSteer");
+  const maxV = limitSpeed();
+  const maxS = limitSteer();
+
+  if (+speed.max !== maxV) { speed.max = maxV; speed.min = -maxV; }
+  if (+steer.max !== maxS) { steer.max = maxS; steer.min = -maxS; }
+
+  const full = $("autoFull").checked;
+
+  /* full speed: the slider sits at the limit and is not in charge */
+  if (full && +speed.value !== maxV) speed.value = maxV;
+  speed.disabled = full;
+  $("autoSpeedRow").classList.toggle("locked", full);
+
+  const v = full ? maxV : Math.max(-maxV, Math.min(maxV, parseFloat(speed.value) || 0));
+  const a = Math.max(-maxS, Math.min(maxS, parseFloat(steer.value) || 0));
+  const deg = Math.round(a * 180 / Math.PI);
+
+  $("autoSpeedValue").textContent = speedText(v) + (full ? " full" : v < 0 ? " rev" : "");
+  $("autoSteerValue").textContent = deg ? Math.abs(deg) + "° " + (deg > 0 ? "left" : "right") : "0°";
+
+  const go = $("autoStart");
+  const running = autoRun.on && driveArmed;
+
+  /* with a controller on the car a run needs R1 held, so the button cannot
+     start one: say what will, instead of starting and ending at once */
+  const needsR1 = !running && padOnCar();
+
+  const label = running ? "Stop autonomous run"
+    : needsR1 ? "Hold R1 on the controller to start"
+    : "Start autonomous run";
+  if (go.textContent !== label) go.textContent = label;
+  go.disabled = needsR1;               // never while running: this is a stop
+  go.classList.toggle("running", running);
+
+  let status = autoRunNote;
+  if (running && avoidNow) {
+    status = `Avoiding: obstacle ${avoidNow.front.toFixed(2)} m ahead, steering ` +
+      (avoidNow.dir > 0 ? "left" : "right");
+  } else if (running) {
+    const left = autoRun.until ? Math.max(0, Math.ceil((autoRun.until - performance.now()) / 1000)) : null;
+    status = `Driving at ${speedText(cmdSpeed)}` +
+      (autoRun.byR1 ? " · let go of R1 to stop"
+        : left !== null ? ` · ${left} s left` : " · until you stop it");
+  } else if (r1Enabled()) {
+    const r1 = r1Last || { down: false, flicker: false, source: null };
+    const hint =
+      r1.flicker ? "R1 is flickering by itself, so it cannot start a run. See the Controller tab."
+      : !r1.source ? "No controller reading, so R1 cannot start a run."
+      : r1Since && !r1Tried ? "Keep holding R1…"
+      : "Hold R1 to run.";
+    status = autoRunNote ? autoRunNote + " " + hint : hint;
+  }
+  if ($("autoStatus").textContent !== status) $("autoStatus").textContent = status;
+  $("autoStatus").classList.toggle("running", running);
+
+  renderObstacleGuard();
+}
+
+/* ---------- obstacle stop: on the robot, set from here ----------
+
+   system_diagnostics.py watches the LiDAR straight ahead while /drive drives
+   the car forward, and turns the emergency stop on when something is closer
+   than the car needs to stop. This shows its state ("system: Obstacle stop"),
+   switches it and sets its margin through the node's ROS parameters, and
+   draws the space it needs clear on the LiDAR view. */
+
+let guardPending = null;        // { on, margin, until } while a change is on its way
+
+function guardDiag() {
+  const item = diag[SYS_PREFIX + "Obstacle stop"];
+  if (!item || !item.values) return null;
+  const v = item.values;
+  const num = key => parseFloat(v[key]);
+  return {
+    on: v.enabled === "yes",
+    margin: num("margin m"),
+    reaction: num("reaction s"),
+    decel: num("decel m/s2"),
+    corridor: num("corridor m"),
+    ahead: v["ahead m"] === "none" ? null : num("ahead m"),
+    level: item.level,
+    message: item.message
+  };
+}
+
+/* the same sum as the robot's stop_distance() */
+function guardStopDistance(g, speed) {
+  const v = Math.max(0, speed);
+  return g.margin + v * g.reaction + v * v / (2 * g.decel);
+}
+
+/* the speed the stop zone is drawn for: the run's now, or what one would ask */
+function guardSpeed() {
+  return autoRun.on && driveArmed ? Math.max(cmdSpeed, autoSpeed()) : autoSpeed();
+}
+
+async function setObstacleGuard(on, margin) {
+
+  guardPending = { on, margin, until: performance.now() + 3000 };
+  renderObstacleGuard();
+
+  try {
+    const result = await call(SYSDIAG_PARAMS_SERVICE, { parameters: [
+      { name: "obstacle_stop", value: { type: 1, bool_value: on } },
+      { name: "obstacle_margin", value: { type: 3, double_value: margin } }
+    ] });
+    const bad = (result.results || []).find(r => !r.successful);
+    if (bad) {
+      guardPending = null;
+      toast("The car refused: " + (bad.reason || "no reason given") + ".", "warn");
+    } else {
+      toast(on ? `Obstacle stop on: ${margin.toFixed(1)} m margin.` : "Obstacle stop off.", on ? "ok" : "warn");
+    }
+  } catch (error) {
+    guardPending = null;
+    toast("Could not set the obstacle stop (" + error.message + ").", "bad");
+  }
+  renderObstacleGuard();
+}
+
+function renderObstacleGuard() {
+
+  const g = guardDiag();
+  const sw = $("autoGuardOn");
+  const pick = $("autoGuardMargin");
+
+  if (guardPending && (performance.now() > guardPending.until ||
+      (g && g.on === guardPending.on && Math.abs(g.margin - guardPending.margin) < 1e-6))) {
+    guardPending = null;
+  }
+
+  sw.disabled = !g || !socketOpen();
+  pick.disabled = sw.disabled;
+
+  let text;
+
+  if (!g) {
+    sw.checked = false;
+    text = "Needs the new system_diagnostics.py on the car.";
+  } else {
+    const on = guardPending ? guardPending.on : g.on;
+    const margin = guardPending ? guardPending.margin : g.margin;
+    sw.checked = on;
+    if (document.activeElement !== pick) {
+      const value = String(margin);
+      if (![...pick.options].some(o => o.value === value)) pick.add(new Option(margin.toFixed(2) + " m", value));
+      pick.value = value;
+    }
+    const need = guardStopDistance({ ...g, margin }, guardSpeed());
+    text = !on
+      ? "Off: nothing stops the car before an obstacle."
+      : `Stops if anything is within ${need.toFixed(1)} m ahead at ${speedText(guardSpeed(), 1)}` +
+        (g.ahead !== null ? ` · nearest ${g.ahead.toFixed(1)} m` : " · clear ahead");
+  }
+
+  if ($("autoGuardText").textContent !== text) $("autoGuardText").textContent = text;
+  $("autoGuard").dataset.state = !g ? "none" : sw.checked ? "on" : "off";
+}
+
+/* for the LiDAR views: the stop zone, when it is worth showing */
+function obstacleZone() {
+
+  const g = guardDiag();
+
+  if (!g || !g.on) return null;
+  if (driveMode !== "auto" && autonomousState().state !== "on") return null;
+
+  const length = guardStopDistance(g, guardSpeed());
+
+  return { length, halfWidth: g.corridor / 2, hit: g.ahead !== null && g.ahead <= length };
+}
+
+/* hold to drive, or an autonomous run; kept per browser */
+const DRIVE_MODE_KEY = "driveMode";
+let driveMode = "hold";
+
+try {
+  if (localStorage.getItem(DRIVE_MODE_KEY) === "auto") driveMode = "auto";
+} catch (error) {}
+
+/* Full speed is kept per browser; Hold R1 to run is not - it starts on
+   after a reload */
+const AUTO_FULL_KEY = "autoFullSpeed";
+
+try {
+  if (localStorage.getItem(AUTO_FULL_KEY) === "0") $("autoFull").checked = false;
+} catch (error) {}
+
+let autoSlowSpeed = parseFloat($("autoSpeed").value);   // the slider's own value, under Full speed
+
+function setAutoFull(on) {
+  if (on) autoSlowSpeed = parseFloat($("autoSpeed").value);
+  else $("autoSpeed").value = autoSlowSpeed;
+  try {
+    localStorage.setItem(AUTO_FULL_KEY, on ? "1" : "0");
+  } catch (error) {}
+}
+
+function setDriveMode(mode) {
+  if (mode !== "auto" && autoRun.on) stopAutoRun("switched to hold to drive");
+  r1Tried = true;                      // a hold already down does not start a run
+  driveMode = mode === "auto" ? "auto" : "hold";
+  try {
+    localStorage.setItem(DRIVE_MODE_KEY, driveMode);
+  } catch (error) {}
+  $("cockpitPanel").dataset.mode = driveMode;
+  document.querySelectorAll("[data-drive-mode]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.driveMode === driveMode)));
+  if (typeof jpSubscribe === "function") jpSubscribe();
+}
+
 /* Is a controller attached? true / false, or null with no
    system_diagnostics. Read from /dev/input/js*, which the robot lists
    every second and which vanishes the moment the pad disconnects -
@@ -657,12 +1314,16 @@ function padLinkState() {
   return Boolean(js) && js !== "none";
 }
 
+/* One answer to "who has the car right now?", most urgent first,
+   plus the extras that matter: whether there is a physical backup
+   stop, and warnings only when something is actually going on. */
 function controlState() {
 
   const connected = socketOpen();
   const pubs = drivePublishers();
   const foreign = foreignDriveActive();
-  const active = driveArmed && (padHeld || driveKeys.size > 0);
+  const active =
+    driveArmed && (padHeld || stickHeld || driveKeys.size > 0);
 
   /* right after we disarm, rosbridge can still list us for a few
      seconds — do not call that "another dashboard" */
@@ -677,68 +1338,87 @@ function controlState() {
 
   if (estopActive()) {
 
-    hero = { tone: "bad", icon: "🛑", title: "Emergency stop is on",
+    hero = { tone: "bad", icon: "octagonAlert", title: "Emergency stop is on",
              sub: "Nobody can drive the car until it is released at the top of the page." };
 
   } else if (!connected) {
 
-    hero = { tone: "none", icon: "⏸", title: "Not connected",
+    hero = { tone: "none", icon: "pause", title: "Not connected",
              sub: "Connect to the robot in the top bar." };
 
   } else if (foreign && pubs.autonomous.length && !pubs.web) {
 
-    hero = { tone: "bad", icon: "🤖", title: "Autonomous code is driving",
+    hero = { tone: "bad", icon: "bot", title: "Autonomous code is driving",
              sub: pubs.autonomous.join(", ") + " is sending drive commands." };
 
   } else if (foreign) {
 
-    hero = { tone: "bad", icon: "🖥️", title: "Someone else is driving",
+    hero = { tone: "bad", icon: "monitor", title: "Someone else is driving",
              sub: "Another dashboard is sending drive commands. You can't arm until they stop." };
 
   } else if (mux === "teleop") {
 
-    hero = { tone: "warn", icon: "🎮", title: "The controller is driving",
+    hero = { tone: "warn", icon: "gamepad", title: "The controller is driving",
              sub: "Someone is holding the controller's deadman. It overrides this page." };
+
+  } else if (autoRun.on && driveArmed) {
+
+    hero = { tone: "you", icon: "bot", title: "Autonomous run",
+             sub: autoRun.byR1
+               ? "R1 is held: this page is driving the car at a set speed. Let go of R1 to stop."
+               : "This page is driving the car at a set speed. STOP, Space or Esc ends it." };
 
   } else if (active) {
 
-    hero = { tone: "you", icon: "🕹️", title: "You are driving",
+    hero = { tone: "you", icon: "joystick", title: "You are driving",
              sub: "Let go to stop. STOP, Space or Esc disarms." };
 
   } else if (driveArmed) {
 
-    hero = { tone: "you", icon: "🕹️", title: "You're armed",
-             sub: "Hold the pad or a drive key to move." };
+    hero = { tone: "you", icon: "joystick", title: "You're armed",
+             sub: "Hold the pad, a drive key or a stick to move." };
 
   } else if (mux === "autonomous") {
 
-    hero = { tone: "warn", icon: "🤖", title: "The car is following /drive",
+    hero = { tone: "warn", icon: "bot", title: "The car is following /drive",
              sub: "Something is sending drive commands." };
 
   } else {
 
-    hero = { tone: "ok", icon: "⏸", title: "Nobody is driving",
+    hero = { tone: "ok", icon: "pause", title: "Nobody is driving",
              sub: "The car is idle. Arm the controls to drive." };
   }
 
   /* ---- the backup stop ---- */
 
   const padLinked = padLinkState();
+  const pad = diag["system: Gamepad"];
 
   const chips = [
-    padLinked === null
-      ? { tone: "", text: "🎮 Controller: unknown",
+    padLinked && pad.level === 2
+      ? { tone: "bad", text: "Controller can't be read - no backup stop",
+          title: pad.message }
+      : padLinked === null
+      ? { tone: "", text: "Controller: unknown",
           title: "Needs system_diagnostics.py running on the robot" }
       : padLinked
-      ? { tone: "ok", text: "🎮 Controller connected",
+      ? { tone: "ok", text: "Controller connected",
           title: "The physical controller is your backup stop" }
-      : { tone: "warn", text: "🎮 No controller — no backup stop",
+      : { tone: "warn", text: "No controller — no backup stop",
           title: "Pair the PS4 controller so someone can take over" }
   ];
 
   /* ---- warnings, only when true ---- */
 
   const alerts = [];
+
+  /* the sticks' status stays up while armed, in the full-screen view too */
+  if (driveArmed && stickStatus) {
+    alerts.push({
+      tone: stickStatus.startsWith("Gamepad ready") ? "" : "warn",
+      text: stickStatus
+    });
+  }
 
   if (connected && otherArmed && !foreign) {
     alerts.push({ tone: "warn",
@@ -763,13 +1443,13 @@ function renderControl() {
   const { hero, chips, alerts, padLinked } = controlState();
 
   $("controlHero").className = "control-hero tone-" + hero.tone;
-  $("controlIcon").textContent = hero.icon;
+  $("controlIcon").innerHTML = icon(hero.icon);
   $("controlTitle").textContent = hero.title;
   $("controlSub").textContent = hero.sub;
 
   $("controlChips").innerHTML =
     chips.map(chip =>
-      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.text)}</span>`
+      `<span class="control-chip ${chip.tone}" title="${escapeHtml(chip.title)}">${icon("gamepad")}${escapeHtml(chip.text)}</span>`
     ).join("");
 
   $("controlAlerts").innerHTML =
@@ -820,8 +1500,8 @@ function renderPadDisconnect(padLinked) {
 
   button.hidden = !padLinked;
   button.disabled = padDisconnectBusy || held;
-  button.textContent =
-    padDisconnectBusy ? "Disconnecting…" : "🎮 Disconnect controller";
+  button.innerHTML =
+    padDisconnectBusy ? "Disconnecting…" : icon("gamepad") +  ' Disconnect<span class="fold-word"> controller</span>';
   button.title =
     held
       ? "Someone is holding L1/R1 — they must let go first, or press E-STOP"
@@ -881,6 +1561,12 @@ $("padDisconnectBtn").onclick = disconnectPad;
 
 /* ---------- limits and high speed ---------- */
 
+function renderSpeedUnlock() {
+  $("speedUnlockBtn").innerHTML = highSpeed
+    ? `Lock back to ${speedLimitText(NORMAL_MAX_SPEED)}`
+    : icon("alert") + ` Unlock high speed (up to ${speedLimitText(HIGH_MAX_SPEED)})`;
+}
+
 function setHighSpeed(on) {
 
   highSpeed = on;
@@ -893,8 +1579,7 @@ function setHighSpeed(on) {
     slider.value = NORMAL_MAX_SPEED;
   }
 
-  $("speedUnlockBtn").textContent =
-    on ? "Lock back to 3 m/s" : "⚠ Unlock high speed (up to 5 m/s)";
+  renderSpeedUnlock();
 
   $("speedUnlockBtn").classList.toggle("unlocked", on);
   $("speedMode").hidden = !on;
@@ -915,8 +1600,8 @@ function setFullSteer(on) {
     slider.value = NORMAL_MAX_STEER;
   }
 
-  $("steerUnlockBtn").textContent =
-    on ? "Lock back to 19°" : "⚠ Unlock full steering (up to 23°)";
+  $("steerUnlockBtn").innerHTML =
+    on ? "Lock back to 19°" : icon("alert") + " Unlock full steering (up to 23°)";
 
   $("steerUnlockBtn").classList.toggle("unlocked", on);
   $("steerMode").hidden = !on;
@@ -962,7 +1647,7 @@ function wireUnlock(prefix, isOn, setOn) {
 function renderLimits() {
 
   $("maxSpeedValue").textContent =
-    limitSpeed().toFixed(1) + " m/s";
+    speedText(limitSpeed(), 1);
 
   $("maxSteerValue").textContent =
     Math.round(limitSteer() * 180 / Math.PI) + "°";
@@ -1002,7 +1687,8 @@ function setLidarBig(big) {
 
   $("driveGrid").dataset.lidar = big ? "big" : "normal";
 
-  $("lidarBigBtn").textContent = big ? "⤡ Shrink" : "⤢ Enlarge";
+  $("lidarBigBtn").innerHTML =
+    icon(big ? "minimize" : "maximize") + (big ? " Shrink" : " Enlarge");
   $("lidarBigBtn").setAttribute("aria-pressed", String(big));
 
   try {
@@ -1059,3 +1745,36 @@ renderLimits();
 placeKnob(0, 0);
 
 setInterval(driveTick, 1000 / DRIVE_HZ);
+
+/* ---------- autonomous run and Stop: wiring ---------- */
+
+document.querySelectorAll("[data-drive-mode]").forEach(button => {
+  button.onclick = () => setDriveMode(button.dataset.driveMode);
+});
+setDriveMode(driveMode);
+
+$("autoStart").onclick = () => (autoRun.on ? stopAutoRun("Stop pressed") : startAutoRun());
+$("autoZero").onclick = () => {
+  $("autoFull").checked = false;
+  setAutoFull(false);
+  $("autoSpeed").value = 0;
+  $("autoSteer").value = 0;
+};
+$("autoFull").addEventListener("change", e => setAutoFull(e.target.checked));
+$("autoGuardOn").addEventListener("change", e =>
+  setObstacleGuard(e.target.checked, parseFloat($("autoGuardMargin").value)));
+$("autoGuardMargin").addEventListener("change", e =>
+  setObstacleGuard($("autoGuardOn").checked, parseFloat(e.target.value)));
+$("autoR1").addEventListener("change", e => {
+  autoR1Choice = e.target.checked;
+  r1Tried = true;                      // only a fresh hold starts a run
+  if (typeof jpSubscribe === "function") jpSubscribe();
+  if (!e.target.checked) driveNow();
+});
+
+document.querySelectorAll("[data-auto-stop]").forEach(button => {
+  button.onclick = stopAutonomous;
+});
+
+setInterval(() => { syncAutoR1(); renderAutoPanel(); }, 100);
+

@@ -49,6 +49,11 @@ function onJoy(message) {
   joyAt = Date.now();
 }
 
+/* a controller is connected to the car: /joy is coming in */
+function padOnCar() {
+  return Date.now() - joyAt <= JOY_FRESH_MS;
+}
+
 function deadmanHeld() {
 
   if (Date.now() - joyAt > JOY_FRESH_MS) return false;
@@ -68,6 +73,14 @@ function estopActive() {
   const item = estopDiag();
 
   return item ? item.level === 2 : estopLocal;
+}
+
+/* what tripped it, when the robot's obstacle stop did: "obstacle stop:
+   something 0.62 m ahead at 2.40 m/s (needs 1.40 m to stop)", or "" */
+function estopObstacle() {
+  const item = estopDiag();
+  const action = estopActive() && item && item.values ? item.values["action"] || "" : "";
+  return /^obstacle stop:/.test(action) ? action.split(" - ")[0] : "";
 }
 
 function estopFailureText(error) {
@@ -122,7 +135,7 @@ async function releaseEstop() {
   if (deadmanHeld()) return;
 
   const ok = confirm(
-    "Release the emergency stop?\n\n" +
+    "Allow driving again?\n\n" +
     "The car will accept driving commands again. Make sure the area " +
     "is clear and nobody is about to drive.");
 
@@ -158,13 +171,19 @@ function renderEstop() {
   bar.hidden = !active && !estopError;
   bar.classList.toggle("error-only", !active && Boolean(estopError));
 
+  const obstacle = estopObstacle();
+
   $("estopText").innerHTML =
-    active
-      ? "<strong>🛑 EMERGENCY STOP IS ON.</strong> " +
+    active && obstacle
+      ? "<strong>Obstacle stop.</strong> The car stopped itself: " +
+        escapeHtml(obstacle.replace(/^obstacle stop:\s*/, "")) +
+        ". Clear the way, then allow driving again."
+      : active
+      ? "<strong>Emergency stop is on.</strong> " +
         "The car will not move for anyone — controller, this page or autonomous code."
       : escapeHtml(estopError);
 
-  /* what the robot actually did, e.g. "froze ackermann_to_vesc_node (pid 1234)" */
+  /* what the robot actually did, e.g. "locked the mux (/emergency_stop)" */
   const action =
     active && item && item.values ? item.values["action"] || "" : "";
 
@@ -186,12 +205,16 @@ function renderEstop() {
       ? "Someone is holding the controller's deadman — they must let go first"
       : "Let the car be driven again";
   release.textContent =
-    deadman ? "Release (controller in use)" : "Release e-stop";
+    deadman ? "Allow driving again (controller in use)" : "Allow driving again";
 
   const button = $("estopBtn");
 
   button.classList.toggle("active", active);
-  button.textContent = active ? "🛑 E-STOP ON" : "🛑 E-STOP";
+  /* the full name where there is room, "E-stop" on phones (CSS) */
+  button.innerHTML =
+    icon("stopSign") +
+    `<span class="estop-long">Emergency stop${active ? " on" : ""}</span>` +
+    `<span class="estop-short">E-stop${active ? " on" : ""}</span>`;
 }
 
 $("estopBtn").onclick = triggerEstop;

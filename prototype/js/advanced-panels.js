@@ -309,7 +309,7 @@ function renderAttention() {
       if (!BAD_TOPIC_STATES.has(state)) continue;
 
       items.push({
-        rank: state === "STALE" || state === "SLOW" ? 1 : 2,
+        rank: state === "SLOW" ? 1 : 2,
         what: topic.name,
         why: state + " — " + topicReason(topic, state),
         link: "#secTopics"
@@ -326,8 +326,8 @@ function renderAttention() {
             <span class="dot ${item.rank >= 2 ? "bad" : "warn"}"></span>
             <span class="what">${escapeHtml(item.what)}</span>
             <span class="why">${escapeHtml(item.why)}</span>
-            ${item.link ? `<a href="${item.link}">details ↓</a>` : ""}
+            ${item.link ? `<a class="link-btn" href="${item.link}">Details ↓</a>` : ""}
           </li>
         `).join("")
-      : '<li class="all-clear">✓ Nothing needs attention.</li>';
+      : `<li class="all-clear">${icon("check")} Nothing needs attention.</li>`;
 }
