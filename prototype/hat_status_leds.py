@@ -5,7 +5,7 @@ Needs a sourced ROS 2 install and hat_leds.py's hardware (SPI) to run.
 
 /diagnostics already carries everything this needs - system_diagnostics.py
 publishes "system: Camera", "system: Network", "system: VESC device",
-"system: Power" and "system: Gamepad" once a second, and urg_node publishes
+and "system: Gamepad" once a second, and urg_node publishes
 its own LiDAR entries into the same array. This just reads that array and
 lights a fixed LED per subsystem; it adds no new sensing of its own.
 
@@ -15,9 +15,10 @@ LED assignment (D1-D10 on the silkscreen = chain index 0-9):
     1  Camera       "system: Camera"
     2  Network      "system: Network"  (the Orin's own link, not rosbridge clients)
     3  VESC         "system: VESC device"
-    4  Battery      "system: Power"
-    5  Gamepad      "system: Gamepad"
-    6-9 free        left alone here - for whatever a future student wires up next
+    4  Gamepad      "system: Gamepad"
+    5-9 free        left alone here - for whatever a future student wires up next
+
+The names and numbers are the board's: hat_leds.STATUS_NAMES (silkscreen, issue #64).
 
 Colour per DiagnosticStatus.level: OK green, WARN amber, ERROR and STALE red
 (the dashboard's reading-the-page table calls STALE a real problem, same as
@@ -31,24 +32,23 @@ import rclpy
 from diagnostic_msgs.msg import DiagnosticArray
 from rclpy.node import Node
 
-from hat_leds import GREEN, HatLeds, OFF, RED, YELLOW
+from hat_leds import GREEN, HatLeds, OFF, RED, STATUS_NAMES, YELLOW
 
 OK, WARN, ERROR, STALE = 0, 1, 2, 3        # diagnostic_msgs/DiagnosticStatus levels
 
 LEVEL_COLOUR = {OK: GREEN, WARN: YELLOW, ERROR: RED, STALE: RED}
 
-PROGRAMMABLE_LEDS = range(6, 10)           # not touched by this module - left for later use
+PROGRAMMABLE_LEDS = range(5, 10)           # not touched by this module - left for later use
 
 # (LED index, exact name) for the fixed assignments, except LiDAR which matches
 # by prefix since urg_node publishes several differently-named entries.
 FIXED_NAMES = {
-    1: "system: Camera",
-    2: "system: Network",
-    3: "system: VESC device",
-    4: "system: Power",
-    5: "system: Gamepad",
+    STATUS_NAMES["Camera"]: "system: Camera",
+    STATUS_NAMES["Network"]: "system: Network",
+    STATUS_NAMES["VESC"]: "system: VESC device",
+    STATUS_NAMES["Gamepad"]: "system: Gamepad",
 }
-LIDAR_LED = 0
+LIDAR_LED = STATUS_NAMES["LiDAR"]
 LIDAR_NAME_PREFIX = "urg_node"
 
 

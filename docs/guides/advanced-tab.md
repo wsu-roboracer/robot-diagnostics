@@ -51,6 +51,7 @@ The checks `system_diagnostics.py` runs on the car's operating system, things RO
 |---|---|---|
 | **E-stop** | Whether the emergency stop is on | **ERROR** while it is on: *EMERGENCY STOP ACTIVE since …* |
 | **Drive watchdog** | Commands from dashboards on `/drive` | **WARN** for a minute after it had to stop the car because `/drive` went quiet for 0.3 s while moving |
+| **Obstacle stop** | The LiDAR straight ahead while `/drive` drives the car forward; readings: on or off, the margin, the nearest thing ahead | **WARN** for a minute after it stopped the car (see [the Drive guide](drive-tab.md#obstacle-stop)). *off* when someone switched it off |
 | **Thermal** | Every temperature sensor on the Jetson | **WARN** at 70 °C, **ERROR** at 85 °C (junction) |
 | **Power** | How long the computer has been on | **ERROR** *REBOOTED - uptime went backwards (brownout?)*: the board restarted, usually because the battery sagged |
 | **CPU** | Load average against the number of cores | **WARN** above 1 per core, **ERROR** above 2 per core |
@@ -141,6 +142,27 @@ To save bandwidth the page samples most topics 5 times a second, so the message 
 | *No controller is connected* | Nothing is paired | Pair the controller (hold PS + Share), then run the check again |
 
 It takes a few seconds. If it says the service does not exist, `system_diagnostics.py` is not running or is an old copy: run `~/diag/start_diagnostics.sh`.
+
+
+### Restart the dashboard on the car
+
+When the page lags, stops updating, or shows **NO DATA FROM THE ROBOT**, **Restart the dashboard on the car** stops and starts again every node on the car: bringup (the drive stack), rosbridge, the camera, and the server this page comes from. Nobody needs to be at the car.
+
+When you are debugging on the car itself (over SSH or NoMachine), the same by hand is:
+
+```bash
+./start_diagnostics.sh --stop && ./start_diagnostics.sh
+```
+
+It asks first, disarms driving from this page, then shows a panel while the car restarts (usually 30 to 60 seconds) and **reloads the page by itself** when the car is back. Every dashboard on that car loses its connection meanwhile. The same button is on the red **NO DATA FROM THE ROBOT** bar.
+
+- **It refuses** while the emergency stop is on (a restart would bring the drive chain back up running), while someone holds L1 or R1 on the controller, or while a dashboard is driving. It says which.
+- **Pressing it again within 90 seconds** of a restart starts no second one: the page waits for the restart already under way.
+- **It still works when rosbridge is stuck**, which is usually why the page stopped: it then asks the car's camera server instead. That route cannot see whether the car is moving, so make sure it is stopped.
+- **If nothing answers**, the car is off the network or the dashboard is not running at all; it says so, with the command to run on the car.
+- **If the car has not come back after three minutes**, it says so: `./start_diagnostics.sh --status` on the car shows what is running, and `/tmp/f1tenth-diag/restart.log` what the restart printed.
+
+The first time, the car needs the new `system_diagnostics.py`, `camera_http.py` and `restart_stack.py` (copy the dashboard over and restart it by hand once). Cars that start the dashboard with `bringup` instead of `start_diagnostics.sh` cannot restart this way, and the button says so.
 
 ## ROS Warnings / Errors
 

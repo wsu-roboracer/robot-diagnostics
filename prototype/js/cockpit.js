@@ -332,6 +332,18 @@ function setRail(side) {
   applyRail();
 }
 
+/* Who is driving and the latency: the bottom bar's empty right end on a
+   computer, the top bar on a phone, which has no bottom bar. */
+function placeBottomChips() {
+  const home = cockpitTouchLayout()
+    ? document.querySelector(".cockpit-status")
+    : $("cockpitBottomInfo");
+  home.append($("cockpitLatency"), $("cockpitWho"));
+}
+
+placeBottomChips();
+window.matchMedia(COCKPIT_TOUCH_QUERY).addEventListener("change", placeBottomChips);
+
 function applyRail() {
 
   const side = railActive() ? railSide() : "off";
@@ -1268,6 +1280,19 @@ function renderCockpitDriving() {
   $("cockpitWho").title = $("controlSub").textContent;
   $("cockpitWho").dataset.tone = tone;
 
+  /* autonomous code: say so plainly whenever it is up */
+  const auto = typeof autonomousState === "function" ? autonomousState() : { state: "off" };
+  ["cockpitAuto", "railAuto"].forEach(id => {
+    $(id).hidden = !["on", "standby"].includes(auto.state);
+    $(id).dataset.state = auto.state;
+    $(id).title = auto.detail || "";
+    $(id).title = (auto.detail || "") + " Click to stop it.";
+    $(id).innerHTML = icon("bot") + (id === "railAuto"
+      ? `<span>${auto.state === "on" ? "Autonomous" : "Auto standby"}</span><span class="auto-stop-word">■ Stop</span>`
+      : (auto.state === "on" ? (auto.mine ? " AUTONOMOUS RUN" : " AUTONOMOUS DRIVING") : " Autonomous standby") +
+        `<span class="auto-stop-word">■ Stop</span>`);
+  });
+
   $("railWho").innerHTML = $("controlIcon").innerHTML +
     "<span>" + escapeHtml($("controlTitle").textContent) + "</span>";
   $("railWho").title = $("controlSub").textContent;
@@ -1333,20 +1358,7 @@ function renderCockpitSys() {
       </div>` : "");
 }
 
-/* Speed units for the speedometer and the readout (the limits stay in
-   m/s, as the car's own settings are). Kept per browser. */
-const SPEED_UNITS = {
-  mps: { label: "m/s", factor: 1, digits: 2 },
-  kmh: { label: "km/h", factor: 3.6, digits: 1 },
-  mph: { label: "mph", factor: 2.23694, digits: 1 }
-};
-
-let speedUnit = "mps";
-
-try {
-  speedUnit = SPEED_UNITS[localStorage.getItem("cockpitUnits")] ? localStorage.getItem("cockpitUnits") : "mps";
-} catch (error) {}
-
+/* Settings > Readouts: the unit for every speed on the page (helpers.js) */
 function setSpeedUnit(unit) {
   speedUnit = SPEED_UNITS[unit] ? unit : "mps";
   try {
@@ -1354,12 +1366,33 @@ function setSpeedUnit(unit) {
   } catch (error) {}
   document.querySelectorAll("[data-speed-unit]").forEach(button =>
     button.setAttribute("aria-pressed", String(button.dataset.speedUnit === speedUnit)));
+
+  /* text that is not redrawn on its own; the live readouts catch up by themselves */
+  document.querySelectorAll("[data-mps]").forEach(element => {
+    element.textContent = speedLimitText(Number(element.dataset.mps));
+  });
+  renderSpeedUnlock();
+  renderLimits();
+  renderAutoPanel();
+  renderControllerSpeed();
+  syncCockpitSettings();
 }
 
-function speedText(mps, digits = SPEED_UNITS[speedUnit].digits) {
-  const unit = SPEED_UNITS[speedUnit];
-  return (mps * unit.factor).toFixed(digits) + " " + unit.label;
-}
+/* The scale's tick marks, drawn once: the last ones red, near the limit. */
+(function drawSpeedoTicks() {
+  const line = (share, inner) => {
+    const angle = Math.PI * (1 - share);
+    const at = r => (60 + Math.cos(angle) * r).toFixed(1) + " " + (62 - Math.sin(angle) * r).toFixed(1);
+    return `M ${at(inner)} L ${at(41)} `;
+  };
+  let calm = "", hot = "";
+  for (let i = 0; i <= 20; i++) {
+    const d = line(i / 20, i % 5 === 0 ? 34 : 38);
+    if (i >= 17) hot += d; else calm += d;
+  }
+  $("speedoTicks").setAttribute("d", calm);
+  $("speedoTicksRed").setAttribute("d", hot);
+})();
 
 /* Speedometer: measured speed as the arc (the command until /odom
    reports), the command as a tick, scaled to the max-speed limit. */
@@ -1372,16 +1405,23 @@ function renderSpeedo() {
 
   $("speedoFill").style.strokeDasharray = `${share(shown) * 100} 100`;
 
+  /* the bright tip rides the end of the arc */
+  const tip = Math.PI * (1 - share(shown));
+  $("speedoHead").style.transform =
+    `translate(${(60 + Math.cos(tip) * 50).toFixed(1)}px, ${(62 - Math.sin(tip) * 50).toFixed(1)}px)`;
+  $("speedoHead").style.opacity = share(shown) > 0.01 ? 1 : 0;
+
   /* the tick sits on the arc: left end is 0, right end is the limit */
   const angle = Math.PI * (1 - share(cmdSpeed));
   const point = r => [60 + Math.cos(angle) * r, 62 - Math.sin(angle) * r];
-  const [x1, y1] = point(41);
-  const [x2, y2] = point(59);
+  const [x1, y1] = point(43);
+  const [x2, y2] = point(60);
 
   $("speedoCmd").setAttribute("x1", x1.toFixed(1));
   $("speedoCmd").setAttribute("y1", y1.toFixed(1));
   $("speedoCmd").setAttribute("x2", x2.toFixed(1));
   $("speedoCmd").setAttribute("y2", y2.toFixed(1));
+  $("speedoCmd").style.opacity = Math.abs(cmdSpeed) > 0.01 ? 1 : 0;
 
   const unit = SPEED_UNITS[speedUnit];
 
@@ -1426,6 +1466,9 @@ function renderCockpitFast() {
   $("cockpitMiniState").hidden = !driveArmed;
   $("cockpitMiniState").textContent = state.textContent;
   $("cockpitMiniState").className = state.className;
+  /* a controller on this device can drive: say how */
+  $("cockpitDeckChip").hidden =
+    !(typeof jpDeckConnected === "function" && jpDeckConnected());
   $("cockpitKeysChip").hidden =
     !(driveArmed && !cockpitPaneShown("controls") && !cockpitTouchLayout());
 
@@ -1956,6 +1999,65 @@ function rememberSwitch(id, key) {
 
 rememberSwitch("wakeToggle", "cockpitWake");
 rememberSwitch("buzzToggle", "cockpitBuzz");
+/* on by default on the Steam Deck (?deck=1, see main.js isDeck); a
+   saved choice still wins */
+$("bigToggle").checked = new URLSearchParams(location.search).get("deck") === "1";
+rememberSwitch("bigToggle", "cockpitBig");
+
+/* Big controls: a slider is a poor target for a thumb (Speed is -3 to
+   3 m/s in 0.05 steps), so each panel slider gets - / + buttons, shown
+   only in this mode (css: html.big-controls). Hold one to keep stepping.
+   They fire "input" like a drag does, so every listener follows. */
+function applyBigControls() {
+  document.documentElement.classList.toggle("big-controls", $("bigToggle").checked);
+}
+
+$("bigToggle").addEventListener("change", applyBigControls);
+applyBigControls();
+
+document.querySelectorAll(".cockpit-panel .slider-row input[type=range]").forEach(input => {
+
+  const row = input.closest("label");
+
+  /* the row is a <label>: point it at the slider, or a tap on its text
+     would press the first button inside it (the -) */
+  row.htmlFor = input.id;
+
+  const step = dir => {
+    if (input.disabled) return;
+    if (dir > 0) input.stepUp(); else input.stepDown();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  [-1, 1].forEach(dir => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "slider-step";
+    button.textContent = dir > 0 ? "+" : "−";
+    button.setAttribute("aria-label", (dir > 0 ? "More " : "Less ") +
+      row.querySelector("span").textContent.toLowerCase());
+
+    let timer = null;
+    const stop = () => { clearTimeout(timer); timer = null; };
+    const repeat = delay => {
+      timer = setTimeout(() => { step(dir); repeat(80); }, delay);
+    };
+
+    button.addEventListener("pointerdown", event => {
+      event.preventDefault();
+      step(dir);
+      repeat(400);
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(type =>
+      button.addEventListener(type, stop));
+    button.addEventListener("click", event => {
+      if (event.detail === 0) step(dir);    // keyboard Enter / Space
+    });
+
+    if (dir < 0) input.before(button); else input.after(button);
+  });
+});
 document.addEventListener("visibilitychange", updateWakeLock);
 setInterval(updateWakeLock, 2000);    // follows open / close / tab changes
 
@@ -1964,7 +2066,7 @@ setInterval(updateWakeLock, 2000);    // follows open / close / tab changes
 const VIEW_KEYS = ["cockpitLayouts", "cockpitTabLayout", "cockpitBarHidden",
   "cockpitControlsOnly", "cockpitGlow", "cockpitWarn", "cockpitLayout",
   "cockpitFloat", "cockpitUnits", "cockpitWake", "cockpitBuzz", "cockpitRail",
-  "radarSweep"];
+  "cockpitBig", "radarSweep"];
 
 $("cockpitResetAll").onclick = () => {
 

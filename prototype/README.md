@@ -13,13 +13,15 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `js/*.js` | The page's logic, split by job. They are plain scripts that share one scope, so **the load order in `dashboard.html` matters**: `config.js` first, `main.js` last. See the table below |
 | `start_diagnostics.sh` | Starts bringup, `system_diagnostics.py`, rosbridge and a web server, and stops them all on Ctrl+C |
 | `camera_http.py` | The camera's HTTP proxy: relays the GStreamer MJPEG stream to browsers, always the newest frame, so a slow link drops frames instead of lagging |
-| `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics` |
+| `restart_stack.py` | Restarts everything `start_diagnostics.sh` runs, for the dashboard's **Restart the dashboard on the car** button: reached through `system_diagnostics.py`'s `~/restart_stack` service, or `camera_http.py`'s `POST /restart` when rosbridge does not answer. Logs to `/tmp/f1tenth-diag/restart.log` |
+| `system_diagnostics.py` | ROS node that publishes OS-level health (temperatures, CPU, memory, disk, network, USB devices, gamepad, clock) to `/diagnostics`, and runs the emergency stop, the drive watchdog and the **obstacle stop** (LiDAR ahead while `/drive` drives forward) |
 | `tests/` | Checks that need no robot. Run them all with `node tests/run.mjs`: LiDAR plot geometry, beam selection maths, the system list, joystick check and connection banners (all against the page's real `js/`), and the self-tests in `camera_http.py` and `system_diagnostics.py` |
 | `tools/baseline_capture.sh` | Read-only health snapshot of a car for a session log: topic rates, `/diagnostics`, Bluetooth, thermals, load, memory, disk, network and lidar ping, VESC device, camera and clock. Run with bringup up: `bash tools/baseline_capture.sh \| tee baseline.txt` |
-| `hat_leds.py` | Drives the diagnostics HAT's 74 WS2812B LEDs over SPI (header pin 19) and reads its button (pin 29). Pinout and LED index map: [diagnostic-hardware/pcb/orin_hat_diag](../diagnostic-hardware/pcb/orin_hat_diag/README.md). `python3 hat_leds.py --demo` needs the HAT wired to the Orin |
+| `hat_leds.py` | Drives the diagnostics HAT's 74 WS2812B LEDs over SPI (header pin 19) and reads its six user buttons. Pinout and LED index map: [diagnostic-hardware/pcb/orin_hat_diag](../diagnostic-hardware/pcb/orin_hat_diag/README.md). `python3 hat_leds.py --self-test` needs no hardware |
+| `hat_display.py` | Shows the Orin's hostname and IP addresses on the HAT's 0.91" OLED (I2C7, header pins 3/5) when SW2 is pressed. `python3 hat_display.py --self-test` needs no hardware |
 | `hat_battery.py` | **Skeleton, no hardware yet.** Will read the HAT's battery voltmeter over I2C7 (header pins 3/5) and show it on its 7-segment display, once that part of the board is designed and `BATTERY_I2C_ADDR`/`DISPLAY_I2C_ADDR` are set |
 | `hat_obstacle_matrix.py` | **Skeleton.** Turns `/scan` into obstacles on the HAT's 8x8 LED matrix: nearest return per angular slice, coloured red/amber/green by the same distance bands as the web radar plot. Needs a sourced ROS 2 install and `hat_leds.py`'s hardware: `python3 hat_obstacle_matrix.py` |
-| `hat_status_leds.py` | **Skeleton.** Lights 6 of the HAT's 10 status LEDs from `/diagnostics` - LiDAR, Camera, Network, VESC, Battery, Gamepad - green/amber/red by `DiagnosticStatus.level`. The other 4 are left free for future use. Needs a sourced ROS 2 install and `hat_leds.py`'s hardware: `python3 hat_status_leds.py` |
+| `hat_status_leds.py` | **Skeleton.** Lights the HAT's 5 named status LEDs from `/diagnostics` - LiDAR, Camera, Network, VESC, Gamepad - green/amber/red by `DiagnosticStatus.level`. LEDs 5-9 are left free for future use. Needs a sourced ROS 2 install and `hat_leds.py`'s hardware: `python3 hat_status_leds.py` |
 | `tools/rosbridge_check.py` | Checks rosbridge from a terminal with only Python installed. Lists nodes, checks `/scan`, `/odom`, `/sensors/core` and `/diagnostics`, and prints the battery voltage: `python3 tools/rosbridge_check.py [host] [port]` |
 
 ### The scripts, in load order
@@ -40,10 +42,13 @@ The page shows the car's health (battery, computer, subsystems, ROS nodes and to
 | `js/checks.js` | Connection health banners and the on-demand joystick check |
 | `js/lidar-select.js` | Select beams: picking a range of LiDAR beam indices |
 | `js/estop.js` | The Emergency stop button and banner |
+| `js/controller.js` | The Controller tab: the PS4 controller drawn live from `/joy`, or a Steam Deck (any controller on this device) through the browser's Gamepad API, which can also drive (`deckDriveInput`, read by `drive.js`); the deadman check, the battery, and Map buttons |
+| `js/avoid.js` | LiDAR steer-away for the autonomous run: `lidarAvoid()` turns the run away from something ahead. Pure function, checked by `tests/verify_avoid.mjs` |
 | `js/drive.js` | The driving logic: arming, the dead-man, limits, who's driving. Its own cards sit hidden under the driving view |
 | `js/cockpit.js` | The driving view on the Drive tab and in full screen: panes, floating controls, Settings, the side rail, thumb sticks, speedometer |
 | `js/radar.js` | The Detailed LiDAR view: the radar drawing, obstacle detection and its panel on the Overview card |
-| `js/main.js` | Render loop, tabs, theme switch, buttons, the connection form and robot picker, and startup. Must load last |
+| `js/main.js` | Render loop, tabs, theme switch, buttons, the connection form and robot picker, and startup. Must load last, apart from `deck.js` |
+| `js/deck.js` | Steam Deck only (`?deck=1`): swipe, D-pad and stick scrolling, and L1/R1 to switch tabs |
 
 ## Looking at it
 
@@ -215,6 +220,8 @@ The count is advisory - it is there so people can watch the room fill up before 
 **The page connects but every topic reads SILENT.** You are probably past rosbridge's 10-client limit. The page now says so itself with an orange bar - *"rosbridge is answering but sending no topic data"* - and the header shows `clients N / 10`. Closing another tab is the fix, not restarting anything.
 
 **rosbridge stops responding** (connections are accepted but the page never connects). It has no rate limiting, and a client subscribing to everything *unthrottled* can wedge it, which needs a restart. Merely having too many throttled clients does not - that degrades and recovers on its own. The page throttles all of its own subscriptions.
+
+**A controller only blinks on PS and won't connect.** Pair it again on the car with Share + PS. If the car says "Pairing successful" and the controller hangs up about 5 s later, it is probably an off-brand pad stuck calling another computer: see [tools/ds4-pair](tools/ds4-pair/README.md).
 
 ## Things to know
 

@@ -41,6 +41,7 @@ function render() {
   renderLidar();
   renderRadar();
   renderSelectionReadout();
+  renderLidarTab();
 
   renderSubsystems(subsystems);
   renderOverall(subsystems);
@@ -117,7 +118,7 @@ $("refreshBtn").onclick = async () => {
    straight onto it, and a reload keeps you where you were.
 ========================================================== */
 
-const TABS = ["overview", "drive", "advanced"];
+const TABS = ["overview", "drive", "advanced", "controller", "lidar"];
 
 function showTab(name) {
 
@@ -143,6 +144,11 @@ function showTab(name) {
   $(name === "drive" ? "driveCamSlot" : "cameraHome")
     .appendChild($("cameraBox"));
 
+  /* the one LiDAR card lives on the Overview, and moves to the
+     LiDAR tab while that shows */
+  $(name === "lidar" ? "lidarSlot" : "lidarHome")
+    .appendChild($("lidarCard"));
+
   TABS.forEach(tab => {
 
     const id = tab[0].toUpperCase() + tab.slice(1);
@@ -150,6 +156,9 @@ function showTab(name) {
     $("panel" + id).hidden = tab !== name;
     $("tab" + id).setAttribute("aria-selected", String(tab === name));
   });
+
+  /* the Controller tab takes /joy at full rate while it shows */
+  if (typeof jpSubscribe === "function") jpSubscribe();
 
   /* the Drive tab is the driving view (cockpit.js), embedded */
   if (typeof embedCockpit === "function") {
@@ -411,6 +420,37 @@ if (queryVideo) {
   $("cameraUrl").value = cameraUrlFor($("wsUrl").value.trim());
   connectCamera($("cameraUrl").value, true);
 }
+
+/* Steam Deck: open_dashboard.sh opens the page with ?deck=1. Kiosk mode
+   has no tabs, address bar or close button, so on the Deck the page
+   gets Close buttons ([data-quit], hidden everywhere else).
+
+   window.close() only works on a window Firefox is allowed to let a
+   page close; the Deck needs dom.allow_scripts_to_close_windows set to
+   true once (docs/guides/steam-deck-setup.md). Without it nothing
+   happens, so say how to leave instead of doing nothing. */
+const isDeck = new URLSearchParams(location.search).get("deck") === "1";
+
+function quitDashboard() {
+
+  if (!confirm("Close the dashboard?")) return;
+
+  /* the page-hide handlers would stop the car anyway; do it first */
+  if (typeof driveArmed !== "undefined" && driveArmed) {
+    disarmDrive("closing the dashboard");
+  }
+
+  window.close();
+
+  setTimeout(() => {
+    setDriveNote("Firefox would not close the page. Press the Steam button, then Exit Game.");
+  }, 500);
+}
+
+document.querySelectorAll("[data-quit]").forEach(button => {
+  button.hidden = !isDeck;
+  button.onclick = quitDashboard;
+});
 
 /* A form, so Enter in the address box and the button do the
    same thing. Lives in the top bar: switching robots is one

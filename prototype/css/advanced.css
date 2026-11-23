@@ -703,3 +703,87 @@ tr.topic-detail pre {
 .log-entry.error {
   color: var(--bad-ink);
 }
+
+
+/* the second check under the first one's result */
+#joyResult ~ .check-row {
+  margin-top: 14px;
+}
+
+/* restarting the car's dashboard: set apart as the one that disrupts */
+.check-btn.restart-btn {
+  border-color: color-mix(in srgb, var(--failed) 55%, transparent);
+  color: var(--bad-ink);
+}
+
+/* ------------------------------------------------------------------
+   6. LIDAR TAB
+   The Overview's LiDAR card moves in on the left, the sensor's own
+   details stack on the right. One column on narrow screens.
+   ------------------------------------------------------------------ */
+
+.lidar-home { display: contents; }
+
+.lidar-tab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 18px;
+  margin-top: 24px;
+  align-items: start;
+}
+
+.lidar-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.lidar-slot { min-width: 0; }
+
+.lt-health { font-weight: 600; margin-bottom: 8px; }
+
+.lt-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.lt-list li { padding: 5px 0; border-top: 1px solid var(--border); }
+.lt-list li.bad { color: var(--bad, #d33); }
+.lt-list li.ok { color: var(--ok, #2a9d4a); }
+
+.lidar-side .raw-table td:first-child { color: var(--muted, inherit); width: 45%; }
+
+@media (max-width: 900px) {
+  .lidar-tab-grid { grid-template-columns: 1fr; }
+}
+
+/* ------------------------------------------------------------------
+   7. LIDAR FULL SCREEN
+   The LiDAR card fills the window: toolbar on top, the map as big as
+   fits, the wordy extras hidden.
+   ------------------------------------------------------------------ */
+
+.lidar-card.lidar-full {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  margin: 0;
+  border-radius: 0;
+  overflow: auto;
+  background: var(--bg, var(--panel));
+  display: flex;
+  flex-direction: column;
+}
+
+.lidar-card.lidar-full .radar-box {
+  width: min(100%, calc(100vh - 170px));
+  margin: 0 auto 8px;
+}
+
+.lidar-card.lidar-full .lidar-legend,
+.lidar-card.lidar-full .sector-grid,
+.lidar-card.lidar-full .lidar-tech,
+.lidar-card.lidar-full .radar-panel {
+  display: none;
+}
+
+body.lidar-full-open { overflow: hidden; }
+
+.lidar-full-btn { display: inline-flex; align-items: center; gap: 6px; }

@@ -364,10 +364,6 @@ function getSpeedMetric() {
   const speedMps =
     robotSpeedMps;
 
-  const speedMph =
-    Math.abs(speedMps) *
-    2.23694;
-
   /* --------------------------------------------------------
      Determine direction.
   -------------------------------------------------------- */
@@ -397,8 +393,6 @@ function getSpeedMetric() {
   /*
      Visual gauge only.
 
-     3 m/s is approximately 6.7 MPH.
-
      This does NOT determine the robot's actual speed.
   */
 
@@ -419,14 +413,12 @@ function getSpeedMetric() {
     sub: direction,
 
     value:
-      speedMph.toFixed(2) +
-      " MPH",
+      speedText(speedMps),
 
     pct,
 
     note:
-      speedMps.toFixed(2) +
-      " m/s · /odom",
+      "/odom",
 
     grade: "ok"
   };
@@ -2099,7 +2091,10 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
 
   /* DANGER CIRCLES — red under 0.5 m, amber under 1 m */
 
-  drawDangerZones(ctx, originX, originY, pxPerMeter);
+  if (radarState.warnings) drawDangerZones(ctx, originX, originY, pxPerMeter);
+
+  /* the robot's obstacle stop zone (radar.js) */
+  if (typeof drawObstacleZone === "function") drawObstacleZone(ctx, P, k, Math.round(11 * k));
 
   /* SELECTED WEDGE — behind the returns */
 
@@ -2169,7 +2164,7 @@ function drawClassicScan(canvas, scaleState, selLo, selHi) {
 
   const labelFont = Math.round(Math.max(12, Math.min(15, w / RU / 32)) * RU);
 
-  drawZoneLabels(ctx, P, labelFont);
+  if (radarState.warnings) drawZoneLabels(ctx, P, labelFont);
 
   /* the outline is drawn to its full length, so every point on it can
      be pointed at */

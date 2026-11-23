@@ -1513,6 +1513,17 @@ body:has(.cockpit.full:not([hidden])) {
   margin: 2px 0;
 }
 
+/* room for "10.8 km/h", on one line, in every speed unit */
+.cockpit-panel .slider-row strong {
+  white-space: nowrap;
+}
+
+@media (min-width: 901px) {
+  .cockpit-panel .slider-row {
+    grid-template-columns: 92px 1fr minmax(76px, max-content);
+  }
+}
+
 .cockpit-pad-wrap {
   display: flex;
   flex-direction: column;
@@ -2011,8 +2022,8 @@ body:has(.cockpit.full:not([hidden])) {
 .speedo {
   position: relative;
   flex: none;
-  width: 96px;
-  height: 58px;
+  width: 132px;
+  height: 75px;
   display: grid;
   justify-items: center;
 }
@@ -2025,40 +2036,103 @@ body:has(.cockpit.full:not([hidden])) {
   overflow: visible;
 }
 
+.speedo-face {
+  fill: url(#speedoFace);
+  stroke: rgba(255, 255, 255, .09);
+  stroke-width: .75;
+}
+
+.speedo-ticks {
+  fill: none;
+  stroke: rgba(255, 255, 255, .34);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.speedo-ticks-red {
+  stroke: #ff5147;
+}
+
+.speedo-seg,
 .speedo-track,
 .speedo-fill {
   fill: none;
   stroke-width: 9;
-  stroke-linecap: round;
+}
+
+/* one LED, one gap: a white stroke in the mask shows the arc through it */
+.speedo-seg {
+  stroke: #fff;
+  stroke-width: 11;
+  stroke-dasharray: 2.5 .9;
 }
 
 .speedo-track {
-  stroke: rgba(255, 255, 255, .14);
+  stroke: rgba(255, 255, 255, .13);
 }
 
 .speedo-fill {
-  stroke: var(--healthy);
+  stroke: url(#speedoHeat);
   stroke-dasharray: 0 100;
-  transition: stroke-dasharray .12s linear, stroke .2s;
+  transition: stroke-dasharray .12s linear;
 }
 
-.speedo.fast .speedo-fill    { stroke: var(--orange); }
+.speedo.reverse .speedo-fill {
+  stroke: url(#speedoCold);
+}
 
-.speedo.reverse .speedo-fill { stroke: #8ab4ff; }
+.speedo-glow {
+  filter: drop-shadow(0 0 2.5px rgba(255, 170, 60, .75));
+}
 
+.speedo.fast .speedo-glow {
+  filter: drop-shadow(0 0 4.5px rgba(255, 70, 40, .95));
+}
+
+.speedo.reverse .speedo-glow {
+  filter: drop-shadow(0 0 3px rgba(110, 150, 255, .85));
+}
+
+.speedo-head {
+  fill: #fff;
+  opacity: 0;
+  filter: drop-shadow(0 0 3px #fff);
+  transition: transform .12s linear, opacity .15s;
+}
+
+/* your command: a bright marker across the arc */
 .speedo-cmd {
-  stroke: var(--orange);
-  stroke-width: 3;
+  stroke: #fff;
+  stroke-width: 2.4;
   stroke-linecap: round;
+  filter: drop-shadow(0 0 2.5px var(--orange));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speedo-fill,
+  .speedo-head {
+    transition: none;
+  }
 }
 
 .speedo-v {
   position: relative;
-  margin-top: 20px;
-  font-size: 20px;
+  margin-top: 31px;
+  font-size: 27px;
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(255, 255, 255, .28);
+}
+
+.speedo.fast .speedo-v {
+  color: #ffb066;
+  text-shadow: 0 0 12px rgba(255, 90, 40, .75);
+}
+
+.speedo.reverse .speedo-v {
+  color: #b9d0ff;
+  text-shadow: 0 0 10px rgba(110, 150, 255, .6);
 }
 
 .speedo-u {
@@ -2071,7 +2145,7 @@ body:has(.cockpit.full:not([hidden])) {
 
 .speedo-max {
   position: absolute;
-  bottom: -12px;
+  bottom: -13px;
   font-size: 9px;
   opacity: .55;
   white-space: nowrap;
@@ -2085,7 +2159,7 @@ body:has(.cockpit.full:not([hidden])) {
   }
 
   .speedo-v {
-    margin-top: 15px;
+    margin-top: 18px;
     font-size: 16px;
   }
 
@@ -2605,7 +2679,7 @@ body:has(.cockpit.full:not([hidden])) {
 }
 
 .rail-speedo .speedo-v {
-  margin-top: 17px;
+  margin-top: 21px;
   font-size: 18px;
 }
 
@@ -2766,7 +2840,7 @@ body:has(.cockpit.full:not([hidden])) {
   }
 
   .rail-speedo .speedo-v {
-    margin-top: 14px;
+    margin-top: 17px;
     font-size: 16px;
   }
 
@@ -2785,6 +2859,235 @@ body:has(.cockpit.full:not([hidden])) {
 
 .latency-chip[hidden] {
   display: none;
+}
+
+/* autonomous code: driving (red, pulsing) or standing by (amber) */
+.cockpit .auto-chip[hidden] {
+  display: none;
+}
+
+.cockpit .auto-chip[data-state="standby"] {
+  color: var(--degraded);
+  border: 1px solid color-mix(in srgb, var(--degraded) 50%, transparent);
+}
+
+.cockpit .auto-chip[data-state="on"] {
+  background: var(--failed);
+  color: #fff;
+  font-weight: 800;
+  animation: auto-chip-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes auto-chip-pulse {
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--failed) 35%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .auto-chip[data-state="on"] { animation: none; }
+}
+
+/* in the rail: under who is driving (as specific as it takes to outweigh
+   .cockpit button.auto-chip's font: inherit, which made it 16px) */
+.cockpit button.rail-auto.auto-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.cockpit .rail-auto .ic {
+  width: 16px;
+  height: 16px;
+}
+
+/* the autonomous chips are Stop buttons */
+.cockpit button.auto-chip {
+  font: inherit;
+  cursor: pointer;
+}
+
+.cockpit .auto-chip .auto-stop-word {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .28);
+  font-weight: 800;
+}
+
+.cockpit .rail-auto .auto-stop-word {
+  margin: 3px 0 0;
+}
+
+.cockpit .auto-chip[data-state="standby"] {
+  background: rgba(58, 49, 16, .85);
+}
+
+/* --- hold to drive, or an autonomous run --- */
+.cockpit-panel .drive-mode {
+  display: flex;
+  flex: none;                 /* the card is a column: never squash it */
+  height: 34px;
+  margin: 10px 0 8px;
+}
+
+.cockpit-panel .drive-mode button {
+  flex: 1;
+}
+
+.auto-panel {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 121, 0, .45);
+  border-radius: 12px;
+  background: rgba(255, 121, 0, .08);
+}
+
+.cockpit-panel[data-mode="auto"] .auto-panel {
+  display: flex;
+}
+
+/* the pad has nothing to do in an autonomous run; STOP stays */
+.cockpit-panel[data-mode="auto"] .drive-pad {
+  display: none;
+}
+
+.auto-warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, .78);
+}
+
+.auto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 13px;
+}
+
+.auto-row label {
+  white-space: nowrap;
+}
+
+.auto-row select {
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .4);
+  color: #fff;
+  font: inherit;
+}
+
+.auto-row .link-btn {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #8cbcff;
+  white-space: nowrap;
+}
+
+.auto-go {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ff9a3c, var(--orange));
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.auto-go.running {
+  background: var(--failed);
+  animation: auto-chip-pulse 1.2s ease-in-out infinite;
+}
+
+/* the button when a controller on the car means R1 starts the run */
+.auto-go:disabled {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  cursor: default;
+}
+
+/* R1 held: fills over the half second it takes (R1_HOLD_MS), so the press
+   shows at once rather than looking like nothing happened */
+.auto-go {
+  position: relative;
+  overflow: hidden;
+}
+
+.auto-go.r1-hold::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--orange);
+  transform-origin: left;
+  animation: auto-r1-fill .5s linear forwards;
+}
+
+.auto-go.r1-hold {
+  isolation: isolate;
+}
+
+@keyframes auto-r1-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* the panel's own switches: compact, on the panel's orange tint */
+.auto-panel .auto-switch {
+  padding: 7px 10px;
+  border-color: rgba(255, 255, 255, .16);
+  background: rgba(0, 0, 0, .25);
+}
+
+.auto-panel .auto-switch .cockpit-switch-text span {
+  color: rgba(255, 255, 255, .7);
+}
+
+/* the obstacle stop: its own box, green while it watches */
+.auto-guard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auto-guard[data-state="on"] .auto-switch {
+  border-color: rgba(74, 222, 128, .5);
+}
+
+.auto-guard[data-state="off"] .auto-switch {
+  border-color: rgba(255, 193, 7, .55);
+}
+
+/* full speed: the slider shows the speed but is not the one in charge */
+.auto-panel .slider-row.locked input {
+  opacity: .45;
+}
+
+.auto-status {
+  min-height: 16px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, .75);
+  font-variant-numeric: tabular-nums;
+}
+
+.auto-status.running {
+  color: #fff;
+  font-weight: 700;
 }
 
 /* ------------------------------------------------------------------
@@ -2832,3 +3135,272 @@ body:has(.cockpit.full:not([hidden])) {
   }
 }
 
+/* ------------------------------------------------------------------
+   THE TOP BAR ON ONE LINE
+   ------------------------------------------------------------------ */
+
+/* the top bar on one line: status on the left, buttons on the right. Status
+   is what gives way, so a rare extra chip wraps there and is never cut off. */
+@media (min-width: 901px) {
+  .cockpit-status {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .cockpit-tools {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}
+
+/* messages get a line of their own, only while there is one to show */
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  .cockpit-msgs {
+    flex: 1 1 100%;
+  }
+
+  .cockpit-msgs:not(:has(> :not([hidden]))) {
+    display: none;
+  }
+}
+
+/* not room for every word on most screens, so the longest fold away first.
+   Their full names stay in the tooltips. */
+@media (min-width: 901px) and (max-width: 1799px) {
+  .cockpit-status .fold-word {
+    display: none;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1699px) {
+  .cockpit-tools .top-btn:not(.recording) .btn-lbl {
+    display: none;
+  }
+
+  .cockpit-tools .estop-long {
+    display: none;
+  }
+
+  .cockpit-tools .estop-short {
+    display: inline;
+  }
+}
+
+/* the pane buttons' icons only appear when their words go */
+.pane-switch button .ic {
+  display: none;
+}
+
+@media (min-width: 901px) and (max-width: 1399px) {
+  .pane-switch .pane-word {
+    display: none;
+  }
+
+  .pane-switch button .ic {
+    display: inline-block;
+  }
+
+  .cockpit .pane-switch button {
+    padding: 0 10px;
+  }
+}
+
+/* the bottom bar's right end: who is driving and the latency */
+.cockpit-bottom-info {
+  display: none;
+}
+
+@media (min-width: 901px) and (not (pointer: coarse)) {
+  .cockpit-bottom-info {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* a short rail: the pane buttons share a row, so E-stop stays on screen */
+@container (max-height: 760px) {
+  .rail-group {
+    flex-direction: row;
+  }
+
+  .cockpit .rail-group .rail-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+  }
+}
+
+/* ------------------------------------------------------------------
+   BIG CONTROLS (Settings > Screen, js/cockpit.js applyBigControls)
+   Thumb-sized targets for touch screens like the Steam Deck: every
+   button, switch, select and slider in the controls card grows, and
+   each slider gets - / + buttons (.slider-step, hidden otherwise).
+   ------------------------------------------------------------------ */
+
+.slider-step {
+  display: none;
+}
+
+/* two lines, so it fits the narrow floating card: the name and value,
+   then - slider + across the whole width */
+html.big-controls .cockpit-panel .slider-row {
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  grid-template-areas:
+    "name name value"
+    "less slider more";
+  gap: 6px 10px;
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+html.big-controls .cockpit-panel .slider-row > span { grid-area: name; }
+html.big-controls .cockpit-panel .slider-row > strong { grid-area: value; }
+html.big-controls .cockpit-panel .slider-row > input { grid-area: slider; }
+html.big-controls .cockpit-panel .slider-row > .slider-step:first-of-type { grid-area: less; }
+html.big-controls .cockpit-panel .slider-row > .slider-step:last-of-type { grid-area: more; }
+
+html.big-controls .cockpit-panel .slider-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-3);
+  color: inherit;
+  font: inherit;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+html.big-controls .cockpit-panel .slider-step:active {
+  background: var(--orange);
+  border-color: var(--orange);
+}
+
+/* full speed locks the Speed slider: its buttons fade with it */
+html.big-controls .auto-panel .slider-row.locked .slider-step {
+  opacity: .45;
+  cursor: default;
+}
+
+/* the slider itself: a fat track and a thumb you can actually hit */
+html.big-controls .cockpit-panel .slider-row input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 56px;
+  background: transparent;
+}
+
+html.big-controls .cockpit-panel .slider-row input[type=range]::-moz-range-track {
+  height: 12px;
+  border-radius: 99px;
+  background: var(--surface-3);
+}
+
+html.big-controls .cockpit-panel .slider-row input[type=range]::-moz-range-progress {
+  height: 12px;
+  border-radius: 99px;
+  background: var(--orange);
+}
+
+html.big-controls .cockpit-panel .slider-row input[type=range]::-moz-range-thumb {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--orange);
+  border-radius: 50%;
+  background: #fff;
+}
+
+html.big-controls .cockpit-panel .slider-row input[type=range]::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 99px;
+  background: var(--surface-3);
+}
+
+html.big-controls .cockpit-panel .slider-row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 40px;
+  height: 40px;
+  margin-top: -14px;
+  border: 3px solid var(--orange);
+  border-radius: 50%;
+  background: #fff;
+}
+
+html.big-controls .cockpit-panel .drive-mode {
+  height: 56px;
+}
+
+html.big-controls .cockpit-panel .drive-mode button,
+html.big-controls .cockpit-panel .arm-btn,
+html.big-controls .cockpit-panel .auto-row select,
+html.big-controls .cockpit-panel .auto-row .link-btn {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+html.big-controls .cockpit-panel .auto-row .link-btn {
+  padding: 0 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+}
+
+html.big-controls .auto-go {
+  min-height: 64px;
+  font-size: 19px;
+}
+
+html.big-controls .cockpit-panel .arm-check {
+  font-size: 16px;
+}
+
+html.big-controls .cockpit-panel .arm-check input {
+  width: 30px;
+  height: 30px;
+}
+
+html.big-controls .cockpit-switch {
+  padding: 14px 14px;
+}
+
+html.big-controls .cockpit-switch-text strong {
+  font-size: 16px;
+}
+
+html.big-controls .cockpit-switch-text span {
+  font-size: 13.5px;
+}
+
+html.big-controls .cockpit-switch input {
+  width: 64px;
+  height: 36px;
+}
+
+html.big-controls .cockpit-switch input::after {
+  width: 30px;
+  height: 30px;
+}
+
+html.big-controls .cockpit-switch input:checked::after {
+  transform: translateX(28px);
+}
+
+/* the PS4 top speed - / + in the top bar and the side rail */
+html.big-controls .cockpit .cspeed-step {
+  min-width: 52px;
+  min-height: 52px;
+  font-size: 24px;
+}

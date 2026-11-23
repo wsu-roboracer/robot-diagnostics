@@ -77,6 +77,7 @@ const RADAR = {
 const radarState = {
   masks: [],                  // [from, to] degrees to ignore (own robot)
   sweep: true,
+  warnings: true,             // warning circles, highlights and object tags
   scanAt: 0,                  // which scan was last analysed
   arrivals: [],               // scan times, for scans/s
   result: null,               // the last analysis
@@ -245,6 +246,41 @@ function radarCurrent() {
    Called by drawScanCanvas (metrics.js) when the view is Detailed.
 ========================================================== */
 
+/* The robot's obstacle stop (drive.js obstacleZone): the corridor ahead
+   that has to stay clear for the car to stop, orange, red when something is
+   in it. A rectangle in front of the LiDAR, drawn through P like the scan. */
+function drawObstacleZone(ctx, P, px, font) {
+
+  const zone = typeof obstacleZone === "function" ? obstacleZone() : null;
+
+  if (!zone) return;
+
+  const { length: L, halfWidth: hw } = zone;
+  const at = (x, y) => P(Math.atan2(y, x), Math.hypot(x, y));
+  const corners = [at(0.01, hw), at(L, hw), at(L, -hw), at(0.01, -hw)];
+  const color = zone.hit ? "255, 77, 77" : "255, 145, 40";
+
+  ctx.save();
+  ctx.beginPath();
+  corners.forEach((p, k) => (k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  ctx.closePath();
+  ctx.fillStyle = `rgba(${color}, ${zone.hit ? 0.28 : 0.14})`;
+  ctx.fill();
+  ctx.setLineDash([5 * px, 4 * px]);
+  ctx.strokeStyle = `rgba(${color}, 0.9)`;
+  ctx.lineWidth = 1.5 * px;
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const tip = at(L, 0);
+  ctx.fillStyle = `rgb(${color})`;
+  ctx.font = `700 ${font}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`stop zone ${L.toFixed(1)} m`, tip.x, tip.y - 4 * px);
+  ctx.restore();
+}
+
 function drawRadarScan(canvas, scaleState, selLo, selHi) {
 
   const ctx = canvas.getContext("2d");
@@ -348,7 +384,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
   }
 
   /* the warn and danger distances, as dashed circles */
-  [[RADAR.warn, c.warn], [RADAR.danger, c.danger]].forEach(([r, color]) => {
+  (radarState.warnings ? [[RADAR.warn, c.warn], [RADAR.danger, c.danger]] : []).forEach(([r, color]) => {
     ctx.setLineDash([4 * px, 4 * px]);
     ctx.strokeStyle = color;
     ctx.globalAlpha = (live ? 1 : 0.4) * 0.55;
@@ -359,6 +395,8 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
   });
   ctx.setLineDash([]);
   ctx.globalAlpha = live ? 1 : 0.4;
+
+  drawObstacleZone(ctx, P, px, font);
 
   if (result) {
 
@@ -387,7 +425,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
     /* obstacles (closer than the warning distance): a thick outline in
        their status colour, bigger dots */
     result.objects.forEach(o => {
-      if (o.distance >= RADAR.warn) return;
+      if (!radarState.warnings || o.distance >= RADAR.warn) return;
       const color = o.distance < RADAR.danger ? c.danger : c.warn;
       ctx.strokeStyle = color;
       ctx.lineWidth = 4 * px;
@@ -459,7 +497,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
   ctx.fill();
 
   /* proximity ring: each direction's status as an arc around the car */
-  if (result && live) {
+  if (result && live && radarState.warnings) {
     const ring = s * 2.1;
     const tone = { danger: c.danger, warn: c.warn, clear: "rgba(34, 197, 94, 0.55)" };
     result.sectors.forEach(sec => {
@@ -477,7 +515,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
 
   /* object tags: number and distance, approaching ones with an arrow;
      drawn last so nothing covers them */
-  if (result) {
+  if (result && radarState.warnings) {
     const placed = [];                      // tags already drawn, to step around
     const hits = (x, y, bw, bh) => placed.some(r =>
       x < r.x + r.w + 3 * px && x + bw + 3 * px > r.x && y < r.y + r.h + 2 * px && y + bh + 2 * px > r.y);
@@ -488,7 +526,7 @@ function drawRadarScan(canvas, scaleState, selLo, selHi) {
       const status = o.distance < RADAR.danger ? "danger" : o.distance < RADAR.warn ? "warn" : "clear";
       const fill = { danger: c.danger, warn: c.warn, clear: "#1f2a3c" }[status];
       const ink = status === "warn" ? "#1a1400" : "#fff";
-      const text = `${o.number}  ${o.distance.toFixed(2)} m` + (o.approach ? `  \u25BC ${o.approach.toFixed(1)} m/s` : "");
+      const text = `${o.number}  ${o.distance.toFixed(2)} m` + (o.approach ? `  \u25BC ${speedText(o.approach, 1)}` : "");
       ctx.font = `700 ${Math.round(font * 0.82)}px system-ui, sans-serif`;
       const tw = ctx.measureText(text).width;
       const bw = tw + 12 * px;
@@ -572,7 +610,7 @@ function radarHover(ctx, result, ranges, g, reach, P, ox, oy, ppm, hover, font) 
       (object.number ? `Object ${object.number}` : "Object") + ` · ${RADAR_WORD[status]}`,
       `${object.distance.toFixed(2)} m · ${radarBearing(object.angle)}`,
       `width ${object.width.toFixed(2)} m · ${object.points.length} points`,
-      object.approach ? `approaching at ${object.approach.toFixed(1)} m/s` : "not approaching"
+      object.approach ? `approaching at ${speedText(object.approach, 1)}` : "not approaching"
     ];
     const q = P(object.angle, object.distance);
     ctx.strokeStyle = "#ffffff";
@@ -710,7 +748,7 @@ function renderRadarPanel(now) {
       <li class="${radarStatusOf(o.distance)}">
         <span class="ro-num">${o.number}</span>
         <span><b>${o.distance.toFixed(2)} m</b>, ${radarBearing(o.angle)}, width ${o.width.toFixed(2)} m${
-          o.approach ? ` <em class="ro-approach">▼ approaching ${o.approach.toFixed(1)} m/s</em>` : ""}</span>
+          o.approach ? ` <em class="ro-approach">▼ approaching ${speedText(o.approach, 1)}</em>` : ""}</span>
       </li>`).join("")
     : `<li class="none">${fresh ? "Nothing detected" : "—"}</li>`;
 
@@ -800,6 +838,21 @@ document.querySelectorAll("[data-sweep-toggle]").forEach(button => {
   button.onclick = () => setRadarSweep(!radarState.sweep);
 });
 
+/* Warnings: the warn/danger circles, the red and amber highlights on
+   close objects, the proximity arcs round the car and the object tags.
+   Off leaves just the map. Kept per browser, like Sweep. */
+function setRadarWarnings(on) {
+
+  radarState.warnings = on;
+  document.querySelectorAll("[data-warnings-toggle]").forEach(button =>
+    button.setAttribute("aria-pressed", String(on)));
+
+  try { localStorage.setItem("radarWarnings", on ? "on" : "off"); } catch (error) {}
+
+  renderRadar();
+  if (typeof cockpitPaneShown === "function" && cockpitPaneShown("lidar")) redrawPaneRadar();
+}
+
 $("radarMask").addEventListener("change", () => {
   radarState.masks = parseMasks($("radarMask").value);
   $("radarMask").value = radarState.masks.map(([a, b]) => `${a}:${b}`).join(", ");
@@ -810,6 +863,7 @@ $("radarMask").addEventListener("change", () => {
 
 try {
   radarState.sweep = localStorage.getItem("radarSweep") !== "off";
+  radarState.warnings = localStorage.getItem("radarWarnings") !== "off";
   $("radarMask").value = localStorage.getItem("radarMask") || "";
   radarState.masks = parseMasks($("radarMask").value);
 } catch (error) {}
